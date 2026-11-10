@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Circle, FlaskConical, Pause, Play, Settings2, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, Circle, FlaskConical, Loader2, Pause, Play, ScanLine, Settings2, ShieldAlert, Video, XCircle } from 'lucide-react';
 import { useStore, todayISO } from '@/store';
 import { buildPlan, GEAR_LABEL, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
+import { fileToImages, scanInfo, scanSpace, scanToSpace, ScanError, type ScanInfo, type ScanResult } from '@/lib/scan';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
 
 const DEFAULT: Space = { lengthM: 4, widthM: 3, ceilingM: 2.5, floor: 'alfombra', gear: ['putter'] };
 const FLOORS: { value: Floor; label: string }[] = [{ value: 'alfombra', label: 'Alfombra' }, { value: 'cesped', label: 'Césped' }, { value: 'duro', label: 'Piso duro' }];
 
 export default function HomeLab() {
-  const { mode, space, plan, sessions, setSpace, setPlan, addSession, setMode } = useStore();
+  const { mode, space, plan, scan, sessions, setSpace, setPlan, addSession, setMode } = useStore();
   const [editing, setEditing] = useState(!space);
   const today = todayISO();
 
@@ -44,7 +45,12 @@ export default function HomeLab() {
   }
 
   if (editing || !space) {
-    return <div className="space-y-5">{header}<SpaceForm initial={space ?? DEFAULT} onSave={(s) => { setSpace(s); setEditing(false); }} onCancel={space ? () => setEditing(false) : undefined} /></div>;
+    return (
+      <div className="space-y-5">
+        {header}
+        <ScanFlow current={space} onSave={(s, info) => { setSpace(s, info); setEditing(false); }} onCancel={space ? () => setEditing(false) : undefined} />
+      </div>
+    );
   }
 
   const zs = zones(space);
@@ -76,6 +82,29 @@ export default function HomeLab() {
           </div>
         ))}
       </div>
+
+      {scan && (scan.setup.length > 0 || scan.safety.length > 0) && (
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <ScanLine className="w-5 h-5 text-primary" />
+            <h2 className="font-heading text-lg font-semibold">Cómo montar tu espacio</h2>
+          </div>
+          {scan.summary && <p className="text-sm text-muted-foreground">{scan.summary}</p>}
+          <ol className="space-y-2">
+            {scan.setup.map((s, i) => (
+              <li key={i} className="flex gap-2 text-sm">
+                <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>{s}
+              </li>
+            ))}
+          </ol>
+          {scan.safety.length > 0 && (
+            <div className="rounded-xl bg-destructive/10 text-destructive px-3 py-2.5 text-sm space-y-1">
+              {scan.safety.map((s, i) => <p key={i} className="flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />{s}</p>)}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Medidas estimadas por IA a partir de tu foto ({space.lengthM} × {space.widthM} m, techo {space.ceilingM} m). Son aproximadas: comprueba el espacio antes de hacer un swing.</p>
+        </Card>
+      )}
 
       {plan && (
         <>
@@ -174,6 +203,127 @@ function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: 
       <div className="flex gap-2">
         {onCancel && <Button variant="outline" onClick={onCancel}>Cancelar</Button>}
         <Button full disabled={!valid} onClick={() => onSave(s)}>Guardar y crear mi plan</Button>
+      </div>
+    </Card>
+  );
+}
+
+/* ───────────────────────── Escaneo con foto o video ───────────────────────── */
+
+const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja: revisa las medidas' } as const;
+
+function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave: (s: Space, info: ScanInfo | null) => void; onCancel?: () => void }) {
+  const [stage, setStage] = useState<'pick' | 'busy' | 'review' | 'manual'>('pick');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<ScanError | null>(null);
+  const [result, setResult] = useState<ScanResult | null>(null);
+  const [gear, setGear] = useState<Gear[]>([]);
+  const [manualInit, setManualInit] = useState<Space>(current ?? DEFAULT);
+
+  const run = async (file?: File) => {
+    if (!file) return;
+    setError(null); setStage('busy');
+    try {
+      const r = await scanSpace(await fileToImages(file), notes);
+      setResult(r);
+      setGear([...new Set([...(current?.gear ?? []), ...r.gear])]);
+      setStage('review');
+    } catch (e) {
+      setError(e instanceof ScanError ? e : new ScanError(e instanceof Error ? e.message : 'No se pudo procesar el archivo.'));
+      setStage('pick');
+    }
+  };
+
+  if (stage === 'manual') {
+    return <SpaceForm initial={manualInit} onSave={(s) => onSave(s, result ? scanInfo(result) : null)} onCancel={() => setStage(result ? 'review' : 'pick')} />;
+  }
+
+  if (stage === 'busy') {
+    return (
+      <Card className="text-center space-y-3 py-10">
+        <Loader2 className="w-10 h-10 mx-auto animate-spin text-primary" />
+        <p className="font-heading text-lg font-semibold">Analizando tu espacio…</p>
+        <p className="text-sm text-muted-foreground">Estimando medidas, piso, obstáculos y equipo. Tarda unos segundos.</p>
+      </Card>
+    );
+  }
+
+  if (stage === 'review' && result) {
+    const sp = scanToSpace({ ...result, gear });
+    const toggle = (g: Gear) => setGear((p) => (p.includes(g) ? p.filter((x) => x !== g) : [...p, g]));
+    if (!result.usable) {
+      return (
+        <Card className="space-y-4">
+          <Notice tone="error">{result.summary || 'En esa imagen no se distingue un espacio para practicar.'}</Notice>
+          <Button full onClick={() => { setResult(null); setStage('pick'); }}>Tomar otra</Button>
+        </Card>
+      );
+    }
+    return (
+      <Card className="space-y-5">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Esto es lo que vi</p>
+          <p className="mt-1">{result.summary}</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          {[['Largo', sp.lengthM], ['Ancho', sp.widthM], ['Techo', sp.ceilingM]].map(([l, v]) => (
+            <div key={l} className="rounded-xl bg-muted p-3"><p className="text-[11px] uppercase text-muted-foreground">{l}</p><p className="text-xl font-bold">{v}<span className="text-xs font-normal text-muted-foreground"> m</span></p></div>
+          ))}
+        </div>
+        <p className={`text-xs ${result.confidence === 'baja' ? 'text-destructive' : 'text-muted-foreground'}`}>
+          {CONF_LABEL[result.confidence]} · piso: {FLOORS.find((f) => f.value === sp.floor)?.label.toLowerCase()} · medidas estimadas, sin que tengas que medir.
+        </p>
+        {result.observations.length > 0 && (
+          <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">{result.observations.map((o, i) => <li key={i}>{o}</li>)}</ul>
+        )}
+        <div>
+          <p className="text-sm font-medium mb-1.5">¿Qué equipo tienes?</p>
+          <p className="text-xs text-muted-foreground mb-2">Marqué lo que se ve en la imagen. Toca para añadir lo que no salió.</p>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(GEAR_LABEL) as Gear[]).map((g) => (
+              <button key={g} onClick={() => toggle(g)} aria-pressed={gear.includes(g)} className={`h-10 px-3 rounded-full border text-sm ${gear.includes(g) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{GEAR_LABEL[g]}</button>
+            ))}
+          </div>
+        </div>
+        <Button full onClick={() => onSave(sp, scanInfo(result))}>Crear mi plan con este espacio</Button>
+        <div className="flex gap-2">
+          <Button full variant="outline" onClick={() => { setResult(null); setStage('pick'); }}>Tomar otra</Button>
+          <Button full variant="outline" onClick={() => { setManualInit(sp); setStage('manual'); }}>Corregir medidas</Button>
+        </div>
+      </Card>
+    );
+  }
+
+  const tile = 'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-7 cursor-pointer hover:bg-muted/50 text-center';
+  return (
+    <Card className="space-y-4">
+      <div>
+        <h2 className="font-heading text-lg font-semibold">Muéstrame tu espacio</h2>
+        <p className="text-sm text-muted-foreground">Toma una foto o un video corto del lugar donde quieres practicar. No tienes que medir nada: la app estima el espacio y te dice qué hacer.</p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className={tile}>
+          <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Camera className="w-5 h-5" /></span>
+          <span className="font-medium text-sm">Foto</span>
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => run(e.target.files?.[0])} />
+        </label>
+        <label className={tile}>
+          <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Video className="w-5 h-5" /></span>
+          <span className="font-medium text-sm">Video</span>
+          <input type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => run(e.target.files?.[0])} />
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">Consejo: que se vean el piso, el techo y algún mueble o puerta; ayudan a calcular el tamaño.</p>
+      <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder="¿Algo que deba saber? (opcional)" className="w-full h-11 rounded-xl border border-border bg-card px-3 text-sm" />
+      {error && (
+        <Notice tone="error">
+          {error.message}
+          {error.code && <> Mientras tanto puedes ingresar tu espacio a mano.</>}
+        </Notice>
+      )}
+      <div className="flex gap-2">
+        {onCancel && <Button variant="outline" onClick={onCancel}>Cancelar</Button>}
+        <Button full variant="ghost" className="text-sm text-muted-foreground" onClick={() => setStage('manual')}>Prefiero ingresar las medidas a mano</Button>
       </div>
     </Card>
   );

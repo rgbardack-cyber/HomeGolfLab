@@ -29,3 +29,14 @@ No mostrar números que la app no mide. El swing reporta solo lo estimable desde
 - `npm run typecheck`, `npm test`, `npm run build` — correr los tres antes de dar algo por terminado.
 
 `node_modules` es un enlace a `C:\Users\Ryan\dev\hgl-node_modules` para que iCloud no lo sincronice.
+
+## Monetización (decidido el 10 nov 2026)
+- **Ball tracking es la función para todos**: gratis por bloques de 15 minutos de uso; al agotarse, el usuario ve 2 anuncios de 30 s para abrir otros 15 (`src/lib/ads.ts`, `src/components/AdGate.tsx`). Premium: sin anuncios ni límite.
+- En la app nativa los anuncios son de AdMob con recompensa (`@capacitor-community/admob`). Por defecto usa los identificadores de PRUEBA de Google; los reales van en `VITE_ADMOB_REWARDED_ANDROID` / `VITE_ADMOB_REWARDED_IOS`. En el navegador se muestra un espacio publicitario de prueba.
+- Falta para publicar: cuenta de AdMob y su App ID en AndroidManifest / Info.plist al añadir las plataformas; compras dentro de la app para Premium (hoy es un interruptor de prueba).
+
+## HomeLAB con foto o video
+- Idea central: el usuario NO mide nada. Toma una foto o video y la app estima el espacio y le dice qué hacer. La entrada manual queda solo como alternativa.
+- `server/index.ts` (Node, `npm run server`, puerto 8787) recibe las imágenes y usa visión de Claude (`claude-opus-5-5`, salida estructurada) para devolver medidas, piso, equipo, observaciones, seguridad y pasos de montaje. La clave `ANTHROPIC_API_KEY` vive solo en el servidor (`.env`, ver `.env.example`); nunca en la app.
+- En desarrollo Vite redirige `/api` al servidor. En producción la app necesita `VITE_API_URL` apuntando al servidor desplegado.
+- `src/lib/scan.ts` valida y recorta todo lo que devuelve el servidor antes de usarlo.

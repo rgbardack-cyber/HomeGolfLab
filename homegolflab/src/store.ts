@@ -4,6 +4,7 @@ import { computeStats, newBadges, type SessionLite } from '@/lib/badges';
 import type { Plan, Space } from '@/lib/homelab';
 import type { SwingResult } from '@/lib/swing';
 import type { Shot } from '@/lib/tracking';
+import type { ScanInfo } from '@/lib/scan';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -26,12 +27,16 @@ interface State {
   unlockQueue: string[];            // medallas recién ganadas, pendientes de mostrar
   space: Space | null;
   plan: Plan | null;
+  scan: ScanInfo | null;            // lo que la IA vio en el último escaneo del espacio
+  trackingUsedSec: number;          // segundos de ball tracking usados desde el último desbloqueo
 
   setMode: (m: Mode) => void;
   setProfile: (p: Partial<Profile>) => void;
   addSession: (s: Omit<Session, 'id' | 'at' | 'date' | 'mode'> & { mode?: Mode }) => Session;
   shiftUnlock: () => void;
-  setSpace: (s: Space) => void;
+  setSpace: (s: Space, scan?: ScanInfo | null) => void;
+  addTrackingTime: (sec: number) => void;
+  unlockTracking: () => void;
   setPlan: (p: Plan | null) => void;
   reset: () => void;
 }
@@ -49,6 +54,8 @@ const initial = {
   unlockQueue: [] as string[],
   space: null as Space | null,
   plan: null as Plan | null,
+  scan: null as ScanInfo | null,
+  trackingUsedSec: 0,
 };
 
 export const useStore = create<State>()(
@@ -68,7 +75,9 @@ export const useStore = create<State>()(
         return session;
       },
       shiftUnlock: () => set({ unlockQueue: get().unlockQueue.slice(1) }),
-      setSpace: (space) => set({ space, plan: null }),
+      setSpace: (space, scan = null) => set({ space, scan, plan: null }),
+      addTrackingTime: (sec) => set({ trackingUsedSec: get().trackingUsedSec + sec }),
+      unlockTracking: () => set({ trackingUsedSec: 0 }),
       setPlan: (plan) => set({ plan }),
       reset: () => set({ ...initial }),
     }),

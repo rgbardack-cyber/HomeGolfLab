@@ -5,3 +5,4 @@ dist
 !.env.example
 *.lnk
 homegolflab-base44-export.json
+.claude/launch.json

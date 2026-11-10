@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, Crosshair, Loader2, PencilLine, Plus, Save, Square, Target, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Camera, Clock, Crosshair, Loader2, PencilLine, Plus, Save, Square, Target, Trash2 } from 'lucide-react';
 import { useStore } from '@/store';
+import { fmtClock, isLocked, remainingSec } from '@/lib/ads';
+import AdGate from '@/components/AdGate';
 import { analyzeShot, CLUBS, detectMovingBright, dispersion, type P2, type Shot, type TrackPoint } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, Segmented, Stat } from '@/components/ui';
 
@@ -15,6 +18,18 @@ export default function Tracking() {
 
   const add = (s: Omit<Shot, 'id' | 'at'>) => { setSaved(false); setShots((p) => [...p, { ...s, id: crypto.randomUUID(), at: new Date().toISOString() }]); };
   const d = dispersion(shots);
+
+  // Gratis: 15 minutos de uso y luego 2 anuncios para abrir otros 15. Premium: sin límite ni anuncios.
+  const premium = useStore((s) => s.profile.premium);
+  const usedSec = useStore((s) => s.trackingUsedSec);
+  const addTrackingTime = useStore((s) => s.addTrackingTime);
+  const unlockTracking = useStore((s) => s.unlockTracking);
+  const locked = isLocked(usedSec, premium);
+  useEffect(() => {
+    if (premium || locked) return;
+    const t = setInterval(() => { if (document.visibilityState === 'visible') addTrackingTime(1); }, 1000);
+    return () => clearInterval(t);
+  }, [premium, locked, addTrackingTime]);
 
   const save = () => {
     let best = 0, run = 0;
@@ -31,16 +46,29 @@ export default function Tracking() {
         subtitle={mode === 'casa' ? 'Mide tus putts y registra tus tiros' : 'Registra tus tiros y tu dispersión'}
         right={<div className="text-right"><p className="font-heading text-2xl font-bold text-primary leading-none">{shots.length}</p><p className="text-[11px] text-muted-foreground">tiros</p></div>}
       />
-      <Segmented<Tab>
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'camera', label: <><Camera className="w-4 h-4" /> Cámara (putt)</> },
-          { value: 'manual', label: <><PencilLine className="w-4 h-4" /> Registro manual</> },
-        ]}
-      />
+      {!premium && !locked && (
+        <div className="flex items-center gap-2 text-xs bg-muted rounded-xl px-3 py-2">
+          <Clock className="w-4 h-4 text-primary shrink-0" />
+          <span className="flex-1">Tiempo gratis: <span className="font-bold tabular-nums">{fmtClock(remainingSec(usedSec))}</span>. Después, 2 anuncios para seguir.</span>
+          <Link to="/perfil" className="font-semibold text-primary shrink-0">Sin anuncios</Link>
+        </div>
+      )}
 
-      {tab === 'camera' ? <CameraTracker onShot={add} /> : <ManualEntry onShot={add} />}
+      {locked ? (
+        <AdGate onUnlocked={unlockTracking} />
+      ) : (
+        <>
+          <Segmented<Tab>
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'camera', label: <><Camera className="w-4 h-4" /> Cámara (putt)</> },
+              { value: 'manual', label: <><PencilLine className="w-4 h-4" /> Registro manual</> },
+            ]}
+          />
+          {tab === 'camera' ? <CameraTracker onShot={add} /> : <ManualEntry onShot={add} />}
+        </>
+      )}
       {saved && <Notice tone="ok">Sesión guardada.</Notice>}
 
       {shots.length > 0 && (

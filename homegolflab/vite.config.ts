@@ -11,7 +11,10 @@ const nodeModulesReal = realpathSync(fileURLToPath(new URL('./node_modules', imp
 // "npm run dev:phone" sirve por HTTPS (certificado local) porque los teléfonos solo dan acceso a la cámara en HTTPS.
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === 'phone' ? [basicSsl()] : [])],
+  // Cada servidor usa su propia caché: compartirla hace que se pisen al reiniciar.
+  cacheDir: mode === 'phone' ? 'node_modules/.vite-phone' : 'node_modules/.vite',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  server: { fs: { allow: ['.', nodeModulesReal] } },
+  // /api va al servidor local (npm run server), que guarda la clave de la IA.
+  server: { fs: { allow: ['.', nodeModulesReal] }, proxy: { '/api': 'http://localhost:8787' } },
   test: { environment: 'node' },
 }));

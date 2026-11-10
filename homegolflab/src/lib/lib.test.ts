@@ -158,3 +158,35 @@ describe('medallas', () => {
     expect(new Set(BADGES.map((b) => b.id)).size).toBe(BADGES.length);
   });
 });
+
+import { AD_RULES, fmtClock, isLocked, remainingSec } from './ads';
+import { scanToSpace, type ScanResult } from './scan';
+
+describe('anuncios del tracking', () => {
+  it('gratis: 15 minutos y luego bloqueo; premium nunca', () => {
+    expect(AD_RULES).toMatchObject({ freeSeconds: 900, adsToUnlock: 2, adSeconds: 30 });
+    expect(isLocked(899, false)).toBe(false);
+    expect(isLocked(900, false)).toBe(true);
+    expect(isLocked(5000, true)).toBe(false);
+    expect(remainingSec(840)).toBe(60);
+    expect(remainingSec(2000)).toBe(0);
+    expect(fmtClock(754)).toBe('12:34');
+  });
+});
+
+describe('escaneo de HomeLAB', () => {
+  const base: ScanResult = { usable: true, summary: 's', lengthM: 4.26, widthM: 3, ceilingM: 2.4, floor: 'alfombra', gear: ['putter'], confidence: 'media', observations: [], safety: [], setup: [] };
+  it('convierte el resultado en un espacio', () => {
+    expect(scanToSpace(base)).toEqual({ lengthM: 4.3, widthM: 3, ceilingM: 2.4, floor: 'alfombra', gear: ['putter'] });
+    expect(scanToSpace(base, ['wedge', 'putter']).gear).toEqual(['putter', 'wedge']);
+  });
+  it('no confía en valores fuera de rango o inválidos', () => {
+    const bad = { ...base, lengthM: 900, widthM: -2, ceilingM: Number.NaN, floor: 'lava', gear: ['putter', 'bazuca'] } as unknown as ScanResult;
+    const s = scanToSpace(bad);
+    expect(s.lengthM).toBe(30);
+    expect(s.widthM).toBe(1);
+    expect(s.ceilingM).toBe(2.4);
+    expect(s.floor).toBe('duro');
+    expect(s.gear).toEqual(['putter']);
+  });
+});

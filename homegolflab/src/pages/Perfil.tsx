@@ -3,8 +3,8 @@ import { Check, Crown, User } from 'lucide-react';
 import { useStore } from '@/store';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
 
-const PREMIUM = ['Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
-const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tracking y registro de tiros', 'Medallas y niveles'];
+const PREMIUM = ['Ball tracking sin anuncios ni pausas', 'Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
+const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tracking: 15 min y luego 2 anuncios para seguir', 'Medallas y niveles'];
 
 export default function Perfil() {
   const { profile, setProfile, reset, sessions } = useStore();
@@ -37,7 +37,7 @@ export default function Perfil() {
           <span className="w-11 h-11 rounded-xl bg-accent/20 flex items-center justify-center"><Crown className="w-5 h-5 text-accent" /></span>
           <div>
             <h2 className="font-heading text-lg font-semibold">{profile.premium ? 'Premium activo' : 'Plan gratuito'}</h2>
-            <p className="text-xs text-muted-foreground">{profile.premium ? 'Tienes acceso a todo.' : 'Pásate a Premium para el análisis en vivo.'}</p>
+            <p className="text-xs text-muted-foreground">{profile.premium ? 'Tienes acceso a todo.' : 'Pásate a Premium: sin anuncios y con análisis en vivo.'}</p>
           </div>
         </div>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">
