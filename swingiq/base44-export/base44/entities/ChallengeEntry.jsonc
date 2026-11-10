@@ -1,0 +1,32 @@
+{
+  "name": "ChallengeEntry",
+  "type": "object",
+  "properties": {
+    "challenge_id": {
+      "type": "string",
+      "description": "ID of the challenge"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email of the participant"
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Display name of the participant"
+    },
+    "total_points": {
+      "type": "number",
+      "default": 0,
+      "description": "Total accumulated points"
+    },
+    "paid": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether entry fee has been paid"
+    }
+  },
+  "required": [
+    "challenge_id",
+    "user_email"
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "name": "Challenge",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Challenge title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the challenge"
+    },
+    "month": {
+      "type": "string",
+      "description": "Challenge month (e.g. June 2026)"
+    },
+    "registration_deadline": {
+      "type": "string",
+      "format": "date",
+      "description": "Last day to register"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Challenge start date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Challenge end date"
+    },
+    "entry_fee": {
+      "type": "number",
+      "description": "Entry fee in USD"
+    },
+    "prize_1st_pct": {
+      "type": "number",
+      "description": "First place prize percentage"
+    },
+    "prize_2nd_pct": {
+      "type": "number",
+      "description": "Second place prize percentage"
+    },
+    "prize_3rd_pct": {
+      "type": "number",
+      "description": "Third place prize percentage"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "registration_open",
+        "active",
+        "completed"
+      ],
+      "default": "registration_open"
+    },
+    "total_pool": {
+      "type": "number",
+      "default": 0,
+      "description": "Total prize pool accumulated"
+    }
+  },
+  "required": [
+    "title",
+    "month"
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "SwingIQ",
+    "slug": "swingiq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "swingiq",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1a12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.swingiq.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SwingIQ needs camera access to record and analyse your golf swing.",
+        "NSMicrophoneUsageDescription": "SwingIQ needs microphone access when recording swing videos.",
+        "NSPhotoLibraryUsageDescription": "SwingIQ needs photo library access to upload swing videos for analysis.",
+        "NSPhotoLibraryAddUsageDescription": "SwingIQ saves your swing recordings to your photo library."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f1a12"
+      },
+      "package": "com.swingiq.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_VIDEO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      [
+        "expo-image-picker",
+        { "photosPermission": "SwingIQ needs access to your photo library to upload swing videos." }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "SwingIQ saves swing recordings to your library.",
+          "savePhotosPermission": "SwingIQ saves swing recordings to your library."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

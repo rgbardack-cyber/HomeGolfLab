@@ -1,0 +1,44 @@
+{
+  "name": "PracticeSession",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "swing_analysis",
+        "home_practice",
+        "ball_tracking"
+      ],
+      "description": "Type of practice session"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the session"
+    },
+    "video_url": {
+      "type": "string",
+      "description": "URL of the uploaded video"
+    },
+    "photo_url": {
+      "type": "string",
+      "description": "URL of the uploaded photo"
+    },
+    "ai_analysis": {
+      "type": "string",
+      "description": "AI-generated analysis results as JSON string"
+    },
+    "notes": {
+      "type": "string",
+      "description": "User notes about the session"
+    },
+    "score": {
+      "type": "number",
+      "description": "Practice score/rating"
+    }
+  },
+  "required": [
+    "type",
+    "date"
+  ]
+}

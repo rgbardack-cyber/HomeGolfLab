@@ -1,0 +1,30 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The role of the user in the app",
+      "enum": [
+        "admin",
+        "user"
+      ]
+    },
+    "avatar_url": {
+      "type": "string",
+      "description": "URL of the user's profile picture"
+    },
+    "nickname": {
+      "type": "string"
+    },
+    "handicap": {
+      "type": "string"
+    },
+    "home_course": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "role"
+  ]
+}
