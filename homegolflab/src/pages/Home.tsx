@@ -70,16 +70,21 @@ export default function Home() {
         ) : (
           sessions.slice(0, 6).map((s) => {
             const Icon = TYPE_ICON[s.type];
-            return (
-              <div key={s.id} className="flex items-center gap-3 bg-card border border-border rounded-2xl p-4">
+            const row = 'flex items-center gap-3 bg-card border border-border rounded-2xl p-4';
+            const body = (
+              <>
                 <span className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-primary" /></span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium text-sm">{TYPE_LABEL[s.type]}{s.live ? ' · en vivo' : ''}</span>
                   <span className="block text-xs text-muted-foreground">{new Date(s.at).toLocaleDateString('es', { day: 'numeric', month: 'short' })} · {s.mode === 'casa' ? 'Casa' : 'Cancha'}</span>
                 </span>
                 <span className="font-heading font-bold text-primary">{sessionValue(s)}</span>
-              </div>
+              </>
             );
+            // Un swing guardado se puede volver a abrir para ver su análisis.
+            return s.swing
+              ? <Link key={s.id} to={`/swing?ver=${s.id}`} className={`${row} hover:shadow-md transition`}>{body}</Link>
+              : <div key={s.id} className={row}>{body}</div>;
           })
         )}
       </section>

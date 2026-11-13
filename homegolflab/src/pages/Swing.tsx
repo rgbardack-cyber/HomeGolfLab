@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
 import { analyzeSwing, SWING_ERROR_TEXT, type Frame, type SwingResult, LM } from '@/lib/swing';
 import { detect, drawSkeleton, loadPose } from '@/lib/pose';
@@ -11,6 +12,23 @@ export default function Swing() {
   const premium = useStore((s) => s.profile.premium);
   const mode = useStore((s) => s.mode);
   const [tab, setTab] = useState<Tab>('video');
+  // /swing?ver=<id> abre el resultado de un swing ya guardado (desde "Sesiones recientes").
+  const [params, setParams] = useSearchParams();
+  const verId = params.get('ver');
+  const saved = useStore((s) => (verId ? s.sessions.find((x) => x.id === verId) : undefined));
+  if (saved?.swing) {
+    return (
+      <div className="space-y-5">
+        <PageHeader
+          icon={<Activity className="w-5 h-5" />}
+          title="Análisis de swing"
+          subtitle={`${new Date(saved.at).toLocaleDateString('es', { day: 'numeric', month: 'long' })} · ${saved.mode === 'casa' ? 'Casa' : 'Cancha'}${saved.live ? ' · en vivo' : ''}`}
+        />
+        <SwingResultView r={saved.swing} />
+        <Button full variant="outline" onClick={() => setParams({})}><ArrowLeft className="w-5 h-5" /> Analizar otro swing</Button>
+      </div>
+    );
+  }
   return (
     <div className="space-y-5">
       <PageHeader icon={<Activity className="w-5 h-5" />} title="Análisis de swing" subtitle={mode === 'casa' ? 'En casa: de frente a la cámara, cuerpo entero' : 'En cancha: apoya el teléfono a unos 3 m, de frente'} />
