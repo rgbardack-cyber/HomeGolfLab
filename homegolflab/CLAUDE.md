@@ -40,3 +40,6 @@ No mostrar números que la app no mide. El swing reporta solo lo estimable desde
 - `server/index.ts` (Node, `npm run server`, puerto 8787) recibe las imágenes y usa visión de Claude (`claude-opus-5-5`, salida estructurada) para devolver medidas, piso, equipo, observaciones, seguridad y pasos de montaje. La clave `ANTHROPIC_API_KEY` vive solo en el servidor (`.env`, ver `.env.example`); nunca en la app.
 - En desarrollo Vite redirige `/api` al servidor. En producción la app necesita `VITE_API_URL` apuntando al servidor desplegado.
 - `src/lib/scan.ts` valida y recorta todo lo que devuelve el servidor antes de usarlo.
+
+## Marketing
+Lo que se puede decir en público sobre la app está en `../marketing/BRAND.md`. Si un cambio aquí altera una función, una medida, un límite de la versión gratuita, un precio o el estado de publicación, actualiza ese archivo en el mismo commit.
