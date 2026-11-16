@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSwing, angleAt, coach, type Frame, type Pt } from './swing';
+import { analyzeSwing, angleAt, coach, coachDtl, viewOfFrame, type Frame, type Pt } from './swing';
 import { analyzeShot, detectMovingBright, dispersion, type Shot } from './tracking';
 import { buildPlan, zones, type Space } from './homelab';
 import { BADGES, computeStats, levelFor, newBadges, totalXp, type SessionLite } from './badges';
@@ -29,6 +29,103 @@ function synthSwing({ back = 0.9, down = 0.3, turn = 0.25, hipShift = 0.03, fps 
   return frames;
 }
 
+/**
+ * Swing sintético visto desde atrás (línea de tiro): el jugador se ve de perfil mirando a +x,
+ * con los dos hombros y las dos caderas casi superpuestos.
+ * `rise` = cuánto se endereza en el impacto; `hipAdvance` = cuánto se acercan las caderas a la bola.
+ */
+function synthDtl({ back = 0.9, down = 0.3, rise = 0, hipAdvance = 0, fps = 30 } = {}): Frame[] {
+  const frames: Frame[] = [];
+  const total = 0.5 + back + down + 0.5;
+  for (let i = 0; i < total * fps; i++) {
+    const t = i / fps;
+    let wy = 0.6, k = 0; // k: avance de la bajada (0 → 1)
+    if (t >= 0.5 && t < 0.5 + back) wy = 0.6 - 0.42 * ((t - 0.5) / back);
+    else if (t >= 0.5 + back && t < 0.5 + back + down) { k = (t - 0.5 - back) / down; wy = 0.18 + 0.44 * k; }
+    else if (t >= 0.5 + back + down) { k = 1; wy = 0.62 - 0.4 * Math.min(1, (t - 0.5 - back - down) / 0.4); }
+    const hipX = 0.45 + hipAdvance * k;
+    const lean = 0.154 - rise * k; // desplazamiento horizontal de los hombros sobre la cadera
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[0] = pt(hipX + lean + 0.07, 0.22 - rise * k * 0.3);
+    lm[11] = pt(hipX + lean + 0.01, 0.33); lm[12] = pt(hipX + lean - 0.01, 0.33);
+    lm[13] = pt(hipX + lean + 0.03, (0.33 + wy) / 2); lm[14] = pt(hipX + lean + 0.02, (0.33 + wy) / 2);
+    lm[15] = pt(0.61, wy); lm[16] = pt(0.6, wy);
+    lm[23] = pt(hipX + 0.01, 0.55); lm[24] = pt(hipX - 0.01, 0.55);
+    lm[25] = pt(0.5, 0.75); lm[26] = pt(0.5, 0.75);
+    lm[27] = pt(0.46, 0.95); lm[28] = pt(0.46, 0.95);
+    frames.push({ t: t * 1000, lm });
+  }
+  return frames;
+}
+
+describe('swing desde atrás', () => {
+  it('reconoce la vista sola', () => {
+    const front = analyzeSwing(synthSwing());
+    const back = analyzeSwing(synthDtl());
+    if (typeof front === 'string' || typeof back === 'string') throw new Error('sin resultado');
+    expect(front.view).toBe('frente');
+    expect(back.view).toBe('atras');
+    expect(viewOfFrame(synthSwing()[0])).toBe('frente');
+    expect(viewOfFrame(synthDtl()[0])).toBe('atras');
+  });
+  it('con puntos 3D, la profundidad de los hombros desempata un ancho dudoso', () => {
+    // Ancho aparente 0,38: de frente real (un jugador angosto) o de perfil con el hombro lejano asomando.
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[11] = pt(0.55, 0.3); lm[12] = pt(0.45, 0.3); lm[23] = pt(0.545, 0.55); lm[24] = pt(0.455, 0.55);
+    const world = (dx: number, dz: number): Pt[] => lm.map((p, i) => (i === 11 ? { ...p, x: dx, z: dz } : i === 12 ? { ...p, x: -dx, z: -dz } : p));
+    expect(viewOfFrame({ lm, world: world(0.2, 0.03) })).toBe('frente'); // hombros casi paralelos a la cámara
+    expect(viewOfFrame({ lm, world: world(0.06, 0.19) })).toBe('atras');  // hombros apuntando a la cámara
+  });
+  it('respeta la vista elegida a mano', () => {
+    const r = analyzeSwing(synthSwing(), { view: 'atras' });
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.view).toBe('atras');
+  });
+  it('mide la postura al inicio y la da por buena', () => {
+    const r = analyzeSwing(synthDtl());
+    if (typeof r === 'string' || r.view !== 'atras') throw new Error('se esperaba vista desde atrás');
+    expect(r.metrics.spineAddressDeg).toBeGreaterThan(30); // atan(0.154 / 0.22) ≈ 35°
+    expect(r.metrics.spineAddressDeg).toBeLessThan(40);
+    expect(r.metrics.kneeFlexDeg).toBeGreaterThan(20);     // ≈ 25°
+    expect(r.metrics.kneeFlexDeg).toBeLessThan(30);
+    expect(r.metrics.tempoRatio).toBeGreaterThan(2.5);
+    expect(r.metrics.tempoRatio).toBeLessThan(3.6);
+    expect(Math.abs(r.metrics.hipAdvancePct)).toBeLessThanOrEqual(2);
+    for (const key of ['setup', 'knees', 'spine', 'extension', 'head', 'tempo']) {
+      expect(r.feedback.find((f) => f.key === key)?.severity, key).toBe('good');
+    }
+  });
+  it('detecta extensión temprana y que te levantas', () => {
+    const r = analyzeSwing(synthDtl({ rise: 0.1, hipAdvance: 0.05 }));
+    if (typeof r === 'string' || r.view !== 'atras') throw new Error('se esperaba vista desde atrás');
+    expect(r.metrics.hipAdvancePct).toBeGreaterThan(14);
+    expect(r.metrics.spineImpactChangeDeg).toBeLessThan(-14);
+    expect(r.feedback.find((f) => f.key === 'extension')?.severity).toBe('fix');
+    expect(r.feedback.find((f) => f.key === 'spine')?.title).toBe('Te levantas en el impacto');
+    const clean = analyzeSwing(synthDtl());
+    if (typeof clean === 'string') throw new Error(clean);
+    expect(r.score).toBeLessThan(clean.score);
+  });
+  it('omite las rodillas si no se ven los tobillos', () => {
+    const frames = synthDtl().map((f) => ({ ...f, lm: f.lm.map((p, i) => (i === 27 || i === 28 ? { ...p, v: 0.1 } : p)) }));
+    const r = analyzeSwing(frames);
+    if (typeof r === 'string' || r.view !== 'atras') throw new Error('se esperaba vista desde atrás');
+    expect(r.metrics.kneeFlexDeg).toBeNull();
+    expect(r.feedback.find((f) => f.key === 'knees')).toBeUndefined();
+  });
+  it('corrige la proporción del video antes de medir ángulos', () => {
+    // El mismo swing grabado en vertical (3:4) llega con las x estiradas; con `aspect` da lo mismo.
+    const tall = synthDtl().map((f) => ({ ...f, lm: f.lm.map((p) => ({ ...p, x: p.x / 0.75 })) }));
+    const a = analyzeSwing(synthDtl()), b = analyzeSwing(tall, { aspect: 0.75 });
+    if (typeof a === 'string' || typeof b === 'string' || a.view !== 'atras' || b.view !== 'atras') throw new Error('sin resultado');
+    expect(b.metrics.spineAddressDeg).toBeCloseTo(a.metrics.spineAddressDeg, 0);
+  });
+  it('la nota baja con más errores', () => {
+    const base = { tempoRatio: 3, backswingSec: 0.9, downswingSec: 0.3, framesUsed: 60, spineAddressDeg: 35, kneeFlexDeg: 20, spineTopChangeDeg: 2, spineImpactChangeDeg: -2, hipAdvancePct: 2, headVerticalPct: 3, headForwardPct: 2 };
+    expect(coachDtl(base).score).toBeGreaterThan(coachDtl({ ...base, spineAddressDeg: 10, hipAdvancePct: 20, headVerticalPct: 25 }).score);
+  });
+});
+
 describe('swing', () => {
   it('mide ángulos', () => {
     expect(angleAt({ x: 1, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 1 })).toBeCloseTo(90);
@@ -37,6 +134,7 @@ describe('swing', () => {
   it('detecta tempo 3:1 y giro de hombros', () => {
     const r = analyzeSwing(synthSwing());
     if (typeof r === 'string') throw new Error(r);
+    if (r.view === 'atras') throw new Error('se esperaba vista de frente');
     expect(r.metrics.tempoRatio).toBeGreaterThan(2.5);
     expect(r.metrics.tempoRatio).toBeLessThan(3.6);
     expect(r.metrics.shoulderTurnDeg).toBeGreaterThan(65); // acos(0.25) ≈ 75°

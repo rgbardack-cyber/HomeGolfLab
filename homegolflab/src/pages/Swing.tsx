@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
-import { analyzeSwing, SWING_ERROR_TEXT, type Frame, type SwingResult, LM } from '@/lib/swing';
+import { analyzeSwing, viewOfFrame, SWING_ERROR_TEXT, VIEW_LABEL, type Frame, type SwingResult, type SwingView, LM } from '@/lib/swing';
 import { detect, drawSkeleton, loadPose } from '@/lib/pose';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
 
 type Tab = 'video' | 'live';
+type ViewChoice = SwingView | 'auto';
 
 export default function Swing() {
   const premium = useStore((s) => s.profile.premium);
   const mode = useStore((s) => s.mode);
   const [tab, setTab] = useState<Tab>('video');
+  const [view, setView] = useState<ViewChoice>('auto');
   // /swing?ver=<id> abre el resultado de un swing ya guardado (desde "Sesiones recientes").
   const [params, setParams] = useSearchParams();
   const verId = params.get('ver');
@@ -31,7 +33,7 @@ export default function Swing() {
   }
   return (
     <div className="space-y-5">
-      <PageHeader icon={<Activity className="w-5 h-5" />} title="Análisis de swing" subtitle={mode === 'casa' ? 'En casa: de frente a la cámara, cuerpo entero' : 'En cancha: apoya el teléfono a unos 3 m, de frente'} />
+      <PageHeader icon={<Activity className="w-5 h-5" />} title="Análisis de swing" subtitle={mode === 'casa' ? 'En casa: de frente o desde atrás, cuerpo entero' : 'En cancha: apoya el teléfono a unos 3 m, de frente o desde atrás'} />
       <Segmented<Tab>
         value={tab}
         onChange={setTab}
@@ -40,7 +42,24 @@ export default function Swing() {
           { value: 'live', label: <><Video className="w-4 h-4" /> En vivo</>, locked: !premium },
         ]}
       />
-      {tab === 'video' ? <UploadAnalyzer /> : premium ? <LiveAnalyzer /> : (
+      <div className="space-y-1.5">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground px-1">Vista de la cámara</p>
+        <Segmented<ViewChoice>
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'auto', label: 'Automática' },
+            { value: 'frente', label: VIEW_LABEL.frente },
+            { value: 'atras', label: VIEW_LABEL.atras },
+          ]}
+        />
+        <p className="text-xs text-muted-foreground px-1">
+          {view === 'auto' ? 'La app reconoce sola si te grabas de frente o desde atrás, sobre la línea de tiro.'
+            : view === 'frente' ? 'De frente: tempo, giros, postura, cabeza y traslado de peso.'
+            : 'Desde atrás, sobre la línea de tiro: inclinación, rodillas, caderas y cabeza.'}
+        </p>
+      </div>
+      {tab === 'video' ? <UploadAnalyzer view={view} /> : premium ? <LiveAnalyzer view={view} /> : (
         <PremiumGate title="Análisis en vivo">
           Coloca el teléfono de frente, activa la cámara y recibe la nota y la corrección de cada swing al instante, sin tocar la pantalla. Disponible en Premium.
         </PremiumGate>
@@ -58,28 +77,43 @@ const SEV = {
 } as const;
 
 export function SwingResultView({ r }: { r: SwingResult }) {
-  const m = r.metrics;
   const tone = (ok: boolean, mid = false) => (ok ? 'good' : mid ? 'warn' : 'bad') as 'good' | 'warn' | 'bad';
+  const tempo = (
+    <Stat label="Tempo" value={`${r.metrics.tempoRatio}:1`} tone={tone(r.metrics.tempoRatio >= 2.6 && r.metrics.tempoRatio <= 3.4, r.metrics.tempoRatio >= 2 && r.metrics.tempoRatio <= 4.2)} />
+  );
   return (
     <div className="space-y-4">
       <Card className="flex items-center gap-4">
         <ScoreRing score={r.score} />
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Nota del swing</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">Nota del swing · {VIEW_LABEL[r.view ?? 'frente'].toLowerCase()}</p>
           <p className="text-sm mt-1">{r.summary}</p>
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <Stat label="Tempo" value={`${m.tempoRatio}:1`} tone={tone(m.tempoRatio >= 2.6 && m.tempoRatio <= 3.4, m.tempoRatio >= 2 && m.tempoRatio <= 4.2)} />
-        <Stat label="Giro de hombros" value={m.shoulderTurnDeg} unit="°" tone={tone(m.shoulderTurnDeg >= 75, m.shoulderTurnDeg >= 55)} />
-        <Stat label="Giro de caderas" value={m.hipTurnDeg} unit="°" tone={tone(m.hipTurnDeg <= 60, true)} />
-        <Stat label="Cambio de postura" value={Math.abs(m.spineChangeDeg)} unit="°" tone={tone(Math.abs(m.spineChangeDeg) <= 6, Math.abs(m.spineChangeDeg) <= 12)} />
-        <Stat label="Mov. de cabeza" value={m.headSwayPct} unit="%" tone={tone(m.headSwayPct <= 25, m.headSwayPct <= 45)} />
-        <Stat label="Avance de cadera" value={m.hipShiftPct} unit="%" tone={tone(m.hipShiftPct >= 8, m.hipShiftPct >= -5)} />
-      </div>
+      {r.view === 'atras' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {tempo}
+          <Stat label="Inclinación al inicio" value={r.metrics.spineAddressDeg} unit="°" tone={tone(r.metrics.spineAddressDeg >= 25 && r.metrics.spineAddressDeg <= 45, r.metrics.spineAddressDeg >= 15 && r.metrics.spineAddressDeg <= 55)} />
+          {r.metrics.kneeFlexDeg != null && (
+            <Stat label="Flexión de rodillas" value={r.metrics.kneeFlexDeg} unit="°" tone={tone(r.metrics.kneeFlexDeg >= 10 && r.metrics.kneeFlexDeg <= 30, true)} />
+          )}
+          <Stat label="Postura al impacto" value={Math.abs(r.metrics.spineImpactChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineImpactChangeDeg) <= 7, Math.abs(r.metrics.spineImpactChangeDeg) <= 14)} />
+          <Stat label="Caderas hacia la bola" value={r.metrics.hipAdvancePct} unit="%" tone={tone(r.metrics.hipAdvancePct <= 6, r.metrics.hipAdvancePct <= 14)} />
+          <Stat label="Cabeza: sube/baja" value={Math.abs(r.metrics.headVerticalPct)} unit="%" tone={tone(Math.abs(r.metrics.headVerticalPct) <= 10, Math.abs(r.metrics.headVerticalPct) <= 20)} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {tempo}
+          <Stat label="Giro de hombros" value={r.metrics.shoulderTurnDeg} unit="°" tone={tone(r.metrics.shoulderTurnDeg >= 75, r.metrics.shoulderTurnDeg >= 55)} />
+          <Stat label="Giro de caderas" value={r.metrics.hipTurnDeg} unit="°" tone={tone(r.metrics.hipTurnDeg <= 60, true)} />
+          <Stat label="Cambio de postura" value={Math.abs(r.metrics.spineChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineChangeDeg) <= 6, Math.abs(r.metrics.spineChangeDeg) <= 12)} />
+          <Stat label="Mov. de cabeza" value={r.metrics.headSwayPct} unit="%" tone={tone(r.metrics.headSwayPct <= 25, r.metrics.headSwayPct <= 45)} />
+          <Stat label="Avance de cadera" value={r.metrics.hipShiftPct} unit="%" tone={tone(r.metrics.hipShiftPct >= 8, r.metrics.hipShiftPct >= -5)} />
+        </div>
+      )}
       <p className="text-xs text-muted-foreground px-1">
-        Subida {m.backswingSec}s · bajada {m.downswingSec}s · {m.framesUsed} cuadros. Medidas estimadas a partir de tu postura con una sola cámara; no miden el palo ni la bola.
+        Subida {r.metrics.backswingSec}s · bajada {r.metrics.downswingSec}s · {r.metrics.framesUsed} cuadros. Medidas estimadas a partir de tu postura con una sola cámara; no miden el palo ni la bola.
       </p>
 
       <div className="space-y-2">
@@ -106,7 +140,7 @@ export function SwingResultView({ r }: { r: SwingResult }) {
 const MAX_SECONDS = 12;
 const STEP = 1 / 20;
 
-function UploadAnalyzer() {
+function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, sessions, addSession } = useStore();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -142,7 +176,7 @@ function UploadAnalyzer() {
         if (f) frames.push(f);
         setProgress(Math.round((t / dur) * 100));
       }
-      const r = analyzeSwing(frames, { lefty: profile.lefty });
+      const r = analyzeSwing(frames, { lefty: profile.lefty, view, aspect: v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1 });
       if (typeof r === 'string') setError(SWING_ERROR_TEXT[r]);
       else {
         setResult(r);
@@ -172,7 +206,7 @@ function UploadAnalyzer() {
           <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-10 cursor-pointer hover:bg-muted/50">
             <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Upload className="w-5 h-5" /></span>
             <span className="font-medium">Sube o graba tu swing</span>
-            <span className="text-xs text-muted-foreground">Un solo swing, de frente y de cuerpo entero · máx. {MAX_SECONDS} s</span>
+            <span className="text-xs text-muted-foreground">Un solo swing, de frente o desde atrás, de cuerpo entero · máx. {MAX_SECONDS} s</span>
             <input type="file" accept="video/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
           </label>
         )}
@@ -196,8 +230,11 @@ function UploadAnalyzer() {
 
 type Phase = 'ready' | 'top' | 'settle' | 'rearm';
 
-function LiveAnalyzer() {
+function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, addSession } = useStore();
+  // El bucle de la cámara vive fuera del render: lee la vista elegida desde una referencia.
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -252,8 +289,10 @@ function LiveAnalyzer() {
         const handsHigh = wy < shY - 0.02;
         const handsLow = wy > hipY - 0.04;
 
+        const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
         if (phase === 'ready') {
-          setStatus('Listo. Haz tu swing cuando quieras');
+          const seen = viewRef.current === 'auto' ? viewOfFrame(f, aspect) : viewRef.current;
+          setStatus(`Listo (${VIEW_LABEL[seen].toLowerCase()}). Haz tu swing cuando quieras`);
           if (handsHigh) { phase = 'top'; tTop = now; }
         } else if (phase === 'top') {
           if (handsLow) { phase = 'settle'; tImp = now; }
@@ -261,7 +300,7 @@ function LiveAnalyzer() {
         } else if (phase === 'settle') {
           if (now - tImp > 600) {
             const seg = buf.filter((b) => b.t >= tTop - 2500 && b.t <= tImp + 500);
-            const r = analyzeSwing(seg, { lefty: profile.lefty });
+            const r = analyzeSwing(seg, { lefty: profile.lefty, view: viewRef.current, aspect });
             if (typeof r !== 'string') {
               swingsRef.current = [r, ...swingsRef.current];
               setSwings(swingsRef.current);
@@ -307,7 +346,7 @@ function LiveAnalyzer() {
         {!on && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
             <Camera className="w-10 h-10 opacity-80" />
-            <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente, y entra de cuerpo entero.</p>
+            <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente o desde atrás, y entra de cuerpo entero.</p>
             <Button variant="gold" onClick={() => start()} disabled={loading}>
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando…</> : <><Video className="w-5 h-5" /> Iniciar análisis en vivo</>}
             </Button>
@@ -320,7 +359,7 @@ function LiveAnalyzer() {
               <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white rounded-xl px-4 py-3 flex items-center gap-3">
                 <span className="font-heading text-4xl font-bold">{last.score}</span>
                 <span className="text-sm leading-snug">
-                  <span className="block opacity-70">Tempo {last.metrics.tempoRatio}:1 · hombros {last.metrics.shoulderTurnDeg}°</span>
+                  <span className="block opacity-70">Tempo {last.metrics.tempoRatio}:1 · {last.view === 'atras' ? `inclinación ${last.metrics.spineAddressDeg}°` : `hombros ${last.metrics.shoulderTurnDeg}°`}</span>
                   <span className="block font-semibold">{topIssue ? topIssue.title : '¡Swing muy sólido!'}</span>
                 </span>
               </div>

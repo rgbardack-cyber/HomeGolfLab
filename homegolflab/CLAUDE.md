@@ -17,7 +17,7 @@ Dueño: Ryan. Responder y escribir la interfaz en español.
 No mostrar números que la app no mide. El swing reporta solo lo estimable desde la postura (tempo, giros, postura, cabeza, cadera), no trayectoria del palo ni cara. El ball tracking con cámara mide putts y chips rodados; el swing completo se registra a mano.
 
 ## Estructura
-- `src/lib/swing.ts` — métricas y coaching por reglas a partir de puntos de MediaPipe Pose.
+- `src/lib/swing.ts` — métricas y coaching por reglas a partir de puntos de MediaPipe Pose. Dos vistas: de frente (`coach`) y desde atrás sobre la línea de tiro (`coachDtl`); `analyzeSwing` elige sola con `detectView` según el ancho aparente del cuerpo al inicio. Pasarle siempre `aspect` (ancho ÷ alto del video).
 - `src/lib/pose.ts` — carga del modelo y detección por cuadro.
 - `src/lib/tracking.ts` — detección de bola por diferencia de cuadros, análisis de putt, dispersión.
 - `src/lib/homelab.ts` — zonas viables y plan diario según espacio y equipo.
@@ -29,6 +29,8 @@ No mostrar números que la app no mide. El swing reporta solo lo estimable desde
 - `npm run typecheck`, `npm test`, `npm run build` — correr los tres antes de dar algo por terminado.
 
 `node_modules` es un enlace a `C:\Users\Ryan\dev\hgl-node_modules` para que iCloud no lo sincronice.
+
+El repo vive en iCloud Drive, y iCloud a veces renombra un archivo recién editado a `nombre 2.ext` y borra el original (pasó con `lib.test.ts` el 16 nov 2026). Si `git status` muestra un archivo borrado junto a un `… 2.…` sin seguimiento, es eso: devolverle el nombre.
 
 ## Monetización (decidido el 10 nov 2026)
 - **Ball tracking es la función para todos**: gratis por bloques de 15 minutos de uso; al agotarse, el usuario ve 2 anuncios de 30 s para abrir otros 15 (`src/lib/ads.ts`, `src/components/AdGate.tsx`). Premium: sin anuncios ni límite.
