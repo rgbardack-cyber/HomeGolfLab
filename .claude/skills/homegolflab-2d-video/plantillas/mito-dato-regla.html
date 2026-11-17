@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mito, dato, regla — HomeGolfLab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Playfair+Display:wght@700&display=block">
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script src="/_hgl/player.js"></script>
+<script>
+// Formato del playbook (homegolflab-video-playbook): gancho → giro → porqué → regla → frase de cierre → CTA.
+// Cambiar solo TEXTO y los tiempos. Todo dato de golf debe estar verificado antes de ponerlo aquí.
+const TEXTO = {
+  gancho: ['Tu swing se ve bien', 'en tu cabeza.'],
+  giro: 'Ni de cerca.',
+  porque: ['Lo que sientes', 'no es lo que haces.'],
+  etiquetas: ['Lo que crees', 'Lo que graba la cámara'],
+  regla: ['Graba un swing.', 'Corrige solo una cosa.', 'Repite.'],
+  cierre: ['Lo que sientes engaña.', 'La cámara no.'],
+  cta: 'Practica en casa. Mejora en la cancha.',
+};
+// segundos en que entra cada bloque
+const T = { gancho: 0.2, giro: 3.2, porque: 5.0, regla: 11.0, cierre: 17.0, cta: 21.0 };
+
+const C = { verde: '#276749', verde2: '#428A68', dorado: '#D4A735', fondo: '#F6F9F7', tinta: '#0E1B14', gris: '#5E6E66', suave: '#EAF0EC', rojo: '#CE2727', blanco: '#FFFFFF' };
+const SERIF = '700 108px "Playfair Display", Georgia, serif', SANS = '700 54px Inter, "Segoe UI", sans-serif';
+
+const fade = (t, t0, d = 0.5) => HGL.keys(t, [[t0, 0], [t0 + d, 1, 'out']]);
+function text(ctx, s, x, y, font, color, a = 1, dy = 0) {
+  ctx.globalAlpha = a; ctx.font = font; ctx.fillStyle = color; ctx.textAlign = 'center';
+  ctx.fillText(s, x, y + (1 - a) * dy); ctx.globalAlpha = 1;
+}
+// Marca de texto centrada en (cx, y): cuadro verde con "H" + nombre. Para el logo oficial usar los PNG de brand-kit/logos.
+function logo(ctx, cx, y, size, a = 1) {
+  ctx.globalAlpha = a;
+  ctx.font = `700 ${size * 0.8}px "Playfair Display", Georgia, serif`;
+  const tw = ctx.measureText('HomeGolfLab').width, gap = size * 0.25, x0 = cx - (size + gap + tw) / 2;
+  ctx.fillStyle = C.verde; HGL.roundRect(ctx, x0, y - size / 2, size, size, size * 0.22); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = `700 ${size * 0.62}px "Playfair Display", Georgia, serif`; ctx.textAlign = 'center';
+  ctx.fillText('H', x0 + size / 2, y + size * 0.22);
+  ctx.fillStyle = C.tinta; ctx.font = `700 ${size * 0.8}px "Playfair Display", Georgia, serif`; ctx.textAlign = 'left';
+  ctx.fillText('HomeGolfLab', x0 + size + gap, y + size * 0.28); ctx.textAlign = 'center'; ctx.globalAlpha = 1;
+}
+
+HGL.scene({
+  width: 1080, height: 1920, fps: 30, duration: 26,
+  draw(ctx, t, W, H) {
+    const cx = W / 2;
+    // fondo: blanco en el mito, verde en el cierre
+    const toGreen = HGL.keys(t, [[T.cierre - 0.3, 0], [T.cierre + 0.4, 1]]);
+    ctx.fillStyle = C.fondo; ctx.fillRect(0, 0, W, H);
+    if (toGreen > 0) { const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, C.verde); g.addColorStop(1, C.verde2); ctx.globalAlpha = toGreen; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+
+    const inMyth = t < T.porque - 0.3;
+    if (inMyth) {
+      const out = 1 - HGL.keys(t, [[T.porque - 0.6, 0], [T.porque - 0.2, 1]]);
+      TEXTO.gancho.forEach((l, i) => {
+        const y = 760 + i * 130;
+        text(ctx, l, cx, y, SERIF, C.tinta, fade(t, T.gancho + i * 0.25) * out, 40);
+        // tachado en rojo
+        if (i === 1 && t > T.giro - 0.2) {
+          const w = ctx.measureText(l).width * HGL.keys(t, [[T.giro - 0.2, 0], [T.giro + 0.35, 1, 'out']]);
+          ctx.strokeStyle = C.rojo; ctx.lineWidth = 14; ctx.lineCap = 'round'; ctx.globalAlpha = out;
+          ctx.beginPath(); ctx.moveTo(cx - ctx.measureText(l).width / 2, y - 38); ctx.lineTo(cx - ctx.measureText(l).width / 2 + w, y - 38); ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      });
+      text(ctx, TEXTO.giro, cx, 1130, '800 132px Inter, "Segoe UI", sans-serif', C.rojo, fade(t, T.giro + 0.1, 0.4) * out, 30);
+    }
+
+    // el porqué: dos barras que se comparan (placeholder visual, sin cifras)
+    if (t >= T.porque - 0.3 && t < T.regla + 1.2) {
+      const out = 1 - HGL.keys(t, [[T.regla - 0.2, 0], [T.regla + 0.4, 1]]);
+      TEXTO.porque.forEach((l, i) => text(ctx, l, cx, 420 + i * 120, SERIF.replace('108px', '84px'), C.tinta, fade(t, T.porque + i * 0.3) * out, 30));
+      [[0, 0.86, C.suave, C.gris], [1, 0.54, C.verde, C.blanco]].forEach(([i, f, bg, fg], k) => {
+        const y = 820 + i * 330, a = fade(t, T.porque + 1.2 + i * 1.2) * out;
+        const w = 820 * f * HGL.keys(t, [[T.porque + 1.2 + i * 1.2, 0], [T.porque + 2.2 + i * 1.2, 1, 'out']]);
+        ctx.globalAlpha = a; ctx.fillStyle = C.suave; HGL.roundRect(ctx, 130, y, 820, 130, 30); ctx.fill();
+        ctx.fillStyle = i ? C.verde : C.gris; HGL.roundRect(ctx, 130, y, Math.max(60, w), 130, 30); ctx.fill();
+        ctx.globalAlpha = 1;
+        text(ctx, TEXTO.etiquetas[i], cx, y - 28, '600 44px Inter, "Segoe UI", sans-serif', C.gris, a, 10);
+      });
+    }
+
+    // la regla: tres pasos
+    if (t >= T.regla && t < T.cierre) {
+      const out = 1 - HGL.keys(t, [[T.cierre - 0.5, 0], [T.cierre - 0.1, 1]]);
+      text(ctx, 'LA REGLA', cx, 460, '700 40px Inter, "Segoe UI", sans-serif', C.dorado, fade(t, T.regla) * out);
+      TEXTO.regla.forEach((l, i) => {
+        const y = 640 + i * 230, a = fade(t, T.regla + 0.4 + i * 1.0) * out;
+        ctx.globalAlpha = a; ctx.fillStyle = C.blanco; ctx.strokeStyle = '#DCE5DF'; ctx.lineWidth = 3;
+        HGL.roundRect(ctx, 110, y, 860, 170, 40); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = C.verde; ctx.beginPath(); ctx.arc(200, y + 85, 42, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = '700 46px Inter, "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), 200, y + 102);
+        ctx.fillStyle = C.tinta; ctx.font = '700 50px Inter, "Segoe UI", sans-serif'; ctx.textAlign = 'left'; ctx.fillText(l, 275, y + 102);
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // cierre y CTA sobre verde
+    if (t >= T.cierre) {
+      const out = 1 - HGL.keys(t, [[T.cta - 0.4, 0], [T.cta, 1]]);
+      TEXTO.cierre.forEach((l, i) => text(ctx, l, cx, 800 + i * 140, SERIF.replace('108px', '86px'), '#fff', fade(t, T.cierre + 0.4 + i * 0.6) * out, 40));
+      if (t >= T.cta - 0.2) {
+        const a = fade(t, T.cta, 0.6);
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = a; HGL.roundRect(ctx, 110, 640, 860, 280, 60); ctx.fill(); ctx.globalAlpha = 1;
+        logo(ctx, cx, 780, 100, a);
+        ctx.fillStyle = C.dorado; ctx.globalAlpha = a; ctx.fillRect(cx - 45, 1010, 90, 8); ctx.globalAlpha = 1;
+        text(ctx, TEXTO.cta, cx, 1120, '700 52px "Playfair Display", Georgia, serif', '#fff', fade(t, T.cta + 0.5));
+      }
+    }
+  },
+});
+</script>
+</body>
+</html>
