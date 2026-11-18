@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSwing, angleAt, coach, coachDtl, viewOfFrame, type Frame, type Pt } from './swing';
+import { analyzeSwing, angleAt, coach, coachDtl, framingCheck, hipLine, viewOfFrame, type Frame, type Pt } from './swing';
+import { coachInfo, coachPayload } from './coach';
+import { bodyMask, findShaft, pointsDown, readClub, targetSide, type Gray, type Shaft } from './club';
 import { analyzeShot, detectMovingBright, dispersion, type Shot } from './tracking';
 import { buildPlan, zones, type Space } from './homelab';
 import { BADGES, computeStats, levelFor, newBadges, totalXp, type SessionLite } from './badges';
@@ -7,14 +9,15 @@ import { BADGES, computeStats, levelFor, newBadges, totalXp, type SessionLite } 
 const pt = (x: number, y: number): Pt => ({ x, y, z: 0, v: 0.95 });
 
 /** Swing sintético visto de frente: manos suben al tope y bajan al impacto. */
-function synthSwing({ back = 0.9, down = 0.3, turn = 0.25, hipShift = 0.03, fps = 30 } = {}): Frame[] {
+function synthSwing({ back = 0.9, down = 0.3, turn = 0.25, hipShift = 0.03, sway = 0, fps = 30 } = {}): Frame[] {
   const frames: Frame[] = [];
   const total = 0.5 + back + down + 0.5;
   for (let i = 0; i < total * fps; i++) {
     const t = i / fps;
     let wy = 0.6, w = 1, shift = 0;
-    if (t >= 0.5 && t < 0.5 + back) { const k = (t - 0.5) / back; wy = 0.6 - 0.42 * k; w = 1 - (1 - turn) * k; }
-    else if (t >= 0.5 + back && t < 0.5 + back + down) { const k = (t - 0.5 - back) / down; wy = 0.18 + 0.44 * k; w = turn + (1 - turn) * k; shift = hipShift * k; }
+    // `sway`: las caderas se van hacia el lado trasero (−x) en la subida y vuelven en la bajada.
+    if (t >= 0.5 && t < 0.5 + back) { const k = (t - 0.5) / back; wy = 0.6 - 0.42 * k; w = 1 - (1 - turn) * k; shift = -sway * k; }
+    else if (t >= 0.5 + back && t < 0.5 + back + down) { const k = (t - 0.5 - back) / down; wy = 0.18 + 0.44 * k; w = turn + (1 - turn) * k; shift = -sway + (sway + hipShift) * k; }
     else if (t >= 0.5 + back + down) { const k = Math.min(1, (t - 0.5 - back - down) / 0.4); wy = 0.62 - 0.4 * k; shift = hipShift; }
     const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
     const half = 0.08 * w;
@@ -34,16 +37,17 @@ function synthSwing({ back = 0.9, down = 0.3, turn = 0.25, hipShift = 0.03, fps 
  * con los dos hombros y las dos caderas casi superpuestos.
  * `rise` = cuánto se endereza en el impacto; `hipAdvance` = cuánto se acercan las caderas a la bola.
  */
-function synthDtl({ back = 0.9, down = 0.3, rise = 0, hipAdvance = 0, fps = 30 } = {}): Frame[] {
+function synthDtl({ back = 0.9, down = 0.3, rise = 0, hipAdvance = 0, hipTop = 0, fps = 30 } = {}): Frame[] {
   const frames: Frame[] = [];
   const total = 0.5 + back + down + 0.5;
   for (let i = 0; i < total * fps; i++) {
     const t = i / fps;
-    let wy = 0.6, k = 0; // k: avance de la bajada (0 → 1)
-    if (t >= 0.5 && t < 0.5 + back) wy = 0.6 - 0.42 * ((t - 0.5) / back);
-    else if (t >= 0.5 + back && t < 0.5 + back + down) { k = (t - 0.5 - back) / down; wy = 0.18 + 0.44 * k; }
-    else if (t >= 0.5 + back + down) { k = 1; wy = 0.62 - 0.4 * Math.min(1, (t - 0.5 - back - down) / 0.4); }
-    const hipX = 0.45 + hipAdvance * k;
+    let wy = 0.6, k = 0, b = 0; // k: avance de la bajada (0 → 1); b: avance de la subida (0 → 1)
+    if (t >= 0.5 && t < 0.5 + back) { b = (t - 0.5) / back; wy = 0.6 - 0.42 * b; }
+    else if (t >= 0.5 + back && t < 0.5 + back + down) { b = 1; k = (t - 0.5 - back) / down; wy = 0.18 + 0.44 * k; }
+    else if (t >= 0.5 + back + down) { b = 1; k = 1; wy = 0.62 - 0.4 * Math.min(1, (t - 0.5 - back - down) / 0.4); }
+    // `hipTop`: cuánto se acercan las caderas a la bola en la subida; `hipAdvance`: cuánto más en la bajada.
+    const hipX = 0.45 + hipTop * b + hipAdvance * k;
     const lean = 0.154 - rise * k; // desplazamiento horizontal de los hombros sobre la cadera
     const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
     lm[0] = pt(hipX + lean + 0.07, 0.22 - rise * k * 0.3);
@@ -91,9 +95,10 @@ describe('swing desde atrás', () => {
     expect(r.metrics.tempoRatio).toBeGreaterThan(2.5);
     expect(r.metrics.tempoRatio).toBeLessThan(3.6);
     expect(Math.abs(r.metrics.hipAdvancePct)).toBeLessThanOrEqual(2);
-    for (const key of ['setup', 'knees', 'spine', 'extension', 'head', 'tempo']) {
+    for (const key of ['setup', 'knees', 'spine', 'extension', 'head']) {
       expect(r.feedback.find((f) => f.key === key)?.severity, key).toBe('good');
     }
+    expect(r.feedback.find((f) => f.key === 'tempo')).toBeUndefined(); // desde atrás el tempo no se juzga
   });
   it('detecta extensión temprana y que te levantas', () => {
     const r = analyzeSwing(synthDtl({ rise: 0.1, hipAdvance: 0.05 }));
@@ -105,6 +110,47 @@ describe('swing desde atrás', () => {
     const clean = analyzeSwing(synthDtl());
     if (typeof clean === 'string') throw new Error(clean);
     expect(r.score).toBeLessThan(clean.score);
+  });
+  it('línea de caderas: dice en qué parte del swing se acercan a la bola', () => {
+    const dtl = (o: Parameters<typeof synthDtl>[0]) => {
+      const r = analyzeSwing(synthDtl(o));
+      if (typeof r === 'string' || r.view !== 'atras') throw new Error('se esperaba vista desde atrás');
+      return r;
+    };
+    // Limpio: sobre la línea en el tope y en el impacto.
+    const clean = dtl({});
+    expect(Math.abs(clean.metrics.hipTopPct!)).toBeLessThanOrEqual(2);
+    expect(clean.feedback.find((f) => f.key === 'hipsTop')).toBeUndefined();
+    expect(hipLine(clean)!.rows.map((x) => x.tone)).toEqual(['good', 'good']);
+    // Solo en la bajada (el torso sintético mide 0,27: 0,05 ≈ 19 %).
+    const down = dtl({ hipAdvance: 0.05 });
+    expect(Math.abs(down.metrics.hipTopPct!)).toBeLessThanOrEqual(2);
+    expect(down.feedback.find((f) => f.key === 'extension')?.detail).toContain('Ocurre en la bajada');
+    expect(hipLine(down)!.rows.map((x) => x.tone)).toEqual(['good', 'bad']);
+    // Desde la subida y no regresan.
+    const up = dtl({ hipTop: 0.05 });
+    expect(up.metrics.hipTopPct).toBeGreaterThan(16);
+    expect(up.feedback.find((f) => f.key === 'hipsTop')?.severity).toBe('fix');
+    expect(up.feedback.find((f) => f.key === 'extension')?.detail).toContain('Viene de la subida');
+    // En las dos partes.
+    const both = dtl({ hipTop: 0.03, hipAdvance: 0.03 });
+    expect(both.feedback.find((f) => f.key === 'hipsTop')?.severity).toBe('improve');
+    expect(both.feedback.find((f) => f.key === 'extension')?.detail).toContain('Empieza en la subida y sigue en la bajada');
+    expect(both.score).toBeLessThan(down.score);
+    // Se acercan en la subida pero vuelven a la línea en el impacto.
+    const back = dtl({ hipTop: 0.04, hipAdvance: -0.04 });
+    expect(back.feedback.find((f) => f.key === 'hipsTop')).toBeDefined();
+    expect(back.feedback.find((f) => f.key === 'extension')?.severity).toBe('good');
+    // Con el pecho levantándose, lo nombra como el patrón completo.
+    expect(dtl({ rise: 0.1, hipAdvance: 0.05 }).feedback.find((f) => f.key === 'extension')?.detail).toContain('el pecho se levanta');
+    expect(down.feedback.find((f) => f.key === 'extension')?.detail).not.toContain('el pecho se levanta');
+  });
+  it('los resultados guardados sin la medida del tope se siguen leyendo', () => {
+    const old = { tempoRatio: 3, backswingSec: 0.9, downswingSec: 0.3, framesUsed: 60, spineAddressDeg: 35, kneeFlexDeg: 20, spineTopChangeDeg: 2, spineImpactChangeDeg: -2, hipAdvancePct: 20, headVerticalPct: 3, headForwardPct: 2 };
+    const ext = coachDtl(old).feedback.find((f) => f.key === 'extension')!;
+    expect(ext.severity).toBe('fix');
+    expect(ext.detail).not.toMatch(/subida|bajada:/);
+    expect(hipLine({ view: 'atras', metrics: old, score: 80, feedback: [], summary: '', focus: [], events: { address: 0, top: 1, impact: 2 } })).toBeNull();
   });
   it('omite las rodillas si no se ven los tobillos', () => {
     const frames = synthDtl().map((f) => ({ ...f, lm: f.lm.map((p, i) => (i === 27 || i === 28 ? { ...p, v: 0.1 } : p)) }));
@@ -148,6 +194,29 @@ describe('swing', () => {
     if (typeof r === 'string') throw new Error(r);
     expect(r.metrics.tempoRatio).toBeLessThan(2.2);
     expect(r.feedback.find((f) => f.key === 'tempo')?.severity).not.toBe('good');
+  });
+  it('caderas de frente: distingue girar de desplazarse', () => {
+    const front = (o: Parameters<typeof synthSwing>[0]) => {
+      const r = analyzeSwing(synthSwing(o));
+      if (typeof r === 'string' || r.view === 'atras') throw new Error('se esperaba vista de frente');
+      return r;
+    };
+    // El ancho de hombros sintético es 0,16.
+    const clean = front({});
+    expect(clean.metrics.hipSwayPct).toBe(0);
+    expect(clean.feedback.find((f) => f.key === 'sway')).toBeUndefined();
+    expect(hipLine(clean)!.rows.map((x) => x.tone)).toEqual(['good', 'good']);
+    // Balanceo: en el tope las caderas quedan del lado trasero.
+    const sway = front({ sway: 0.04 }); // 25 %
+    expect(sway.metrics.hipSwayPct).toBeGreaterThan(15);
+    expect(sway.feedback.find((f) => f.key === 'sway')?.severity).toBe('improve');
+    expect(hipLine(sway)!.rows[0].pct).toBeLessThan(0); // se dibuja hacia el lado trasero
+    expect(front({ sway: 0.06 }).feedback.find((f) => f.key === 'sway')?.severity).toBe('fix');
+    expect(sway.score).toBeLessThan(clean.score);
+    // Deslizamiento: demasiado avance hacia el objetivo en el impacto.
+    const slide = front({ hipShift: 0.11 }); // ≈ 69 %
+    expect(slide.feedback.find((f) => f.key === 'shift')?.title).toBe('Las caderas se deslizan de más');
+    expect(hipLine(slide)!.rows[1].tone).toBe('warn');
   });
   it('rechaza clips sin swing', () => {
     const first = synthSwing()[0].lm;
@@ -286,5 +355,228 @@ describe('escaneo de HomeLAB', () => {
     expect(s.ceilingM).toBe(2.4);
     expect(s.floor).toBe('duro');
     expect(s.gear).toEqual(['putter']);
+  });
+});
+
+describe('brazos, manos y encuadre', () => {
+  it('de frente: mide codos y manos al inicio y en el tope', () => {
+    const r = analyzeSwing(synthSwing());
+    if (typeof r === 'string' || r.view === 'atras') throw new Error('se esperaba vista de frente');
+    expect(r.metrics.handsTopPct).toBeGreaterThan(30);            // manos por encima de los hombros
+    expect(Math.abs(r.metrics.handsAddressPct!)).toBeLessThan(12); // manos al centro
+    expect(r.metrics.leadArmAddressDeg).toBeGreaterThan(150);
+    expect(r.times!.top).toBeGreaterThan(r.times!.address);
+    expect(r.times!.impact).toBeGreaterThan(r.times!.top);
+  });
+  it('desde atrás: avisa si estiras los brazos hacia la bola', () => {
+    const ok = analyzeSwing(synthDtl());
+    const far = analyzeSwing(synthDtl().map((f) => ({ ...f, lm: f.lm.map((p, i) => (i === 15 || i === 16 ? { ...p, x: p.x + 0.1 } : p)) })));
+    if (typeof ok === 'string' || typeof far === 'string' || ok.view !== 'atras' || far.view !== 'atras') throw new Error('sin resultado');
+    expect(ok.feedback.find((f) => f.key === 'hands')?.severity).toBe('good');
+    expect(far.metrics.handsAddressPct).toBeGreaterThan(30);
+    expect(far.feedback.find((f) => f.key === 'hands')?.title).toBe('Estiras los brazos hacia la bola');
+  });
+  it('las reglas de brazos bajan la nota', () => {
+    const base = { tempoRatio: 3, backswingSec: 0.9, downswingSec: 0.3, shoulderTurnDeg: 90, hipTurnDeg: 45, xFactorDeg: 45, spineAddressDeg: 5, spineChangeDeg: 2, headSwayPct: 10, hipShiftPct: 15, leadArmDeg: 170, framesUsed: 60 };
+    const worse = coach({ ...base, handsTopPct: -10, handsAddressPct: -30 });
+    expect(coach({ ...base, handsTopPct: 30, handsAddressPct: 5 }).score).toBeGreaterThan(worse.score);
+    expect(worse.feedback.map((f) => f.key)).toEqual(expect.arrayContaining(['height', 'hands']));
+    // El codo trasero no se juzga: el modelo lo estima mal cuando el brazo queda tapado.
+    expect(coach({ ...base, trailElbowTopDeg: 150 }).feedback.find((f) => f.key === 'elbow')).toBeUndefined();
+    // Los resultados viejos, sin estas medidas, se siguen pudiendo evaluar.
+    expect(coach(base).feedback.find((f) => f.key === 'height')).toBeUndefined();
+  });
+  it('toma como inicio el último cuadro con las manos quietas', () => {
+    // Arranque real: las manos van primero hacia atrás casi sin subir. Ese tramo ya es subida.
+    const frames = synthSwing().map((f) => {
+      const k = Math.min(1, Math.max(0, (f.t - 300) / 200)); // de 0,3 a 0,5 s las manos se desplazan a un lado
+      return { ...f, lm: f.lm.map((p, i) => (i === 15 || i === 16 ? { ...p, x: p.x - 0.05 * k } : p)) };
+    });
+    const r = analyzeSwing(frames);
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.times!.address).toBeLessThanOrEqual(334);
+    if (r.view === 'atras') throw new Error('se esperaba vista de frente');
+    expect(Math.abs(r.metrics.handsAddressPct!)).toBeLessThan(12); // manos todavía al centro
+  });
+  it('saca la mano dominante del propio swing', () => {
+    // Subida hacia la izquierda de la imagen = diestro; hacia la derecha = zurdo. El perfil no manda.
+    const shift = (dir: number) => synthSwing().map((f) => {
+      const up = Math.max(0, 0.6 - (f.lm[15].y + f.lm[16].y) / 2) / 0.42; // 0 abajo, 1 en el tope
+      return { ...f, lm: f.lm.map((p, i) => (i === 15 || i === 16 ? { ...p, x: p.x + dir * 0.12 * up } : p)) };
+    });
+    const righty = analyzeSwing(shift(-1), { lefty: true }), lefty = analyzeSwing(shift(1), { lefty: false });
+    if (typeof righty === 'string' || typeof lefty === 'string') throw new Error('sin resultado');
+    expect(righty.lefty).toBe(false);
+    expect(lefty.lefty).toBe(true);
+    // Sin movimiento lateral claro, vale lo que diga el perfil.
+    const flat = analyzeSwing(synthSwing(), { lefty: true });
+    if (typeof flat === 'string') throw new Error(flat);
+    expect(flat.lefty).toBe(true);
+  });
+  it('revisa el encuadre', () => {
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[0] = pt(0.5, 0.25); lm[27] = pt(0.45, 0.9); lm[28] = pt(0.55, 0.9); lm[23] = pt(0.47, 0.55); lm[24] = pt(0.53, 0.55);
+    expect(framingCheck(lm).ok).toBe(true);
+    const with_ = (i: number, p: Pt) => lm.map((q, k) => (k === i ? p : q));
+    expect(framingCheck(with_(27, pt(0.45, 0.99))).hint).toMatch(/pies/);
+    expect(framingCheck(with_(0, pt(0.5, 0.08))).hint).toMatch(/cabeza/);
+    expect(framingCheck(with_(0, pt(0.5, 0.6))).hint).toMatch(/Acércate/);
+    expect(framingCheck(lm.map((q) => ({ ...q, x: q.x + 0.3 }))).hint).toMatch(/centro/);
+  });
+});
+
+describe('palo (experimental)', () => {
+  /** Imagen gris con algo de textura determinista. */
+  const canvas = (w = 480, h = 480): Gray => {
+    const data = new Uint8Array(w * h);
+    for (let i = 0; i < data.length; i++) data[i] = 118 + ((i * 2654435761) >>> 29);
+    return { data, width: w, height: h };
+  };
+  const line = (g: Gray, x0: number, y0: number, deg: number, from: number, to: number, value: number, thick = 2) => {
+    const th = (deg * Math.PI) / 180;
+    for (let r = from; r <= to; r += 0.5) for (let k = -thick / 2; k <= thick / 2; k += 0.5) {
+      const x = Math.round(x0 + Math.cos(th) * r - Math.sin(th) * k), y = Math.round(y0 + Math.sin(th) * r + Math.cos(th) * k);
+      if (x >= 0 && y >= 0 && x < g.width && y < g.height) g.data[y * g.width + x] = value;
+    }
+  };
+  const hands = { x: 200, y: 150 }, unit = 120;
+  it('encuentra una varilla fina que sale de las manos', () => {
+    for (const [deg, value] of [[70, 235], [110, 20], [350, 235]] as const) {
+      const g = canvas();
+      line(g, hands.x, hands.y, deg, 10, 230, value);
+      const s = findShaft(g, hands, unit)!;
+      expect(s, 'ángulo ' + deg).not.toBeNull();
+      expect(Math.min(Math.abs(s.angleDeg - deg), 360 - Math.abs(s.angleDeg - deg))).toBeLessThan(2.5);
+      expect(s.confidence).toBeGreaterThan(0.5);
+      expect(s.lengthPx).toBeGreaterThan(200);
+    }
+  });
+  it('la encuentra aunque no pase justo por las muñecas', () => {
+    const g = canvas();
+    line(g, hands.x + 18, hands.y - 6, 75, 30, 240, 20, 3); // el grip queda a un lado del punto de las muñecas
+    const s = findShaft(g, hands, unit)!;
+    expect(s).not.toBeNull();
+    expect(Math.abs(s.angleDeg - 75)).toBeLessThan(2.5);
+    expect(s.tip.y).toBeGreaterThan(hands.y + 180);
+  });
+  it('ignora las líneas que están sobre el cuerpo', () => {
+    // Una "raya del pantalón" vertical bajo las manos, y la varilla de verdad saliendo hacia un lado.
+    const lm = Array.from({ length: 33 }, () => ({ x: 0, y: 0 }));
+    lm[23] = { x: 190, y: 160 }; lm[25] = { x: 192, y: 290 }; lm[27] = { x: 194, y: 410 }; // una pierna bajo las manos
+    lm[24] = { x: 240, y: 160 }; lm[26] = { x: 242, y: 290 }; lm[28] = { x: 244, y: 410 };
+    lm[31] = lm[27]; lm[32] = lm[28]; lm[0] = { x: 215, y: -80 };
+    for (const i of [11, 12, 13, 14, 15, 16]) lm[i] = { x: 215, y: 130 };
+    const crease = canvas(); line(crease, 192, 160, 90, 0, 250, 20, 2);
+    const mask = bodyMask(crease.width, crease.height, lm, unit);
+    expect(findShaft(crease, hands, unit)).not.toBeNull();          // sin máscara, la raya engaña
+    expect(findShaft(crease, hands, unit, { mask })).toBeNull();    // con máscara, no
+    const both = canvas(); line(both, 192, 160, 90, 0, 250, 20, 2); line(both, hands.x, hands.y, 130, 10, 240, 20, 3);
+    const s = findShaft(both, hands, unit, { mask: bodyMask(both.width, both.height, lm, unit) })!;
+    expect(s).not.toBeNull();
+    expect(Math.abs(s.angleDeg - 130)).toBeLessThan(2.5);           // gana la varilla, aunque cruce por delante de la pierna
+  });
+  it('no toma la textura del pasto por un palo', () => {
+    // Fondo con mucho grano (pasto, grava): hay contraste por todas partes, pero ninguna línea.
+    const rough = (): Gray => {
+      const g = canvas(); let a = 7;
+      const rnd = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      for (let i = 0; i < g.data.length; i++) g.data[i] = 85 + Math.floor(rnd() * 70);
+      return g;
+    };
+    expect(findShaft(rough(), hands, unit)).toBeNull();
+    const withShaft = rough(); line(withShaft, hands.x, hands.y, 110, 10, 235, 250, 3);
+    const s = findShaft(withShaft, hands, unit)!;
+    expect(s).not.toBeNull();
+    expect(Math.abs(s.angleDeg - 110)).toBeLessThan(2.5);
+    expect(s.confidence).toBeGreaterThan(0.5);
+  });
+  it('al inicio descarta lo que no apunta hacia abajo', () => {
+    // Una línea larga hacia arriba (un poste, una costura) y la varilla, más corta, hacia el suelo.
+    const g = canvas(); line(g, hands.x, hands.y, 270, 10, 140, 235); line(g, hands.x, hands.y, 105, 10, 120, 235);
+    expect(Math.abs(findShaft(g, hands, unit)!.angleDeg - 270)).toBeLessThan(2.5);
+    const s = findShaft(g, hands, unit, { allow: pointsDown })!;
+    expect(Math.abs(s.angleDeg - 105)).toBeLessThan(4); // en tramos cortos el ángulo baila unos 3°
+    expect(s.confidence).toBeGreaterThan(0.5);
+  });
+  it('no inventa un palo', () => {
+    expect(findShaft(canvas(), hands, unit)).toBeNull();                 // fondo sin líneas
+    const arm = canvas(); line(arm, hands.x, hands.y, 60, 10, 230, 230, 22);
+    expect(findShaft(arm, hands, unit)).toBeNull();                      // algo grueso: un brazo o una pierna
+    const horizon = canvas(); line(horizon, hands.x, hands.y, 0, -190, 230, 235);
+    expect(findShaft(horizon, hands, unit)).toBeNull();                  // línea del fondo que cruza por las manos
+    const far = canvas(); line(far, hands.x, hands.y, 70, 130, 260, 235);
+    expect(findShaft(far, hands, unit)).toBeNull();                      // línea que no nace en las manos
+  });
+  it('no confunde el antebrazo con el palo', () => {
+    const g = canvas(); line(g, hands.x, hands.y, 250, 10, 230, 235);
+    const elbow = { x: hands.x + Math.cos((250 * Math.PI) / 180) * 80, y: hands.y + Math.sin((250 * Math.PI) / 180) * 80 };
+    expect(findShaft(g, hands, unit)).not.toBeNull();
+    expect(findShaft(g, hands, unit, { avoid: [elbow] })).toBeNull();
+  });
+  it('traduce la varilla a medidas', () => {
+    const shaft = (angleDeg: number, confidence = 0.8): Shaft => ({ angleDeg, lengthPx: 200, tip: { x: 0, y: 0 }, confidence });
+    const front = readClub('frente', shaft(100), shaft(0), 1)!;
+    expect(front.addressLeanDeg).toBe(10);            // cabeza del palo a la izquierda, objetivo a la derecha: manos por delante
+    expect(front.topDeg).toBe(0);
+    expect(front.feedback.find((f) => f.key === 'club-top')?.severity).toBe('good');
+    expect(readClub('frente', shaft(100), shaft(0), -1)!.addressLeanDeg).toBe(-10);
+    expect(readClub('frente', null, shaft(25), 1)!.feedback[0].title).toMatch(/pasa de la paralela/);
+    expect(readClub('frente', null, shaft(270), 1)!.topDeg).toBe(90); // varilla vertical: subida a medias, sin juicio
+    expect(readClub('atras', shaft(60), null, 1)!.addressPlaneDeg).toBe(60);
+    expect(readClub('frente', shaft(100, 0.1), shaft(0, 0.1), 1)).toBeNull(); // lecturas dudosas no se muestran
+    expect(readClub('frente', shaft(280), null, 1)).toBeNull();               // "palo" hacia arriba al inicio: lectura falsa
+  });
+  it('sabe de qué lado está el objetivo', () => {
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[11] = pt(0.6, 0.3); lm[12] = pt(0.4, 0.3);
+    expect(targetSide(lm, false)).toBe(1);
+    expect(targetSide(lm, true)).toBe(-1);
+  });
+});
+
+describe('coach con IA', () => {
+  const img = { position: 'tope' as const, media_type: 'image/jpeg' as const, data: 'x'.repeat(200) };
+  it('arma el resumen de medidas de frente y desde atrás, con nombres legibles', () => {
+    const f = analyzeSwing(synthSwing());
+    const b = analyzeSwing(synthDtl());
+    if (typeof f === 'string' || typeof b === 'string') throw new Error('sin resultado');
+    const pf = coachPayload(f, [img]);
+    expect(pf.view).toBe('frente');
+    expect(pf.metrics['Giro de hombros en el tope']).toMatch(/°$/);
+    expect(pf.metrics['Tempo (subida:bajada)']).toMatch(/:1$/);
+    expect(pf.findings.length).toBeGreaterThan(0);
+    const pb = coachPayload(b, [img], '  hoy con driver  ');
+    expect(pb.view).toBe('atras');
+    expect(pb.metrics['Flexión de rodillas al inicio']).toBeDefined();
+    expect(pb.metrics['Tempo (aproximado desde atrás)']).toBeDefined();
+    expect(pb.notes).toBe('hoy con driver');
+    // nada de valores no numéricos ni vacíos: todo lo que sale son textos cortos
+    for (const v of Object.values(pb.metrics)) expect(v).not.toMatch(/NaN|undefined|null/);
+    expect(JSON.stringify(pb).length).toBeLessThan(2500 + 200);
+  });
+  it('le pasa al coach la lectura experimental del palo, marcada como tal', () => {
+    const r = analyzeSwing(synthSwing());
+    if (typeof r === 'string') throw new Error('sin resultado');
+    r.club = { addressLeanDeg: 12, topDeg: 5, feedback: [] };
+    const m = coachPayload(r, [img]).metrics;
+    expect(Object.keys(m).filter((k) => /experimental/.test(k)).length).toBe(2);
+  });
+  it('no confía en lo que devuelve el servidor', () => {
+    expect(coachInfo(null).usable).toBe(false);
+    expect(coachInfo('basura').priorities).toEqual([]);
+    const c = coachInfo({
+      usable: true, summary: ' Se ve bien ', strengths: ['a', 7, '', 'b', 'c', 'd'], confidence: 'altísima',
+      priorities: [{ title: 'Grip', why: 'w', drill: 'd' }, { title: '' }, null, 5, { title: 'T2' }, { title: 'T3' }, { title: 'T4' }],
+      observations: [{ position: 'tope', note: 'n' }, { position: 'cielo', note: 'x' }, { position: 'inicio', note: '' }],
+      disagreements: 'no es lista', limits: 42,
+    });
+    expect(c.summary).toBe('Se ve bien');
+    expect(c.strengths).toEqual(['a', 'b', 'c']);                // solo textos, máximo 3
+    expect(c.priorities.map((x) => x.title)).toEqual(['Grip', 'T2', 'T3']);
+    expect(c.priorities[1]).toEqual({ title: 'T2', why: '', drill: '' });
+    expect(c.observations).toEqual([{ position: 'tope', note: 'n' }]);
+    expect(c.disagreements).toEqual([]);
+    expect(c.limits).toBe('');
+    expect(c.confidence).toBe('baja');                           // valor desconocido: la opción prudente
   });
 });
