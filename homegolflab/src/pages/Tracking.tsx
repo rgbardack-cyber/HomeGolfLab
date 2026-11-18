@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Camera, Clock, Crosshair, Loader2, PencilLine, Plus, Save, Square, Target, Trash2 } from 'lucide-react';
+import { Camera, Clock, Crosshair, Loader2, PencilLine, Plus, Save, Square, Target, Trash2, Video } from 'lucide-react';
 import { useStore } from '@/store';
 import { fmtClock, isLocked, remainingSec } from '@/lib/ads';
 import AdGate from '@/components/AdGate';
+import VideoFlight from '@/components/VideoFlight';
 import { analyzeShot, CLUBS, detectMovingBright, dispersion, type P2, type Shot, type TrackPoint } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, Segmented, Stat } from '@/components/ui';
 
-type Tab = 'camera' | 'manual';
+type Tab = 'camera' | 'manual' | 'video';
 
 export default function Tracking() {
   const mode = useStore((s) => s.mode);
@@ -62,11 +63,12 @@ export default function Tracking() {
             value={tab}
             onChange={setTab}
             options={[
-              { value: 'camera', label: <><Camera className="w-4 h-4" /> Cámara (putt)</> },
-              { value: 'manual', label: <><PencilLine className="w-4 h-4" /> Registro manual</> },
+              { value: 'camera', label: <><Camera className="w-4 h-4" /> Cámara</> },
+              { value: 'manual', label: <><PencilLine className="w-4 h-4" /> Manual</> },
+              { value: 'video', label: <><Video className="w-4 h-4" /> Video</> },
             ]}
           />
-          {tab === 'camera' ? <CameraTracker onShot={add} /> : <ManualEntry onShot={add} />}
+          {tab === 'camera' ? <CameraTracker onShot={add} /> : tab === 'video' ? <VideoFlight /> : <ManualEntry onShot={add} />}
         </>
       )}
       {saved && <Notice tone="ok">Sesión guardada.</Notice>}
