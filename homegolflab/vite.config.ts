@@ -10,6 +10,8 @@ const nodeModulesReal = realpathSync(fileURLToPath(new URL('./node_modules', imp
 
 // "npm run dev:phone" sirve por HTTPS (certificado local) porque los teléfonos solo dan acceso a la cámara en HTTPS.
 export default defineConfig(({ mode }) => ({
+  // En GitHub Pages la app vive en /HomeGolfLab/: el workflow pasa VITE_BASE=/HomeGolfLab/. Por defecto '/', como siempre (desarrollo, teléfono y Capacitor).
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react(), tailwindcss(), ...(mode === 'phone' ? [basicSsl()] : [])],
   // Cada servidor usa su propia caché: compartirla hace que se pisen al reiniciar.
   cacheDir: mode === 'phone' ? 'node_modules/.vite-phone' : 'node_modules/.vite',
