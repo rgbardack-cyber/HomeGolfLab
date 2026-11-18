@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSwing, angleAt, coach, coachDtl, framingCheck, hipLine, viewOfFrame, type Frame, type Pt } from './swing';
+import { analyzeSwing, angleAt, coach, coachDtl, findEvents, findSwingWindow, framingCheck, hipLine, stableFrames, viewOfFrame, wristAngle, type Frame, type Pt } from './swing';
 import { coachInfo, coachPayload } from './coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, type Gray, type Shaft } from './club';
 import { analyzeShot, detectMovingBright, dispersion, type Shot } from './tracking';
@@ -21,7 +21,7 @@ function synthSwing({ back = 0.9, down = 0.3, turn = 0.25, hipShift = 0.03, sway
     else if (t >= 0.5 + back + down) { const k = Math.min(1, (t - 0.5 - back - down) / 0.4); wy = 0.62 - 0.4 * k; shift = hipShift; }
     const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
     const half = 0.08 * w;
-    lm[0] = pt(0.5, 0.2);
+    lm[0] = pt(0.5, 0.2); lm[7] = pt(0.48, 0.2); lm[8] = pt(0.52, 0.2);
     lm[11] = pt(0.5 + half, 0.3); lm[12] = pt(0.5 - half, 0.3);
     lm[13] = pt(0.5 + half, (0.3 + wy) / 2); lm[14] = pt(0.5 - half, (0.3 + wy) / 2);
     lm[15] = pt(0.51, wy); lm[16] = pt(0.49, wy);
@@ -51,6 +51,7 @@ function synthDtl({ back = 0.9, down = 0.3, rise = 0, hipAdvance = 0, hipTop = 0
     const lean = 0.154 - rise * k; // desplazamiento horizontal de los hombros sobre la cadera
     const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
     lm[0] = pt(hipX + lean + 0.07, 0.22 - rise * k * 0.3);
+    lm[7] = pt(hipX + lean + 0.05, 0.22 - rise * k * 0.3); lm[8] = pt(hipX + lean + 0.05, 0.22 - rise * k * 0.3);
     lm[11] = pt(hipX + lean + 0.01, 0.33); lm[12] = pt(hipX + lean - 0.01, 0.33);
     lm[13] = pt(hipX + lean + 0.03, (0.33 + wy) / 2); lm[14] = pt(hipX + lean + 0.02, (0.33 + wy) / 2);
     lm[15] = pt(0.61, wy); lm[16] = pt(0.6, wy);
@@ -559,7 +560,7 @@ describe('coach con IA', () => {
     if (typeof r === 'string') throw new Error('sin resultado');
     r.club = { addressLeanDeg: 12, topDeg: 5, feedback: [] };
     const m = coachPayload(r, [img]).metrics;
-    expect(Object.keys(m).filter((k) => /experimental/.test(k)).length).toBe(2);
+    expect(Object.keys(m).filter((k) => /lectura experimental/.test(k)).length).toBe(2);
   });
   it('no confía en lo que devuelve el servidor', () => {
     expect(coachInfo(null).usable).toBe(false);
@@ -578,5 +579,193 @@ describe('coach con IA', () => {
     expect(c.disagreements).toEqual([]);
     expect(c.limits).toBe('');
     expect(c.confidence).toBe('baja');                           // valor desconocido: la opción prudente
+  });
+});
+
+/** Frames de frente cuya altura de manos sigue una lista de [segundo, y]; el cuerpo queda quieto. */
+function synthWrist(keys: [number, number][], fps = 30): Frame[] {
+  const end = keys[keys.length - 1][0];
+  const at = (t: number) => {
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) { const [t0, y0] = keys[i - 1], [t1, y1] = keys[i]; return y0 + ((y1 - y0) * (t - t0)) / (t1 - t0 || 1); }
+    }
+    return keys[keys.length - 1][1];
+  };
+  const frames: Frame[] = [];
+  for (let i = 0; i <= end * fps; i++) {
+    const t = i / fps, wy = at(t);
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[0] = pt(0.5, 0.2); lm[7] = pt(0.48, 0.2); lm[8] = pt(0.52, 0.2);
+    lm[11] = pt(0.58, 0.3); lm[12] = pt(0.42, 0.3);
+    lm[13] = pt(0.58, (0.3 + wy) / 2); lm[14] = pt(0.42, (0.3 + wy) / 2);
+    lm[15] = pt(0.51, wy); lm[16] = pt(0.49, wy);
+    lm[23] = pt(0.56, 0.55); lm[24] = pt(0.44, 0.55);
+    lm[25] = pt(0.56, 0.75); lm[26] = pt(0.44, 0.75);
+    lm[27] = pt(0.55, 0.95); lm[28] = pt(0.45, 0.95);
+    frames.push({ t: t * 1000, lm });
+  }
+  return frames;
+}
+
+describe('eventos con varios swings y final alto', () => {
+  // Práctica (tope en 1,2 s), pausa, swing real (tope en 3,9 s, golpe en 4,2 s) y un final MÁS ALTO que el tope.
+  const real: [number, number][] = [
+    [0, 0.6], [0.3, 0.6], [1.2, 0.18], [1.5, 0.62], [2.9, 0.6],
+    [3.0, 0.6], [3.9, 0.18], [4.2, 0.62], [4.6, 0.12], [6.5, 0.12], [7.5, 0.6],
+  ];
+  it('toma como tope el del swing real, no el final alto ni la práctica', () => {
+    const f = synthWrist(real);
+    const ev = findEvents(f);
+    expect(f[ev.top].t).toBeGreaterThan(3600);
+    expect(f[ev.top].t).toBeLessThan(4200);
+    expect(f[ev.impact].t).toBeGreaterThan(4000);
+    expect(f[ev.impact].t).toBeLessThan(4500);
+    expect(f[ev.address].t).toBeGreaterThan(2800);
+    expect(f[ev.address].t).toBeLessThan(3500);
+    const r = analyzeSwing(f);
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.metrics.tempoRatio).toBeGreaterThan(2.4);
+    expect(r.metrics.tempoRatio).toBeLessThan(3.8);
+  });
+  it('un solo swing con final alto también se lee bien', () => {
+    const f = synthWrist([[0, 0.6], [0.6, 0.6], [1.5, 0.18], [1.8, 0.62], [2.2, 0.12], [3.5, 0.12], [4.5, 0.6]]);
+    const ev = findEvents(f);
+    expect(f[ev.top].t).toBeGreaterThan(1300);
+    expect(f[ev.top].t).toBeLessThan(1700);
+  });
+  it('ubica la ventana del swing en un muestreo grueso y rechaza un video quieto', () => {
+    const coarse = synthWrist(real, 10);
+    const w = findSwingWindow(coarse)!;
+    expect(w).not.toBeNull();
+    expect(w.from).toBeGreaterThan(1900);   // arranque ≈ 3,0 s menos 0,9 s
+    expect(w.from).toBeLessThan(2400);
+    expect(w.to).toBeGreaterThan(4700);     // golpe ≈ 4,2 s más 0,7 s
+    expect(w.to).toBeLessThan(5300);
+    expect(findSwingWindow(synthWrist([[0, 0.6], [4, 0.6]], 10))).toBeNull();
+  });
+});
+
+describe('otra persona en el cuadro', () => {
+  it('descarta los cuadros donde el seguimiento salta a otra persona', () => {
+    const f = synthSwing();
+    const shifted = f.map((fr, i) => (i >= 20 && i < 24 ? { ...fr, lm: fr.lm.map((p) => ({ ...p, x: p.x + 0.3 })) } : fr));
+    const kept = stableFrames(shifted);
+    expect(kept.length).toBe(f.length - 4);
+    expect(kept.some((fr) => fr.t === f[21].t)).toBe(false);
+    // Si el cambio dura, se acepta (la persona nueva es la que hay que seguir).
+    const long = f.map((fr, i) => (i >= 20 ? { ...fr, lm: fr.lm.map((p) => ({ ...p, x: p.x + 0.3 })) } : fr));
+    expect(stableFrames(long).length).toBeGreaterThan(f.length - 8);
+    // Un swing normal no pierde ningún cuadro.
+    expect(stableFrames(f).length).toBe(f.length);
+  });
+  it('un swing con un intruso de por medio da el mismo resultado', () => {
+    const f = synthSwing();
+    const base = analyzeSwing(f);
+    const dirty = analyzeSwing(f.map((fr, i) => (i === 15 || i === 16 ? { ...fr, lm: fr.lm.map((p) => ({ ...p, x: p.x + 0.35 })) } : fr)));
+    if (typeof base === 'string' || typeof dirty === 'string') throw new Error('sin resultado');
+    expect(Math.abs(dirty.metrics.tempoRatio - base.metrics.tempoRatio)).toBeLessThan(0.25); // quitar 2 cuadros mueve el evento un cuadro de 33 ms
+  });
+  it('avisa de que se perdió al jugador si el modelo no lo detectó en la mayoría de los cuadros', () => {
+    expect(analyzeSwing(synthSwing().slice(0, 40), { sampled: 200 })).toBe('low_visibility');
+    expect(analyzeSwing(synthSwing())).not.toBe('low_visibility');
+  });
+});
+
+describe('cabeza y caderas', () => {
+  const nodHead = (f: Frame[], dx: number) => f.map((fr, i) => {
+    const k = Math.min(1, i / (f.length * 0.5));
+    return { ...fr, lm: fr.lm.map((p, j) => (j === 0 ? { ...p, x: p.x + dx * k } : p)) };
+  });
+  it('mide la cabeza con las orejas: la nariz que gira no cuenta', () => {
+    const r = analyzeSwing(nodHead(synthSwing(), 0.1)); // la nariz se va 0,1 pero las orejas no se mueven
+    if (typeof r === 'string' || r.view === 'atras') throw new Error('se esperaba vista de frente');
+    expect(r.metrics.headSwayPct).toBeLessThan(5);
+  });
+  it('sin orejas visibles usa la nariz', () => {
+    const f = nodHead(synthSwing(), 0.1).map((fr) => ({ ...fr, lm: fr.lm.map((p, j) => (j === 7 || j === 8 ? { ...p, v: 0.1 } : p)) }));
+    const r = analyzeSwing(f);
+    if (typeof r === 'string' || r.view === 'atras') throw new Error('se esperaba vista de frente');
+    expect(r.metrics.headSwayPct).toBeGreaterThan(30);
+  });
+  it('quita el desplazamiento rígido del cuerpo (teléfono que se mueve) pero no el de un solo pie', () => {
+    const base = synthSwing().map((fr) => ({ ...fr, lm: fr.lm.map((p, j) => (j === 27 ? pt(0.45, 0.95) : j === 28 ? pt(0.55, 0.95) : p)) }));
+    const slide = (frames: Frame[], only?: number[]) => frames.map((fr, i) => {
+      const dx = 0.08 * Math.min(1, i / (frames.length * 0.6));
+      return { ...fr, lm: fr.lm.map((p, j) => (!only || only.includes(j) ? { ...p, x: p.x + dx } : p)) };
+    });
+    const a = analyzeSwing(base), b = analyzeSwing(slide(base));
+    if (typeof a === 'string' || typeof b === 'string' || a.view === 'atras' || b.view === 'atras') throw new Error('sin resultado');
+    expect(b.metrics.hipShiftPct).toBeCloseTo(a.metrics.hipShiftPct, -1);   // casi igual aunque todo se corrió 8 %
+    expect(b.metrics.headSwayPct).toBeLessThan(a.metrics.headSwayPct + 12); // queda, como mucho, la zona muerta de 1,5 % del cuadro
+    // Si solo se mueve el cuerpo y un tobillo se queda, no es un desplazamiento rígido: no se corrige.
+    const c = analyzeSwing(slide(base, [0, 7, 8, 23, 24, 11, 12, 13, 14, 15, 16, 27]));
+    if (typeof c === 'string' || c.view === 'atras') throw new Error('sin resultado');
+    expect(c.metrics.headSwayPct).toBeGreaterThan(a.metrics.headSwayPct + 10);
+  });
+});
+
+describe('muñecas (experimental)', () => {
+  const hand = (idx: number, ix: [number, number], pk: [number, number], v = 0.95): Frame => {
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[13] = pt(0.5, 0.4); lm[15] = pt(0.5, 0.5); lm[19] = { x: ix[0], y: ix[1], z: 0, v }; lm[17] = { x: pk[0], y: pk[1], z: 0, v };
+    void idx;
+    return { t: 0, lm };
+  };
+  it('mano alineada con el antebrazo = 180°, doblada a un lado = 90°', () => {
+    expect(wristAngle(hand(0, [0.5, 0.6], [0.5, 0.6]), 'L')).toBeCloseTo(180, 3);
+    expect(wristAngle(hand(0, [0.6, 0.5], [0.6, 0.5]), 'L')).toBeCloseTo(90, 3);
+    expect(wristAngle(hand(0, [0.58, 0.58], [0.58, 0.58]), 'L')!).toBeGreaterThan(120);
+  });
+  it('null si no se ven los puntos de la mano o no hay segmento', () => {
+    expect(wristAngle(hand(0, [0.5, 0.6], [0.5, 0.6], 0.1), 'L')).toBeNull();
+    expect(wristAngle(hand(0, [0.5, 0.5], [0.5, 0.5]), 'L')).toBeNull(); // la mano mide cero
+  });
+  it('con puntos 3D no la deforma la perspectiva', () => {
+    const f = hand(0, [0.5, 0.6], [0.5, 0.6]);
+    const world = f.lm.map((p) => ({ ...p, z: 0 }));
+    world[13] = { ...world[13], x: 0, y: -0.2, z: 0 }; world[15] = { ...world[15], x: 0, y: 0, z: 0 };
+    world[19] = { ...world[19], x: 0.2, y: 0, z: 0 }; world[17] = { ...world[17], x: 0.2, y: 0, z: 0 };
+    expect(wristAngle({ ...f, world }, 'L')).toBeCloseTo(90, 3);
+  });
+  it('el análisis las guarda al inicio y en el tope sin tocar la nota', () => {
+    const f = analyzeSwing(synthSwing());
+    if (typeof f === 'string' || f.view === 'atras') throw new Error('se esperaba vista de frente');
+    for (const k of ['leadWristAddressDeg', 'leadWristTopDeg', 'trailWristTopDeg', 'wristChangeDeg'] as const) expect(k in f.metrics, k).toBe(true);
+    const hidden = analyzeSwing(synthSwing().map((fr) => ({ ...fr, lm: fr.lm.map((p, j) => (j >= 17 && j <= 20 ? { ...p, v: 0.1 } : p)) })));
+    if (typeof hidden === 'string' || hidden.view === 'atras') throw new Error('se esperaba vista de frente');
+    expect(hidden.metrics.leadWristTopDeg).toBeNull();
+    expect(hidden.metrics.wristChangeDeg).toBeNull();
+    expect(hidden.score).toBe(f.score);                      // no entran en la nota
+    expect(hidden.feedback.map((x) => x.key)).toEqual(f.feedback.map((x) => x.key));
+  });
+});
+
+describe('vista elegida a mano y bandas de coaching', () => {
+  it('avisa si la vista elegida no es la del video', () => {
+    const wrong = analyzeSwing(synthSwing(), { view: 'atras' });
+    if (typeof wrong === 'string') throw new Error(wrong);
+    expect(wrong.view).toBe('atras');
+    expect(wrong.viewMismatch).toBe('frente');
+    const ok = analyzeSwing(synthSwing(), { view: 'frente' });
+    const auto = analyzeSwing(synthSwing(), { view: 'auto' });
+    if (typeof ok === 'string' || typeof auto === 'string') throw new Error('sin resultado');
+    expect(ok.viewMismatch).toBeUndefined();
+    expect(auto.viewMismatch).toBeUndefined();
+  });
+  it('el tempo tiene una banda buena ancha y la inclinación lateral no castiga lo normal', () => {
+    const base = { tempoRatio: 3, backswingSec: 0.9, downswingSec: 0.3, shoulderTurnDeg: 90, hipTurnDeg: 45, xFactorDeg: 45, spineAddressDeg: 5, spineChangeDeg: 2, headSwayPct: 10, hipShiftPct: 15, leadArmDeg: 170, framesUsed: 60 };
+    const sev = (m: Partial<typeof base>, key: string) => coach({ ...base, ...m }).feedback.find((x) => x.key === key)?.severity;
+    expect(sev({ tempoRatio: 2.4 }, 'tempo')).toBe('good');
+    expect(sev({ tempoRatio: 3.6 }, 'tempo')).toBe('good');
+    expect(sev({ tempoRatio: 2.1 }, 'tempo')).toBe('improve');
+    expect(sev({ tempoRatio: 1.7 }, 'tempo')).toBe('improve');   // dudoso: no se castiga como error
+    expect(sev({ tempoRatio: 1.2 }, 'tempo')).toBe('fix');
+    expect(sev({ tempoRatio: 3.9 }, 'tempo')).toBe('improve');
+    expect(sev({ tempoRatio: 4.8 }, 'tempo')).toBe('improve');
+    expect(sev({ tempoRatio: 5.4 }, 'tempo')).toBe('fix');
+    expect(sev({ spineChangeDeg: 14 }, 'spine')).toBe('good');
+    expect(sev({ spineChangeDeg: -14.7 }, 'spine')).toBe('good');
+    expect(sev({ spineChangeDeg: 18 }, 'spine')).toBe('improve');
+    expect(sev({ spineChangeDeg: 25 }, 'spine')).toBe('fix');
   });
 });

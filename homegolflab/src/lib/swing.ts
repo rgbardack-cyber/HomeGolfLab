@@ -15,6 +15,8 @@ export const LM = {
   NOSE: 0, L_SHOULDER: 11, R_SHOULDER: 12, L_ELBOW: 13, R_ELBOW: 14,
   L_WRIST: 15, R_WRIST: 16, L_HIP: 23, R_HIP: 24, L_KNEE: 25, R_KNEE: 26,
   L_ANKLE: 27, R_ANKLE: 28,
+  // Cabeza y mano: el modelo de postura da también las orejas y, en cada mano, el meñique y el índice.
+  L_EAR: 7, R_EAR: 8, L_PINKY: 17, R_PINKY: 18, L_INDEX: 19, R_INDEX: 20,
 } as const;
 
 /** Desde dónde graba la cámara: de frente al jugador, o desde atrás sobre la línea de tiro. */
@@ -28,8 +30,24 @@ interface TempoMetrics {
   framesUsed: number;
 }
 
+/**
+ * Muñecas (EXPERIMENTAL, solo informativas: no entran en la nota). Ángulo entre el antebrazo y la mano,
+ * con los puntos de índice y meñique del modelo de postura: 180° = mano alineada con el antebrazo, menos =
+ * muñeca doblada. Con una sola cámara la mano suele quedar tapada y el modelo adivina, así que sirve para
+ * comparar tus swings entre sí, no como medida exacta. No mide la suelta ni la cara del palo.
+ * Opcionales: los resultados guardados antes del 17 nov 2026 no los traen. null = no se vio la mano.
+ */
+interface WristMetrics {
+  leadWristAddressDeg?: number | null;
+  leadWristTopDeg?: number | null;
+  trailWristAddressDeg?: number | null;
+  trailWristTopDeg?: number | null;
+  /** Cambio de la muñeca guía del inicio al tope (negativo = se dobló más). */
+  wristChangeDeg?: number | null;
+}
+
 /** Medidas de la vista desde atrás (línea de tiro). Los porcentajes son del largo del torso. */
-export interface DtlMetrics extends TempoMetrics {
+export interface DtlMetrics extends TempoMetrics, WristMetrics {
   spineAddressDeg: number;       // inclinación hacia la bola al inicio
   kneeFlexDeg: number | null;    // flexión de rodillas al inicio (null si no se ven los tobillos)
   spineTopChangeDeg: number;     // cambio de inclinación en el tope (+ = más inclinado)
@@ -48,7 +66,7 @@ export interface DtlMetrics extends TempoMetrics {
   trailElbowTopDeg?: number | null;
 }
 
-export interface SwingMetrics extends TempoMetrics {
+export interface SwingMetrics extends TempoMetrics, WristMetrics {
   shoulderTurnDeg: number;   // giro de hombros en el tope
   hipTurnDeg: number;        // giro de caderas en el tope
   xFactorDeg: number;        // hombros − caderas
@@ -79,6 +97,8 @@ interface ResultBase {
   times?: { address: number; top: number; impact: number };
   /** Mano dominante que se usó. Sale del propio swing cuando se puede; si no, del perfil. */
   lefty?: boolean;
+  /** Si el jugador eligió la vista a mano y el video parece de la otra, la que parece. Solo para avisar. */
+  viewMismatch?: SwingView;
   /** Lo que se pudo leer del palo (experimental, ver club.ts). No afecta la nota. */
   club?: import('./club').ClubInfo;
 }
@@ -93,6 +113,8 @@ export interface AnalyzeOptions {
   view?: SwingView | 'auto';
   /** Ancho ÷ alto del video. Los puntos vienen normalizados por separado en x e y; sin esto los ángulos se deforman. */
   aspect?: number;
+  /** Cuántos cuadros se muestrearon en total, con los que el modelo no detectó (para avisar si se pierde al jugador). */
+  sampled?: number;
 }
 
 export type SwingError = 'too_short' | 'no_swing' | 'low_visibility';
@@ -145,14 +167,51 @@ function segmentTurn(a: Frame, b: Frame, li: number, ri: number) {
   return deg(Math.acos(clamp(wb / (wa + 1e-8), 0, 1)));
 }
 
+/**
+ * Candidatos a "tope": mínimos locales de la altura de las manos (en ±0,4 s) cuya subida desde el inicio es más
+ * lenta que la bajada que sigue. Así el final del swing (las manos suben rápido y bajan despacio) no se confunde
+ * con el tope, y un swing de práctica anterior no tapa al swing real.
+ */
+function topCandidates(frames: Frame[], wy: number[], s: number, e: number): number[] {
+  const n = frames.length, out: number[] = [];
+  for (let i = s; i < e; i++) {
+    let isMin = true;
+    for (let j = i - 1; j >= 0 && frames[i].t - frames[j].t <= 400; j--) if (wy[j] < wy[i]) { isMin = false; break; }
+    for (let j = i + 1; isMin && j < n && frames[j].t - frames[i].t <= 400; j++) if (wy[j] < wy[i]) isMin = false;
+    if (!isMin) continue;
+    if (out.length && frames[i].t - frames[out[out.length - 1]].t <= 400) continue; // meseta del mismo tope
+    // punto más bajo de las manos en los 3 s previos, y de ahí cuánto subieron
+    let lo = i;
+    for (let j = i - 1; j >= 0 && frames[i].t - frames[j].t <= 3000; j--) if (wy[j] > wy[lo]) lo = j;
+    const amp = wy[lo] - wy[i];
+    if (amp < torsoLen(frames[i]) * 0.5) continue;
+    // la subida arranca en el último cuadro con las manos casi en ese punto bajo
+    let st = i;
+    for (let j = i; j >= 0; j--) if (wy[j] >= wy[lo] - amp * 0.1) { st = j; break; }
+    // la subida termina cuando las manos LLEGAN arriba (a un 10 % del tope), no en cada cuadro de un final sostenido
+    let reach = st;
+    for (let j = st; j <= i; j++) if (wy[j] <= wy[i] + amp * 0.1) { reach = j; break; }
+    // la bajada: el primer cuadro, dentro de 1,5 s, en que las manos recuperaron el 70 % de lo que subieron
+    let dn = -1;
+    for (let j = i + 1; j < n && frames[j].t - frames[i].t <= 1500; j++) if (wy[j] >= wy[i] + amp * 0.7) { dn = j; break; }
+    if (dn < 0) continue;
+    if (frames[dn].t - frames[i].t > (frames[reach].t - frames[st].t) * 0.95) continue; // la bajada tiene que ser la más rápida
+    out.push(i);
+  }
+  return out;
+}
+
 /** Localiza inicio (address), tope y impacto dentro de una secuencia de cuadros. */
 export function findEvents(frames: Frame[]) {
   const n = frames.length;
   const wy = frames.map(wristY);
   const s = Math.floor(n * 0.1);
   const e = Math.max(s + 1, Math.ceil(n * 0.92));
-  let top = s;
-  for (let i = s; i < e; i++) if (wy[i] < wy[top]) top = i; // y menor = más arriba
+  // Con varios swings en el video gana el último que cumple (el de la bola suele ser el último). Si ninguno
+  // cumple, el punto más alto, como antes: así los errores de siempre siguen saliendo.
+  const cands = topCandidates(frames, wy, s, e);
+  let top = cands.length ? cands[cands.length - 1] : s;
+  if (!cands.length) for (let i = s; i < e; i++) if (wy[i] < wy[top]) top = i; // y menor = más arriba
 
   let impact = top;
   const tLimit = frames[top].t + 1500;
@@ -162,8 +221,9 @@ export function findEvents(frames: Frame[]) {
     else if (wy[impact] - wy[i] > 0.03 && impact > top) break;
   }
 
-  let low = 0;
-  for (let i = 0; i <= top; i++) if (wy[i] > wy[low]) low = i;
+  // El punto más bajo de las manos se busca en los 3 s previos al tope, no en todo el video.
+  let low = top;
+  for (let i = top - 1; i >= 0 && frames[top].t - frames[i].t <= 3000; i--) if (wy[i] > wy[low]) low = i;
   const amp = wy[low] - wy[top];
   // Las manos se quedan abajo unos cuadros alrededor del impacto: cuenta el primero en que llegan,
   // no el último de esa meseta (si no, la bajada sale más larga de lo que es).
@@ -255,6 +315,143 @@ const arms = (lefty: boolean) => {
   return lefty ? { lead: R, trail: L } : { lead: L, trail: R };
 };
 
+const median = (xs: number[]) => {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+/** Ángulo (grados) en b entre b→a y b→c, con puntos en 3D. null si algún segmento mide cero. */
+function angle3(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, c: { x: number; y: number; z: number }) {
+  const v1 = [a.x - b.x, a.y - b.y, a.z - b.z], v2 = [c.x - b.x, c.y - b.y, c.z - b.z];
+  const m = Math.hypot(...v1) * Math.hypot(...v2);
+  if (m === 0) return null;
+  return deg(Math.acos(clamp((v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / m, -1, 1)));
+}
+
+/**
+ * Ángulo en la muñeca entre el antebrazo (codo → muñeca) y la mano (muñeca → punto medio de índice y meñique).
+ * 180° = mano alineada con el antebrazo; menos = muñeca doblada. null si no se ven los cuatro puntos.
+ * Con puntos 3D no lo deforma la perspectiva; si no hay, usa la imagen.
+ */
+export function wristAngle(f: Frame, side: 'L' | 'R'): number | null {
+  const [el, wr, ix, pk] = side === 'L' ? [LM.L_ELBOW, LM.L_WRIST, LM.L_INDEX, LM.L_PINKY] : [LM.R_ELBOW, LM.R_WRIST, LM.R_INDEX, LM.R_PINKY];
+  if (!seen(f, [el, wr, ix, pk])) return null;
+  const hand = (p: Pt[]) => ({ x: (p[ix].x + p[pk].x) / 2, y: (p[ix].y + p[pk].y) / 2, z: (p[ix].z + p[pk].z) / 2 });
+  if (f.world && f.world[pk] && f.world[ix]) return angle3(f.world[el], f.world[wr], hand(f.world));
+  const flat = (p: { x: number; y: number }) => ({ x: p.x, y: p.y, z: 0 });
+  const h = hand(f.lm);
+  return angle3(flat(f.lm[el]), flat(f.lm[wr]), flat(h));
+}
+
+/** Mediana del ángulo de la muñeca en los cuadros lo..hi (los que la ven); null si ninguno. */
+function wristMed(frames: Frame[], lo: number, hi: number, side: 'L' | 'R'): number | null {
+  const vals: number[] = [];
+  for (let j = Math.max(0, lo); j <= Math.min(frames.length - 1, hi); j++) {
+    const a = wristAngle(frames[j], side);
+    if (a != null) vals.push(a);
+  }
+  return vals.length ? round(median(vals), 0) : null;
+}
+
+function wristMetrics(frames: Frame[], ev: { address: number; top: number }, lefty: boolean): WristMetrics {
+  const lead = lefty ? 'R' : 'L', trail = lefty ? 'L' : 'R';
+  const leadA = wristMed(frames, ev.address - 2, ev.address, lead), leadT = wristMed(frames, ev.top - 1, ev.top + 1, lead);
+  return {
+    leadWristAddressDeg: leadA,
+    leadWristTopDeg: leadT,
+    trailWristAddressDeg: wristMed(frames, ev.address - 2, ev.address, trail),
+    trailWristTopDeg: wristMed(frames, ev.top - 1, ev.top + 1, trail),
+    wristChangeDeg: leadA != null && leadT != null ? leadT - leadA : null,
+  };
+}
+
+/** Mediana de la inclinación de la columna en los cuadros lo..hi (un solo cuadro ruidoso no decide). */
+const tiltMed = (frames: Frame[], lo: number, hi: number) => {
+  const vals: number[] = [];
+  for (let j = Math.max(0, lo); j <= Math.min(frames.length - 1, hi); j++) vals.push(spineTilt(frames[j].lm));
+  return median(vals);
+};
+
+/**
+ * Cuánto se movió el cuerpo entero respecto al inicio, medido en los tobillos, para quitárselo a la cabeza y a las
+ * caderas. Solo cuenta si los dos tobillos se movieron juntos (un jugador que se corre o un teléfono que se mueve);
+ * si solo se mueve uno, es el talón que se levanta o el pie que gira, y eso es parte del swing.
+ */
+function drift(f: Frame, a: Frame): { x: number; y: number } {
+  const none = { x: 0, y: 0 };
+  if (!seen(f, [LM.L_ANKLE, LM.R_ANKLE]) || !seen(a, [LM.L_ANKLE, LM.R_ANKLE])) return none;
+  const d = (i: number, axis: 'x' | 'y') => f.lm[i][axis] - a.lm[i][axis];
+  const out = { x: 0, y: 0 };
+  for (const axis of ['x', 'y'] as const) {
+    const l = d(LM.L_ANKLE, axis), r = d(LM.R_ANKLE, axis);
+    if (Math.abs(l - r) > 0.015) continue; // se movieron por separado: no es un desplazamiento rígido
+    const avg = (l + r) / 2;
+    if (Math.abs(avg) >= 0.015) out[axis] = avg;
+  }
+  return out;
+}
+
+/** Centro de las caderas en el cuadro i (mediana de 3 cuadros) sin el desplazamiento del cuerpo entero. */
+function hipAt(frames: Frame[], i: number, a: Frame) {
+  const xs: number[] = [], ys: number[] = [];
+  for (let j = Math.max(0, i - 1); j <= Math.min(frames.length - 1, i + 1); j++) {
+    const h = mid(frames[j].lm[LM.L_HIP], frames[j].lm[LM.R_HIP]);
+    xs.push(h.x); ys.push(h.y);
+  }
+  const d = drift(frames[i], a);
+  return { x: median(xs) - d.x, y: median(ys) - d.y };
+}
+
+/**
+ * Punto de la cabeza en los cuadros from..to: el centro entre las orejas (la nariz gira con la cabeza y desde atrás
+ * se pierde). Si las dos orejas no se ven en el 70 % de los cuadros, la nariz en todos, para no mezclar los dos.
+ */
+function headSeries(frames: Frame[], from: number, to: number): { x: number; y: number }[] {
+  const part = frames.slice(from, to + 1);
+  const ears = part.filter((f) => seen(f, [LM.L_EAR, LM.R_EAR])).length >= part.length * 0.7;
+  return part.map((f) => (ears ? mid(f.lm[LM.L_EAR], f.lm[LM.R_EAR]) : { x: f.lm[LM.NOSE].x, y: f.lm[LM.NOSE].y }));
+}
+
+/**
+ * Quita los cuadros en que el seguimiento salta a otra persona (alguien en el cubículo de al lado o quien graba).
+ * Un cuerpo no se desplaza más de ~1,5 torsos por segundo; si pasa de eso (y de un mínimo de 0,35 torsos) el cuadro
+ * es de otro. Tras 6 cuadros seguidos descartados se acepta el cambio, por si la persona que se sigue es la nueva.
+ */
+export function stableFrames(frames: Frame[]): Frame[] {
+  const out: Frame[] = [];
+  let skipped = 0;
+  for (const f of frames) {
+    const prev = out[out.length - 1];
+    if (prev && skipped < 6) {
+      const a = mid(prev.lm[LM.L_HIP], prev.lm[LM.R_HIP]), b = mid(f.lm[LM.L_HIP], f.lm[LM.R_HIP]);
+      const torso = torsoLen(prev) || 1e-6;
+      const limit = Math.max(0.35 * torso, (1.5 * torso * Math.max(1, f.t - prev.t)) / 1000);
+      if (Math.hypot(b.x - a.x, b.y - a.y) > limit) { skipped++; continue; }
+    }
+    skipped = 0;
+    out.push(f);
+  }
+  return out;
+}
+
+/**
+ * Dónde está el swing dentro de un video muestreado de forma gruesa: desde 0,9 s antes del inicio hasta 0,7 s
+ * después del impacto (ms de video), o null si no se ve un swing. Sirve para muestrear fino solo ahí.
+ */
+export function findSwingWindow(input: Frame[], opts: { aspect?: number } = {}): { from: number; to: number } | null {
+  const aspect = opts.aspect && opts.aspect > 0 ? opts.aspect : 1;
+  const frames = stableFrames(input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect)));
+  if (frames.length < 8) return null;
+  const ev = findEvents(frames);
+  const A = frames[ev.address], I = frames[ev.impact];
+  if (ev.amplitude < torsoLen(A) * 0.5 || ev.impact <= ev.top || ev.top <= ev.address) return null;
+  return { from: Math.max(0, A.t - 900), to: I.t + 700 };
+}
+
+const withMismatch = <R extends SwingResult>(r: R, mismatch?: SwingView): R => (mismatch ? { ...r, viewMismatch: mismatch } : r);
+
 export interface Framing { ok: boolean; hint: string }
 /**
  * ¿Está el jugador bien encuadrado para leer el swing completo? Recibe los puntos tal como llegan
@@ -282,8 +479,11 @@ export function framingCheck(lm: Pt[]): Framing {
  */
 export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingResult | SwingError {
   const aspect = opts.aspect && opts.aspect > 0 ? opts.aspect : 1;
-  const frames = input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect));
-  if (input.length >= 12 && frames.length < input.length * 0.4) return 'low_visibility';
+  // Quita los cuadros donde el seguimiento salta a otra persona (alguien en el cubículo de al lado).
+  const frames = stableFrames(input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect)));
+  // Los cuadros donde el modelo no detectó a nadie no llegan aquí: "sampled" los cuenta.
+  const total = Math.max(input.length, opts.sampled ?? 0);
+  if (total >= 12 && frames.length < total * 0.4) return 'low_visibility';
   if (frames.length < 12) return 'too_short';
 
   const ev = findEvents(frames);
@@ -295,32 +495,39 @@ export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingRe
   const downswingSec = Math.max((I.t - T.t) / 1000, 0.001);
   if (backswingSec < 0.25 || backswingSec > 3 || downswingSec > 1.2) return 'no_swing';
 
-  const view = !opts.view || opts.view === 'auto' ? detectView(frames, ev.address) : opts.view;
+  const auto = detectView(frames, ev.address);
+  const view = !opts.view || opts.view === 'auto' ? auto : opts.view;
+  // Si el jugador eligió la vista a mano y el video parece de la otra, se avisa en vez de callar.
+  const mismatch = opts.view && opts.view !== 'auto' && opts.view !== auto ? auto : undefined;
   const tempo: TempoMetrics = {
     tempoRatio: round(backswingSec / downswingSec, 2),
     backswingSec: round(backswingSec, 2),
     downswingSec: round(downswingSec, 2),
     framesUsed: frames.length,
   };
-  if (view === 'atras') return analyzeDtl(frames, ev, tempo, !!opts.lefty);
+  if (view === 'atras') return withMismatch(analyzeDtl(frames, ev, tempo, !!opts.lefty), mismatch);
 
   const sw = shoulderWidth(A) || 1e-6;
   // La subida lleva las manos hacia el lado trasero. De ahí salen el lado del objetivo y la mano
   // dominante, sin depender de lo que diga el perfil: con la cámara mirando al pecho, un diestro
   // sube hacia la izquierda de la imagen y un zurdo hacia la derecha.
-  const backDx = handsMid(T).x - handsMid(A).x;
+  // Sin el desplazamiento rígido del cuerpo entero (teléfono que se mueve), que no es parte de la subida.
+  const backDx = handsMid(T).x - handsMid(A).x - drift(T, A).x;
   const sure = Math.abs(backDx) > sw * 0.15;
   const lefty = sure ? backDx > 0 : !!opts.lefty;
   const { lead, trail } = arms(lefty);
   const [sh, el, wr] = lead;
 
+  // Cabeza: el centro de las orejas (la nariz gira con la cabeza), contra la mediana de los cuadros del inicio y sin
+  // el desplazamiento rígido del cuerpo entero (jugador que se corre o teléfono que se mueve).
+  const first = Math.max(0, ev.address - 2);
+  const hs = headSeries(frames, first, ev.impact);
+  const h0 = median(hs.slice(0, 3).map((p) => p.x));
   let maxHead = 0;
-  for (let i = ev.address; i <= ev.impact; i++) {
-    maxHead = Math.max(maxHead, Math.abs(frames[i].lm[LM.NOSE].x - A.lm[LM.NOSE].x));
-  }
-  const hipA = mid(A.lm[LM.L_HIP], A.lm[LM.R_HIP]);
-  const hipT = mid(T.lm[LM.L_HIP], T.lm[LM.R_HIP]);
-  const hipI = mid(I.lm[LM.L_HIP], I.lm[LM.R_HIP]);
+  for (let i = ev.address; i <= ev.impact; i++) maxHead = Math.max(maxHead, Math.abs(hs[i - first].x - h0 - drift(frames[i], A).x));
+  const hipA = hipAt(frames, ev.address, A);
+  const hipT = hipAt(frames, ev.top, A);
+  const hipI = hipAt(frames, ev.impact, A);
   // El objetivo queda al lado contrario de la subida; si no se pudo ver, del lado del hombro guía.
   const towardTarget = sure ? -Math.sign(backDx) : Math.sign(A.lm[sh].x - mid(A.lm[LM.L_SHOULDER], A.lm[LM.R_SHOULDER]).x) || 1;
 
@@ -332,8 +539,8 @@ export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingRe
     shoulderTurnDeg: round(shoulderTurn),
     hipTurnDeg: round(hipTurn),
     xFactorDeg: round(shoulderTurn - hipTurn),
-    spineAddressDeg: round(spineTilt(A.lm)),
-    spineChangeDeg: round(spineTilt(I.lm) - spineTilt(A.lm)),
+    spineAddressDeg: round(tiltMed(frames, ev.address - 2, ev.address)),
+    spineChangeDeg: round(tiltMed(frames, ev.impact - 1, ev.impact + 1) - tiltMed(frames, ev.address - 2, ev.address)),
     headSwayPct: round((maxHead / sw) * 100, 0),
     hipShiftPct: round((((hipI.x - hipA.x) * towardTarget) / sw) * 100, 0),
     hipSwayPct: round(((-(hipT.x - hipA.x) * towardTarget) / sw) * 100, 0) + 0, // + 0: evita el −0
@@ -342,10 +549,11 @@ export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingRe
     trailElbowTopDeg: seen(T, trail) ? round(jointAngle(T, ...trail), 0) : null,
     handsAddressPct: round((((handsMid(A).x - hipA.x) * towardTarget) / sw) * 100, 0),
     handsTopPct: round(((shoulderMid(T).y - wristY(T)) / (torsoLen(A) || 1e-6)) * 100, 0),
+    ...wristMetrics(frames, ev, lefty),
   };
 
   const { feedback, score } = coach(metrics);
-  return { view: 'frente', lefty, ...buildResult(metrics, feedback, score, ev, frames) };
+  return withMismatch({ view: 'frente' as const, lefty, ...buildResult(metrics, feedback, score, ev, frames) }, mismatch);
 }
 
 /* ───────────────────────── Vista desde atrás (línea de tiro) ───────────────────────── */
@@ -411,23 +619,30 @@ const peak = (xs: number[]) => xs.reduce((m, v) => (Math.abs(v) > Math.abs(m) ? 
 function analyzeDtl(frames: Frame[], ev: { address: number; top: number; impact: number }, tempo: TempoMetrics, profileLefty = false): DtlResult {
   const A = frames[ev.address], T = frames[ev.top], I = frames[ev.impact];
   const torso = torsoLen(A) || 1e-6;
-  const hipA = mid(A.lm[LM.L_HIP], A.lm[LM.R_HIP]);
-  const hipT = mid(T.lm[LM.L_HIP], T.lm[LM.R_HIP]);
-  const hipI = mid(I.lm[LM.L_HIP], I.lm[LM.R_HIP]);
+  const hipA = hipAt(frames, ev.address, A);
+  const hipT = hipAt(frames, ev.top, A);
+  const hipI = hipAt(frames, ev.impact, A);
   const handsA = mid(A.lm[LM.L_WRIST], A.lm[LM.R_WRIST]);
-  // La bola está del lado hacia el que cuelgan las manos al inicio.
-  const towardBall = Math.sign(handsA.x - hipA.x) || Math.sign(A.lm[LM.NOSE].x - hipA.x) || 1;
+  // La bola está del lado hacia el que cuelgan las manos al inicio. Si casi no se separan de las caderas
+  // (menos de 0,08 torsos) no hay dirección clara: se usa la nariz y, para la mano dominante, el perfil.
+  const dxHands = handsA.x - hipA.x;
+  const clear = Math.abs(dxHands) > torso * 0.08;
+  const towardBall = (clear ? Math.sign(dxHands) : 0) || Math.sign(A.lm[LM.NOSE].x - hipA.x) || 1;
 
+  // Cabeza: centro de las orejas (o la nariz si no se ven), contra la mediana del inicio y sin el desplazamiento del cuerpo.
   const headUp: number[] = [], headFwd: number[] = [];
+  const first = Math.max(0, ev.address - 2);
+  const hs = headSeries(frames, first, ev.impact);
+  const h0 = { x: median(hs.slice(0, 3).map((p) => p.x)), y: median(hs.slice(0, 3).map((p) => p.y)) };
   for (let i = ev.address; i <= ev.impact; i++) {
-    const n = frames[i].lm[LM.NOSE];
-    headUp.push((A.lm[LM.NOSE].y - n.y) / torso);                 // y menor = más arriba
-    headFwd.push(((n.x - A.lm[LM.NOSE].x) * towardBall) / torso);
+    const d = drift(frames[i], A), n = hs[i - first];
+    headUp.push((h0.y - (n.y - d.y)) / torso);                    // y menor = más arriba
+    headFwd.push(((n.x - d.x - h0.x) * towardBall) / torso);
   }
   const knee = kneeFlex(A.lm);
-  const spineA = spineTilt(A.lm);
+  const spineA = tiltMed(frames, ev.address - 2, ev.address);
   // Con la cámara detrás de las manos apuntando al objetivo, un diestro mira hacia la derecha de la imagen.
-  const facing = Math.sign(handsA.x - hipA.x);
+  const facing = clear ? Math.sign(dxHands) : 0;
   const lefty = facing !== 0 ? facing < 0 : profileLefty;
   const { trail } = arms(lefty);
   const handsSeenTop = seen(T, [LM.L_WRIST, LM.R_WRIST]);
@@ -436,8 +651,8 @@ function analyzeDtl(frames: Frame[], ev: { address: number; top: number; impact:
     ...tempo,
     spineAddressDeg: round(spineA),
     kneeFlexDeg: knee == null ? null : round(knee, 0),
-    spineTopChangeDeg: round(spineTilt(T.lm) - spineA),
-    spineImpactChangeDeg: round(spineTilt(I.lm) - spineA),
+    spineTopChangeDeg: round(tiltMed(frames, ev.top - 1, ev.top + 1) - spineA),
+    spineImpactChangeDeg: round(tiltMed(frames, ev.impact - 1, ev.impact + 1) - spineA),
     hipAdvancePct: round((((hipI.x - hipA.x) * towardBall) / torso) * 100, 0),
     hipTopPct: round((((hipT.x - hipA.x) * towardBall) / torso) * 100, 0) + 0, // + 0: evita el −0
     headVerticalPct: round(peak(headUp) * 100, 0),
@@ -446,6 +661,7 @@ function analyzeDtl(frames: Frame[], ev: { address: number; top: number; impact:
     handsTopPct: round(((shoulderMid(T).y - wristY(T)) / torso) * 100, 0),
     handsDepthTopPct: handsSeenTop ? round(((-(handsMid(T).x - shoulderMid(T).x) * towardBall) / torso) * 100, 0) : null,
     trailElbowTopDeg: seen(T, trail) ? round(jointAngle(T, ...trail), 0) : null,
+    ...wristMetrics(frames, ev, lefty),
   };
   const { feedback, score } = coachDtl(metrics);
   return { view: 'atras', lefty, ...buildResult(metrics, feedback, score, ev, frames) };
@@ -568,15 +784,27 @@ function armRules(m: { handsTopPct?: number }, add: (f: Feedback, p?: number) =>
   }
 }
 
+/**
+ * Límites del tempo (subida ÷ bajada): [hasta aquí es apresurado, desde aquí es lento] y, más allá, "corregir".
+ * Con video de teléfono a 30 cuadros por segundo la bajada (≈ 0,3 s) se mide con un cuadro de error (≈ ±10 %),
+ * así que un 3:1 perfecto puede salir entre 2,7 y 3,4: la banda buena es ancha a propósito.
+ */
+export const TEMPO = { fastOk: 2.3, slowOk: 3.7, fastBad: 1.3, slowBad: 5.0 } as const;
+// "Corregir" solo en los extremos: en pruebas con un mismo swing real el tempo salió entre 1,2 y 2,8 según dónde se
+// decidía que empezaba la subida (las manos casi no se mueven al arrancar), así que no se castiga lo dudoso.
+
+/** Límite de inclinación lateral desde el frente: [hasta aquí está bien, desde aquí es para corregir] en grados. */
+export const SPINE_SIDE = [15, 22] as const;
+
 /** Regla de tempo, común a las dos vistas. */
 function tempoRule(m: TempoMetrics, add: (f: Feedback, p?: number) => void) {
-  if (m.tempoRatio >= 2.6 && m.tempoRatio <= 3.4) {
-    add({ key: 'tempo', severity: 'good', title: 'Tempo equilibrado', detail: `Tu relación subida/bajada es ${m.tempoRatio}:1, muy cerca del 3:1 de referencia.` });
-  } else if (m.tempoRatio < 2.6) {
-    const sev: Severity = m.tempoRatio < 2 ? 'fix' : 'improve';
+  if (m.tempoRatio >= TEMPO.fastOk && m.tempoRatio <= TEMPO.slowOk) {
+    add({ key: 'tempo', severity: 'good', title: 'Tempo equilibrado', detail: `Tu relación subida/bajada es ${m.tempoRatio}:1, cerca del 3:1 de referencia. Con video de teléfono es una estimación (depende de dónde se marca el inicio de la subida): compárala entre tus swings.` });
+  } else if (m.tempoRatio < TEMPO.fastOk) {
+    const sev: Severity = m.tempoRatio < TEMPO.fastBad ? 'fix' : 'improve';
     add({ key: 'tempo', severity: sev, title: 'Subida apresurada', detail: `Tempo ${m.tempoRatio}:1. La subida es corta respecto a la bajada, lo que suele quitar control y distancia.`, drill: 'Cuenta "uno-dos-tres" en la subida y "ya" en la bajada, 10 swings sin bola.' }, sev === 'fix' ? 14 : 7);
   } else {
-    const sev: Severity = m.tempoRatio > 4.2 ? 'fix' : 'improve';
+    const sev: Severity = m.tempoRatio > TEMPO.slowBad ? 'fix' : 'improve';
     add({ key: 'tempo', severity: sev, title: 'Subida demasiado lenta', detail: `Tempo ${m.tempoRatio}:1. Una subida tan larga rompe el ritmo y dificulta repetir el swing.`, drill: 'Swings continuos sin pausa (ida y vuelta) con un wedge, 3 series de 8.' }, sev === 'fix' ? 12 : 6);
   }
 }
@@ -604,13 +832,15 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
     add({ key: 'hips', severity: 'good', title: 'Buena separación tronco-cadera', detail: `Diferencia de ${m.xFactorDeg}° entre hombros y caderas: buena fuente de potencia.` });
   }
 
-  // Postura al impacto
+  // Inclinación lateral. De frente se ve cuánto se inclina el tronco hacia un lado, no hacia delante, y un buen
+  // swing la aumenta unos 10–15° hacia atrás en el impacto: solo se marca lo grande. La inclinación hacia delante
+  // (levantarse o agacharse) se juzga desde atrás.
   const sc = Math.abs(m.spineChangeDeg);
-  if (sc <= 6) {
-    add({ key: 'spine', severity: 'good', title: 'Postura estable', detail: 'Mantienes la inclinación de la columna desde el inicio hasta el impacto.' });
+  if (sc <= SPINE_SIDE[0]) {
+    add({ key: 'spine', severity: 'good', title: 'Postura estable', detail: 'La inclinación lateral del tronco cambia poco entre el inicio y el impacto.' });
   } else {
-    const sev: Severity = sc > 12 ? 'fix' : 'improve';
-    add({ key: 'spine', severity: sev, title: 'Pierdes la postura en el impacto', detail: `La columna cambia ${sc}° entre el inicio y el impacto. Eso mueve el punto bajo del swing y causa golpes gordos o topeados.`, drill: 'Swings a media velocidad con la cadera tocando una silla detrás de ti durante todo el movimiento.' }, sev === 'fix' ? 14 : 7);
+    const sev: Severity = sc > SPINE_SIDE[1] ? 'fix' : 'improve';
+    add({ key: 'spine', severity: sev, title: 'Mucha inclinación lateral en el impacto', detail: `El tronco se inclina ${sc}° de lado entre el inicio y el impacto. Algo de inclinación hacia atrás es normal; tanta mueve el punto bajo del swing. De frente no se ve si te levantas o te agachas: eso se mide mejor desde atrás.`, drill: 'Swings a media velocidad con la cadera tocando una silla detrás de ti durante todo el movimiento.' }, sev === 'fix' ? 8 : 4);
   }
 
   // Cabeza
@@ -661,6 +891,6 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
 
 export const SWING_ERROR_TEXT: Record<SwingError, string> = {
   too_short: 'No se detectó tu cuerpo el tiempo suficiente. Graba el swing completo, de cuerpo entero.',
-  no_swing: 'No se detectó un swing completo. Asegúrate de que se vea desde el inicio hasta el final, con las manos y los pies dentro del cuadro.',
+  no_swing: 'No se detectó un swing completo. Graba un solo swing, a velocidad normal (no en cámara lenta), desde antes de empezar hasta un poco después del golpe, con las manos y los pies dentro del cuadro y nadie más en la imagen.',
   low_visibility: 'No se te ve con claridad. Mejora la luz y coloca la cámara de frente o desde atrás, a unos 3 metros, con el cuerpo entero en el cuadro.',
 };

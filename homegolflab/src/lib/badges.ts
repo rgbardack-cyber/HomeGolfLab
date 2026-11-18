@@ -49,7 +49,7 @@ export function computeStats(sessions: SessionLite[], todayISO: string): Stats {
     modes: new Set(sessions.map((s) => s.mode)).size,
     bestScore: Math.max(0, ...swings.map((s) => s.score ?? 0)),
     live: sessions.filter((s) => s.live).length,
-    idealTempo: swings.filter((s) => s.tempoRatio != null && s.tempoRatio >= 2.8 && s.tempoRatio <= 3.2).length,
+    idealTempo: swings.filter((s) => s.tempoRatio != null && s.tempoRatio >= 2.6 && s.tempoRatio <= 3.4).length,
     bestOnLine: Math.max(0, ...tracking.map((s) => s.onLineStreak ?? 0)),
     bestConsistency: Math.max(0, ...tracking.filter((s) => (s.shots ?? 0) >= 5).map((s) => s.consistency ?? 0)),
     improved,
@@ -74,7 +74,7 @@ export const BADGES: Badge[] = [
   // Mérito
   { id: 'score_80', kind: 'merito', emoji: '🥈', xp: 200, label: 'Swing sólido', description: 'Un swing con nota de 80 o más.', test: (s) => s.bestScore >= 80 },
   { id: 'score_90', kind: 'merito', emoji: '🥇', xp: 500, label: 'Swing de élite', description: 'Un swing con nota de 90 o más.', test: (s) => s.bestScore >= 90 },
-  { id: 'tempo_3', kind: 'merito', emoji: '🎼', xp: 300, label: 'Metrónomo', description: 'Tres swings con tempo ideal (2.8–3.2 a 1).', test: (s) => s.idealTempo >= 3 },
+  { id: 'tempo_3', kind: 'merito', emoji: '🎼', xp: 300, label: 'Metrónomo', description: 'Tres swings con tempo ideal (2.6–3.4 a 1).', test: (s) => s.idealTempo >= 3 },
   { id: 'online_5', kind: 'merito', emoji: '📏', xp: 300, label: 'Cinco en línea', description: 'Cinco putts seguidos en línea en una sesión.', test: (s) => s.bestOnLine >= 5 },
   { id: 'consistency_80', kind: 'merito', emoji: '🏹', xp: 400, label: 'Precisión', description: 'Consistencia de 80 % o más en una sesión de 5+ tiros.', test: (s) => s.bestConsistency >= 80 },
   { id: 'improved', kind: 'merito', emoji: '📈', xp: 400, label: 'En progreso', description: 'Tus últimos 3 swings promedian 5 puntos más que los 3 primeros.', test: (s) => s.improved },

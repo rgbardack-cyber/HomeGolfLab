@@ -29,11 +29,28 @@ Lo que se aprendió al probar con swings reales (nov 2026, cuatro swings de una 
 - `src/lib/swing.ts` — métricas y coaching por reglas a partir de puntos de MediaPipe Pose. Dos vistas: de frente (`coach`) y desde atrás sobre la línea de tiro (`coachDtl`); `analyzeSwing` elige sola con `detectView` según el ancho aparente del cuerpo al inicio. Pasarle siempre `aspect` (ancho ÷ alto del video). `framingCheck` revisa el encuadre (pies, aire sobre la cabeza, tamaño, centro) y alimenta la silueta guía del modo en vivo.
 - `src/lib/pose.ts` — carga del modelo y detección por cuadro.
 - `src/lib/coach.ts` — coach con IA (Premium): arma lo que se envía al servidor (tres fotos limpias del swing y las medidas con nombre legible, `coachPayload`), llama a `/api/swing/coach` y limpia la respuesta (`coachInfo`). Se pide a mano desde `AiCoachCard` en `Swing.tsx` porque cuesta por uso; las fotos se mandan al servidor y no se guardan.
+- `src/lib/ballflight.ts` + `src/components/VideoFlight.tsx` — pestaña **Video** del Ball tracking (experimental): se sube el video de un tiro, se toca la bola y se sigue SOLO el comienzo de su vuelo, cuadro por cuadro (manchas que cambian, aclaradas u oscurecidas, elegidas por cercanía a la posición predicha). Dibuja los puntos detectados y un ángulo "en la imagen, no real"; nunca da distancia, velocidad ni dirección reales y no guarda nada en el historial de tiros. Un hueco sin detección va punteado y dorado, no como si se hubiera visto. Probado solo con videos sintéticos (pasto y cielo claro); nunca con un tiro real de driving range.
 - `src/lib/club.ts` — búsqueda experimental de la varilla en un cuadro (`findShaft`), máscara del cuerpo y lectura del palo al inicio y en el tope (`readClub`). Solo se usa al subir un video (`captureKeyFrames` en `Swing.tsx`), no en vivo.
 - `src/lib/tracking.ts` — detección de bola por diferencia de cuadros, análisis de putt, dispersión.
 - `src/lib/homelab.ts` — zonas viables y plan diario según espacio y equipo.
 - `src/lib/badges.ts` — medallas (cumplimiento y mérito), XP y niveles. Se otorgan una sola vez, al guardar una sesión.
 - `src/pages/` — Home, Swing, HomeLab, Tracking, Logros, Perfil.
+
+## Cómo se muestrea y se leen los videos (17 nov 2026, tras una auditoría con agentes)
+- `Swing.tsx` muestrea en dos pasadas (`sampleVideo`): una gruesa (10 cuadros/s) para ubicar el swing con `findSwingWindow`, y una fina (30/s) solo desde 0,9 s antes del inicio hasta 0,7 s después del impacto. Con el tiempo real de cada cuadro (`v.currentTime`). Si no se ve un swing, se analiza la pasada gruesa para dar el error correcto. Hay tiempos de espera de 8 s y un mensaje claro si el video no se puede leer (HEVC/.mov).
+- El tope es el último mínimo local de la altura de las manos cuya bajada es más rápida que la subida (`topCandidates`): así ni el final del swing (rápido arriba, lento abajo) ni un swing de práctica anterior lo confunden. Si ningún candidato cumple, el punto más alto, como antes.
+- Cabeza = centro de las orejas (la nariz gira); si no se ven en el 70 % de los cuadros, la nariz. Cabeza y caderas se miden contra la mediana del inicio y sin el desplazamiento **rígido** del cuerpo (los dos tobillos movidos igual, `drift`): un talón que se levanta no cuenta. La mano dominante también se mide sin ese desplazamiento.
+- `stableFrames` descarta los cuadros donde el seguimiento salta a otra persona.
+- El tempo se juzga con una banda ancha (`TEMPO`: bueno 2,3–3,7; `corregir` solo por debajo de 1,3 o por encima de 5). Con un mismo swing real salió entre 1,2 y 2,8 según dónde se marcaba el inicio de la subida (las manos casi no se mueven al arrancar), así que es una estimación para comparar entre swings, no un veredicto. Desde atrás no se juzga. De frente la inclinación lateral se llama así (`SPINE_SIDE` 15°/22°): de frente no se ve si el jugador se levanta o se agacha.
+- Muñecas (`wristAngle`): ángulo entre antebrazo y mano con los puntos de índice y meñique; experimental, informativo, no entra en la nota.
+- Si el jugador fija la vista a mano y el video parece de la otra, `viewMismatch` avisa.
+- La cuota gratis es 1 análisis de video al día: en las pruebas hay que activar Premium (modo prueba) en Perfil.
+
+## Publicar en GitHub Pages
+- `.github/workflows/pages.yml` construye con `VITE_BASE=/<repositorio>/` y publica `homegolflab/dist` (con `404.html` para los enlaces directos). Solo se dispara a mano o al hacer push a `main`.
+- `vite.config.ts` toma `base` de `VITE_BASE` (por defecto `/`, como siempre) y `main.tsx` usa `import.meta.env.BASE_URL` como `basename` del router.
+- En Pages no hay `/api`: HomeLAB con foto y el coach con IA responden "esta versión de prueba no incluye…" (`not_configured`).
+- El repositorio es **privado**: Pages en repositorios privados exige un plan de pago y el sitio es público de todas formas. Los ajustes de Settings > Pages y del entorno `github-pages` solo los puede hacer el dueño.
 
 ## Comandos
 - `npm run dev` — servidor local (también accesible desde el teléfono en la misma red).

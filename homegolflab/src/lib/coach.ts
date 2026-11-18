@@ -65,6 +65,11 @@ export function coachPayload(r: SwingResult, images: CoachImage[], notes?: strin
     put('Manos respecto al centro del cuerpo al inicio', m.handsAddressPct, '% del ancho de hombros');
     put('Altura de las manos sobre los hombros en el tope', m.handsTopPct, '% del torso');
   }
+  // Muñecas (experimental): ángulo entre antebrazo y mano; el coach las contrasta con las fotos.
+  const wr = r.metrics;
+  put('Muñeca guía al inicio, 180 = mano alineada con el antebrazo (experimental)', wr.leadWristAddressDeg, '°');
+  put('Muñeca guía en el tope (experimental)', wr.leadWristTopDeg, '°');
+  put('Muñeca trasera en el tope (experimental)', wr.trailWristTopDeg, '°');
   // La lectura del palo es experimental: se le dice al coach para que la contraste con la foto.
   put('Varilla al inicio, respecto a la vertical (lectura experimental)', r.club?.addressLeanDeg, '°');
   put('Varilla con el suelo al inicio (lectura experimental)', r.club?.addressPlaneDeg, '°');
@@ -122,6 +127,8 @@ export async function askCoach(payload: CoachPayload): Promise<CoachResult> {
     throw new CoachError('No hay conexión con el coach con IA. Revisa tu internet.', 'offline');
   }
   const body = await res.json().catch(() => null);
+  // Sin servidor (por ejemplo, en la versión de prueba publicada en GitHub Pages) /api responde 404 con una página, no con JSON.
+  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new CoachError('Esta versión de prueba no incluye el coach con IA.', 'not_configured');
   if (!res.ok) throw new CoachError(body?.error ?? 'El análisis con IA falló. Inténtalo de nuevo.', body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
   return coachInfo(body);
 }

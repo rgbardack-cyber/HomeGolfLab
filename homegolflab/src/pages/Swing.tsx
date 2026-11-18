@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench, Sparkles } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
-import { analyzeSwing, framingCheck, hipLine, viewOfFrame, SWING_ERROR_TEXT, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
+import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
 import { detect, drawSkeleton, loadPose } from '@/lib/pose';
@@ -235,10 +235,35 @@ function HipLineCard({ r, withShots }: { r: SwingResult; withShots: boolean }) {
   );
 }
 
+/** Muñecas (experimental, informativo): ángulo entre antebrazo y mano al inicio y en el tope. No entra en la nota. */
+function WristCard({ m }: { m: SwingResult['metrics'] }) {
+  const rows = [
+    { label: 'Muñeca guía', a: m.leadWristAddressDeg, t: m.leadWristTopDeg },
+    { label: 'Muñeca trasera', a: m.trailWristAddressDeg, t: m.trailWristTopDeg },
+  ].filter((x) => x.a != null || x.t != null);
+  if (!rows.length) return null;
+  const fmt = (v: number | null | undefined) => (v == null ? '—' : `${v}°`);
+  return (
+    <Card className="!p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="font-semibold text-sm">Muñecas</h3>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">Experimental</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {rows.map((x) => <Stat key={x.label} label={`${x.label}: inicio → tope`} value={`${fmt(x.a)} → ${fmt(x.t)}`} />)}
+        {m.wristChangeDeg != null && <Stat label="Cambio de la guía" value={m.wristChangeDeg > 0 ? `+${m.wristChangeDeg}` : m.wristChangeDeg} unit="°" />}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Ángulo entre el antebrazo y la mano: 180° es la mano alineada con el antebrazo; menos, la muñeca doblada. Es una estimación con una sola cámara y la mano suele quedar tapada, así que úsala para comparar tus swings entre sí, no como medida exacta. No mide la suelta de las muñecas ni la cara del palo, y no cambia la nota.
+      </p>
+    </Card>
+  );
+}
+
 export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }) {
   const tone = (ok: boolean, mid = false) => (ok ? 'good' : mid ? 'warn' : 'bad') as 'good' | 'warn' | 'bad';
   const tempo = (
-    <Stat label="Tempo" value={`${r.metrics.tempoRatio}:1`} tone={tone(r.metrics.tempoRatio >= 2.6 && r.metrics.tempoRatio <= 3.4, r.metrics.tempoRatio >= 2 && r.metrics.tempoRatio <= 4.2)} />
+    <Stat label="Tempo" value={`${r.metrics.tempoRatio}:1`} tone={tone(r.metrics.tempoRatio >= TEMPO.fastOk && r.metrics.tempoRatio <= TEMPO.slowOk, r.metrics.tempoRatio >= TEMPO.fastBad && r.metrics.tempoRatio <= TEMPO.slowBad)} />
   );
   return (
     <div className="space-y-4">
@@ -285,7 +310,7 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
           {tempo}
           <Stat label="Giro de hombros" value={r.metrics.shoulderTurnDeg} unit="°" tone={tone(r.metrics.shoulderTurnDeg >= 75, r.metrics.shoulderTurnDeg >= 55)} />
           <Stat label="Giro de caderas" value={r.metrics.hipTurnDeg} unit="°" tone={tone(r.metrics.hipTurnDeg <= 60, true)} />
-          <Stat label="Cambio de postura" value={Math.abs(r.metrics.spineChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineChangeDeg) <= 6, Math.abs(r.metrics.spineChangeDeg) <= 12)} />
+          <Stat label="Inclinación lateral" value={Math.abs(r.metrics.spineChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[0], Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[1])} />
           <Stat label="Mov. de cabeza" value={r.metrics.headSwayPct} unit="%" tone={tone(r.metrics.headSwayPct <= 25, r.metrics.headSwayPct <= 45)} />
           <Stat label="Avance de cadera" value={r.metrics.hipShiftPct} unit="%" tone={tone(r.metrics.hipShiftPct >= 8, r.metrics.hipShiftPct >= -5)} />
           <Stat label="Brazo guía (tope)" value={r.metrics.leadArmDeg} unit="°" tone={tone(r.metrics.leadArmDeg >= 140, true)} />
@@ -297,6 +322,8 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
       <p className="text-xs text-muted-foreground px-1">
         Subida {r.metrics.backswingSec}s · bajada {r.metrics.downswingSec}s · {r.metrics.framesUsed} cuadros{r.lefty != null && ` · leído como ${r.lefty ? 'zurdo' : 'diestro'}`}. Medidas estimadas a partir de tu postura con una sola cámara; manos y brazos se leen al inicio y en el tope.{r.view === 'atras' && ' Desde atrás el tempo es aproximado y no cuenta para la nota: se mide mejor de frente.'}
       </p>
+
+      <WristCard m={r.metrics} />
 
       {r.club && (
         <Card className="!p-4 space-y-3">
@@ -348,10 +375,60 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
 // Medido en Chrome de escritorio (CPU, ~23 ms por cuadro a 20 cuadros/s): 30 s ≈ 14 s de análisis. Cada
 // cuadro cede el hilo al esperar el "seeked", así que la página no se congela. En teléfonos tarda más.
 const MAX_SECONDS = 30;
-const STEP = 1 / 20;
 
+const VIDEO_ERR = 'No se pudo leer el video. Graba en MP4 (H.264) o pon la cámara del iPhone en "Más compatible" y vuelve a subirlo.';
+const WAIT_MS = 8000;
+
+/** Mueve el video a `sec` y espera a que muestre ese cuadro. Falla con un mensaje claro si el video no responde. */
 const seek = (v: HTMLVideoElement, sec: number) =>
-  new Promise<void>((res) => { v.addEventListener('seeked', () => res(), { once: true }); v.currentTime = sec; });
+  new Promise<void>((res, rej) => {
+    const done = () => { clearTimeout(timer); res(); };
+    const timer = setTimeout(() => { v.removeEventListener('seeked', done); rej(new Error(VIDEO_ERR)); }, WAIT_MS);
+    v.addEventListener('seeked', done, { once: true });
+    v.currentTime = sec;
+  });
+
+/** Espera a que el video tenga sus datos básicos (duración y tamaño). */
+const metadata = (v: HTMLVideoElement) =>
+  v.readyState >= 1 ? Promise.resolve() : new Promise<void>((res, rej) => {
+    const timer = setTimeout(() => rej(new Error(VIDEO_ERR)), WAIT_MS);
+    v.addEventListener('loadedmetadata', () => { clearTimeout(timer); res(); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(timer); rej(new Error(VIDEO_ERR)); }, { once: true });
+  });
+
+const COARSE = 1 / 10;
+const FINE = 1 / 30;
+
+/**
+ * Muestrea el video en dos pasadas: una gruesa (10 cuadros por segundo) para ubicar el swing y otra fina
+ * (30 por segundo, un cuadro de video normal) solo desde un poco antes del inicio hasta un poco después del
+ * impacto. Así el tempo se mide con cuadros de 33 ms y no de 50, sin pagar 30 por segundo en todo el video, y si
+ * el video trae varios swings se queda con el último. Si no se ve un swing, devuelve la pasada gruesa para que
+ * el análisis diga por qué.
+ */
+async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, dur: number, aspect: number, onProgress: (pct: number) => void) {
+  const grab = async (t: number) => { await seek(v, t); return detect(pose, v, v.currentTime * 1000); };
+  const coarse: Frame[] = [];
+  let coarseN = 0;
+  for (let t = 0; t < dur; t += COARSE) {
+    const f = await grab(t);
+    coarseN++;
+    if (f) coarse.push(f);
+    onProgress(Math.round((t / dur) * 60));
+  }
+  const win = findSwingWindow(coarse, { aspect });
+  if (!win) return { frames: coarse, sampled: coarseN, coarse: null as { frames: Frame[]; sampled: number } | null };
+  const to = Math.min(dur, win.to / 1000), from = win.from / 1000;
+  const fine: Frame[] = [];
+  let fineN = 0;
+  for (let t = from; t <= to; t += FINE) {
+    const f = await grab(t);
+    fineN++;
+    if (f) fine.push(f);
+    onProgress(60 + Math.round(((t - from) / Math.max(0.1, to - from)) * 40));
+  }
+  return { frames: fine, sampled: fineN, coarse: { frames: coarse, sampled: coarseN } };
+}
 
 /** El cuadro actual del video, sin marcas y a hasta 1024 px por lado: es lo que ve el coach con IA. */
 async function cleanFrame(v: HTMLVideoElement): Promise<string | undefined> {
@@ -512,17 +589,19 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     setBusy(true); setError(null); setResult(null); setShots([]); setWarn(null);
     try {
       const pose = await loadPose();
-      if (v.readyState < 1) await new Promise((res) => v.addEventListener('loadedmetadata', res, { once: true }));
+      await metadata(v);
       v.pause();
       const dur = Math.min(v.duration || 0, MAX_SECONDS);
-      const frames: Frame[] = [];
-      for (let t = 0; t < dur; t += STEP) {
-        await seek(v, t);
-        const f = detect(pose, v, t * 1000);
-        if (f) frames.push(f);
-        setProgress(Math.round((t / dur) * 100));
+      if (!(dur > 0.5)) throw new Error(VIDEO_ERR);
+      const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+      const sampled = await sampleVideo(v, pose, dur, aspect, setProgress);
+      let frames = sampled.frames;
+      let r = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: sampled.sampled });
+      // Si la pasada fina no da un swing (el video no era lo que parecía), se prueba con la gruesa.
+      if (typeof r === 'string' && sampled.coarse) {
+        const c = analyzeSwing(sampled.coarse.frames, { lefty: profile.lefty, view, aspect, sampled: sampled.coarse.sampled });
+        if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; }
       }
-      const r = analyzeSwing(frames, { lefty: profile.lefty, view, aspect: v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1 });
       if (typeof r === 'string') setError(SWING_ERROR_TEXT[r]);
       else {
         const start = frames.find((x) => x.t === r.times?.address);
@@ -560,6 +639,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url ? (
           <video
             ref={videoRef} src={url} controls={!busy} muted playsInline className="w-full rounded-xl bg-black max-h-[50vh]"
+            onError={() => setError(VIDEO_ERR)}
             onLoadedMetadata={(e) => { const d = e.currentTarget.duration; setTooLong(Number.isFinite(d) && d > MAX_SECONDS + 0.5 ? Math.ceil(d) : null); }}
           />
         ) : (
@@ -589,6 +669,11 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {warn && <Notice>{warn}</Notice>}
+      {result?.viewMismatch && (
+        <Notice tone="error">
+          Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.
+        </Notice>
+      )}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>
   );

@@ -34,7 +34,7 @@ export function detect(pose: PoseLandmarker, video: HTMLVideoElement, t: number)
   return { t, lm: toPts(r.landmarks[0]), world: r.worldLandmarks?.[0] ? toPts(r.worldLandmarks[0]) : undefined };
 }
 
-const BONES: [number, number][] = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
+const BONES: [number, number][] = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [15, 17], [15, 19], [16, 18], [16, 20]];
 
 export function drawSkeleton(ctx: CanvasRenderingContext2D, lm: Pt[], w: number, h: number) {
   ctx.lineWidth = Math.max(2, w / 220);
