@@ -50,6 +50,7 @@ Lo que se aprendió al probar con swings reales (nov 2026, cuatro swings de una 
 - `.github/workflows/pages.yml` construye con `VITE_BASE=/<repositorio>/` y publica `homegolflab/dist` (con `404.html` para los enlaces directos). Solo se dispara a mano o al hacer push a `main`.
 - `vite.config.ts` toma `base` de `VITE_BASE` (por defecto `/`, como siempre) y `main.tsx` usa `import.meta.env.BASE_URL` como `basename` del router.
 - En Pages no hay `/api`: HomeLAB con foto y el coach con IA responden "esta versión de prueba no incluye…" (`not_configured`).
+- `npm run build:static` (modo `static`) deja en `dist-static/` una build con rutas relativas y router con `#` que funciona soltada en cualquier hosting estático con HTTPS (Netlify Drop, Cloudflare Pages, Vercel…), en cualquier subdirectorio y sin configurar redirecciones. Comprobada sirviéndola bajo un subdirectorio sin `404.html`. Para llevarla a un teléfono sin GitHub Pages.
 - El repositorio es **privado**: Pages en repositorios privados exige un plan de pago y el sitio es público de todas formas. Los ajustes de Settings > Pages y del entorno `github-pages` solo los puede hacer el dueño.
 
 ## Comandos

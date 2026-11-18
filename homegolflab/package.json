@@ -8,6 +8,7 @@
     "dev:phone": "vite --host --mode phone --port 5443 --strictPort",
     "server": "node --env-file-if-exists=.env server/index.ts",
     "build": "tsc --noEmit && vite build",
+    "build:static": "tsc --noEmit && vite build --mode static",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
