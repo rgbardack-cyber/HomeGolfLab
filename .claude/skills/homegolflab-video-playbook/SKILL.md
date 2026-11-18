@@ -98,3 +98,9 @@ Entrega siempre, en este orden:
 - [ ] Nada copiado de Goose Golf u otro creador
 - [ ] Subtítulos + zona segura respetada
 - [ ] Duración 40–50 s
+
+## Estado del producto y paso a producción
+
+Los ejemplos de CTA, funciones e ideas anteriores son propuestas condicionadas a marketing/BRAND.md y al código vigente. No prometer funciones porque estén en este banco. Mientras la app no esté publicada, no decir «descárgala» ni «link en bio» sin destino comprobado. Puede cerrarse con «¿Qué practicas en casa? Cuéntanos» o una invitación a seguir el desarrollo. No fabricar un clip de análisis cuando falta una prueba real.
+
+Después del guion, cargar homegolflab-video-production y su references/reference-explainers.md para construir escenas, renderizar, revisar y entregar archivos reales. El análisis histórico de la referencia se conserva como tal; sus métricas no son actuales ni demuestran eficacia.

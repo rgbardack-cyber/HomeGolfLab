@@ -41,3 +41,7 @@ Como punto de partida: 1080 × 1920, 30 fps, H.264 con audio AAC. Son valores in
 ## Entregar
 
 Rutas reales del master y sus variantes, versión, duración y resolución medidas, archivo de subtítulos, origen y derechos de cada recurso y observaciones pendientes, según los [contratos](../../../marketing/contracts.md). Un render terminado es `produced`; pasa a `qa_passed` solo después de la revisión de arriba, y no acredita publicación. Los medios originales no se suben al repositorio.
+
+## Motion graphics del playbook
+
+Para el formato mito → dato → regla, carga [el contrato de escenas y render](references/reference-explainers.md). Usa la plantilla del playbook, material real para la app y la identidad vigente. Entrega el MP4 y subtítulos cuando haya herramientas disponibles; si falta material o renderizador, informa el paso exacto pendiente.
