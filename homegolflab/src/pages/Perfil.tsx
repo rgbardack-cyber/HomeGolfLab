@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Check, Crown, User } from 'lucide-react';
 import { useStore } from '@/store';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
+import { INTERNAL } from '@/lib/flags';
+import FlagsPanel from '@/components/FlagsPanel';
 
 const PREMIUM = ['Ball tracking sin anuncios ni pausas', 'Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
 const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tracking: 15 min y luego 2 anuncios para seguir', 'Medallas y niveles'];
@@ -51,6 +53,8 @@ export default function Perfil() {
           {profile.premium ? 'Volver al plan gratuito (prueba)' : 'Activar Premium (modo prueba)'}
         </Button>
       </Card>
+
+      {INTERNAL && <FlagsPanel />}
 
       <Card className="space-y-3">
         <h2 className="font-heading text-lg font-semibold">Datos</h2>
