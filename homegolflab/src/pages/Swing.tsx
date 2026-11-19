@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench, Sparkles } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
+import { uploadQuota } from '@/lib/quota';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
@@ -568,20 +569,26 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   /** Duración (s) del video cuando pasa el máximo: solo se analizan los primeros MAX_SECONDS. */
   const [tooLong, setTooLong] = useState<number | null>(null);
 
+  // Cuota por archivo analizado (no por clic): `savedRef` marca que este archivo ya guardó su sesión.
+  const [analyzed, setAnalyzed] = useState(false);
+  const savedRef = useRef(false);
   const used = swingUploadsToday(sessions);
-  const limitReached = !profile.premium && used >= FREE.swingUploadsPerDay;
+  const quota = uploadQuota({ premium: profile.premium, used, limit: FREE.swingUploadsPerDay, analyzedThisFile: analyzed });
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   const pick = (f?: File) => {
     if (!f) return;
     setResult(null); setError(null); setProgress(0); setShots([]); setWarn(null); setTooLong(null);
+    setAnalyzed(false); savedRef.current = false;
     setUrl(URL.createObjectURL(f));
   };
 
   const analyze = async () => {
     const v = videoRef.current;
     if (!v) return;
+    // Defensa extra contra dobles toques y reanálisis gratis del mismo archivo (el botón ya viene deshabilitado).
+    if (!profile.premium && savedRef.current) return;
     setBusy(true); setError(null); setResult(null); setShots([]); setWarn(null);
     try {
       const pose = await loadPose();
@@ -615,6 +622,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         }
         setResult(r);
         addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
+        savedRef.current = true; setAnalyzed(true);
       }
     } catch (e) {
       setError('No se pudo analizar el video. ' + (e instanceof Error ? e.message : ''));
@@ -623,7 +631,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     }
   };
 
-  if (limitReached && !result) {
+  if (quota.showGate && !result) {
     return (
       <PremiumGate title="Ya usaste tu análisis de hoy">
         La versión gratuita incluye {FREE.swingUploadsPerDay} análisis de video por día. Con Premium son ilimitados y además tienes el análisis en vivo.
@@ -651,10 +659,10 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url && !busy && <ClubPicker value={currentClub} onChange={setCurrentClub} />}
         {url && (
           <div className="flex gap-2">
-            <Button full onClick={analyze} disabled={busy}>
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
+            <Button full onClick={analyze} disabled={busy || !quota.canAnalyze}>
+              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> Ya analizado</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
+            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
           </div>
         )}
         {!profile.premium && <p className="text-xs text-muted-foreground text-center">Gratis: {Math.max(0, FREE.swingUploadsPerDay - used)} de {FREE.swingUploadsPerDay} análisis disponibles hoy.</p>}
