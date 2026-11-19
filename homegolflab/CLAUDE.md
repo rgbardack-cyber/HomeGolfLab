@@ -61,6 +61,8 @@ Lo que se aprendió al probar con swings reales (nov 2026, cuatro swings de una 
 `node_modules` es un directorio real dentro de la carpeta, y iCloud lo sincroniza (dejó marcadores de nube): `C:\Users\Ryan\dev\hgl-node_modules` está vacía y no hay ningún enlace (comprobado el 18 nov 2026). Funciona; moverlo fuera de iCloud queda pendiente.
 
 ## Probar con videos reales
+El gancho de QA es oficial desde el 19 nov 2026: `src/lib/debugHook.ts` publica `window.__hglDebug` (Swing) y `window.__hglBall` (tracking) **solo en desarrollo**; el build de producción no los contiene (`grep -r __hgl dist/` = 0). El harness puede apuntar al `npm run dev` del repo sin parchear nada.
+
 Las skills `homegolflab-swing-qa-harness` (flujo real en Chrome, métricas con Wilson 95 %), `homegolflab-swing-events-lab` (laboratorio offline y anti-regresión sobre los 96 conjuntos de cuadros guardados), `golf-swing-phases`, `golf-video-groundtruth` y `golf-ball-flight-tracking` (en `../.claude/skills/`) explican cómo. Un área se declara "lista" solo con ≥ 85 % y límite inferior de Wilson 95 % ≥ 75 % con muestra suficiente. Los 90 clips son de un solo golfista zurdo con un teléfono: nada se ha probado con diestros ni otros equipos.
 
 El repo vive en iCloud Drive, y iCloud a veces renombra un archivo recién editado a `nombre 2.ext` y borra el original (pasó con `lib.test.ts` el 16 nov 2026). Si `git status` muestra un archivo borrado junto a un `… 2.…` sin seguimiento, es eso: devolverle el nombre.
