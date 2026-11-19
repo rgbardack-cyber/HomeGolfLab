@@ -15,6 +15,7 @@ export default function Perfil() {
   const { profile, setProfile, reset, sessions } = useStore();
   const [confirm, setConfirm] = useState(false);
   const flags = useFlags();
+  const [wipeError, setWipeError] = useState<string | null>(null);
   const input = 'mt-1 w-full h-11 rounded-xl border border-border bg-card px-3';
 
   return (
@@ -68,11 +69,16 @@ export default function Perfil() {
         {confirm ? (
           <div className="flex gap-2">
             <Button variant="outline" full onClick={() => setConfirm(false)}>Cancelar</Button>
-            <Button full className="!bg-destructive" onClick={() => { reset(); setConfirm(false); void getMediaStore().then(clearAllMedia).catch(() => undefined); }}>Sí, borrar todo</Button>
+            <Button full className="!bg-destructive" onClick={async () => {
+              // Primero los videos: si fallan, no se borra el resto (así no quedan videos huérfanos sin sesión que los muestre).
+              try { await clearAllMedia(await getMediaStore()); } catch { setWipeError('No se pudieron borrar los videos guardados. Inténtalo de nuevo; tus datos siguen intactos.'); return; }
+              setWipeError(null); reset(); setConfirm(false);
+            }}>Sí, borrar todo</Button>
           </div>
         ) : (
           <Button variant="outline" onClick={() => setConfirm(true)}>Borrar todos mis datos</Button>
         )}
+        {wipeError && <Notice tone="error">{wipeError}</Notice>}
       </Card>
     </div>
   );

@@ -161,6 +161,14 @@ export class NativeFsBackend implements MediaBackend {
   private readonly root: string;
   private readonly chunk: number;
   private ready: Promise<void> | null = null;
+  /** Cola por id: dos escrituras/borrados del mismo id no se mezclan (revisión F2: archivo corrupto con putBlob concurrentes). */
+  private queues = new Map<string, Promise<unknown>>();
+  private serial<T>(id: string, work: () => Promise<T>): Promise<T> {
+    const run = (this.queues.get(id) ?? Promise.resolve()).catch(() => undefined).then(work);
+    this.queues.set(id, run);
+    void run.finally(() => { if (this.queues.get(id) === run) this.queues.delete(id); }).catch(() => undefined);
+    return run;
+  }
   constructor(private readonly o: NativeFsOptions) {
     this.root = o.root ?? 'hgl-media';
     this.chunk = Math.max(3, Math.floor((o.chunkBytes ?? DEFAULT_CHUNK_BYTES) / 3) * 3);
@@ -177,8 +185,12 @@ export class NativeFsBackend implements MediaBackend {
     try { await this.o.fs.deleteFile({ path, directory: this.o.directory }); } catch (e) { if (!NOT_FOUND.test(String((e as Error)?.message ?? e))) throw e; }
   }
 
-  async putBlob(id: string, data: Blob) {
+  putBlob(id: string, data: Blob): Promise<void> {
     assertId(id);
+    return this.serial(id, () => this.putBlobNow(id, data));
+  }
+
+  private async putBlobNow(id: string, data: Blob) {
     const path = this.path(id, 'bin');
     try {
       await this.dir();
@@ -227,10 +239,9 @@ export class NativeFsBackend implements MediaBackend {
     try { return JSON.parse(text) as T; } catch (e) { throw new MediaStoreError('corrupt', 'JSON dañado', e); }
   }
 
-  async delete(id: string) {
+  delete(id: string): Promise<void> {
     assertId(id);
-    await this.rm(this.path(id, 'bin'));
-    await this.rm(this.path(id, 'json'));
+    return this.serial(id, async () => { await this.rm(this.path(id, 'bin')); await this.rm(this.path(id, 'json')); });
   }
 
   async list(): Promise<BackendEntry[]> {

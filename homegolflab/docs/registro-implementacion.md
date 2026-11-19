@@ -55,3 +55,28 @@ Base: `feat/mvp-driving-range` @ `d9f4d3e`. Línea base: typecheck OK, 107/107 p
 
 ### Incidencia
 - La caché de Vite (`node_modules/.vite`) quedó desfasada y el servidor devolvía 504 "Outdated Optimize Dep" (la comparten `vite build` y vitest). Se borró (es solo caché) y se reinició el servidor.
+
+## F2. Persistencia y migración (19 nov 2026)
+
+| # | Estado | Commit | Verificación |
+|---|---|---|---|
+| 2.1 | hecho | `2e98d64`, `3f4b1c5` | `lib/storeMigrate.ts`, `persist` versión 1. Fixture REAL generado por la app (`__fixtures__/store-v0-real.json`). 8 pruebas (2 de integración con el store real; fallan con el `store.ts` anterior). Chrome: el JSON v0 se migra al cargar (sesión, 2 medallas y perfil intactos, `exportPasses: []`). |
+| 2.2 | hecho | `7a5c0a6` | `lib/media/*`; `@capacitor/filesystem` 8.1.5 (exacta, 35 días; transitiva `@capacitor/synapse` 1.0.4). 24 pruebas; 2 mutaciones detectadas. IndexedDB real en Chrome: 24 MB en 67 ms, persiste tras recargar, borrar deja 0. |
+| 2.3 | hecho | `106a5ba` | `policy.ts` (pura) + `cleanup.ts` + tarjeta "Espacio usado" + limpieza al arrancar (solo con banderas de video). 13 pruebas con fechas simuladas. Chrome: la exportación de 30 h se borró sola, el video del usuario quedó, el botón borra. |
+
+### Revisión adversarial de F2 (3 lentes + verificador escéptico): 12 hallazgos, 5 confirmados, 7 refutados
+Corregido (commit de revisión de F2):
+- `NativeFsBackend.putBlob`/`delete` ahora se serializan por id (dos `putBlob` concurrentes del mismo id mezclaban bloques y dejaban un archivo corrupto). Prueba nueva que falla sin el arreglo.
+- "Borrar todos mis datos" borra primero los videos y, si falla, avisa y NO borra el resto (antes hacía `reset()` y tragaba el error: videos huérfanos sin sesión).
+
+**PENDIENTE (confirmado, sin corregir por haberse agotado el uso):**
+1. Reemplazar un id existente en el backend nativo borra la versión anterior ANTES de escribir; si falla a mitad se pierden ambas (IndexedDB sí es atómico). Hay que escribir a un archivo temporal y reemplazar al terminar. Latente: hoy ningún llamador reemplaza ids (los ids son UUID nuevos).
+2. Blobs huérfanos (el proceso muere entre `putBlob` y la referencia): `usage()` los cuenta pero `runCleanup` solo ve referencias. Falta una pasada que borre blobs sin referencia de más de 24 h y no referenciados por sesiones.
+3. `saveMedia` esconde un fallo del rollback (`.catch(() => undefined)`).
+
+Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona con el estado inicial), guardado de versión futura, colisión del sufijo `-ref` (ids de usuario, que no existen), borrar recién guardados al pasar el tope (precondición documentada), foto de sesiones en `runCleanup`, `NaN` en fechas.
+
+### Lo no medido
+- Backend nativo: no probado en un dispositivo (no hay carpetas `android`/`ios`), solo con un sistema de archivos falso.
+- Cuota del navegador casi llena: no probada en un navegador real.
+- No hay pantalla para borrar una sesión: `removeSession`/`deleteSessionMedia` existen y tienen pruebas, pero ninguna pantalla los usa.

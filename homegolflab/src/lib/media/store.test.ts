@@ -169,6 +169,15 @@ describe('backend nativo: escritura por bloques (F2.2)', () => {
     await expect(native(f, 300).putBlob('m_y', blobOf(2000))).rejects.toMatchObject({ code: 'unavailable' });
   });
 
+  it('dos putBlob concurrentes del mismo id no se mezclan (el último gana, archivo íntegro)', async () => {
+    const f = fakeFs();
+    const be = native(f, 9);
+    await Promise.all([be.putBlob('m_c', blobOf(30, 1)), be.putBlob('m_c', blobOf(30, 2))]);
+    const got = await bytesOf((await be.getBlob('m_c'))!);
+    expect(got.length).toBe(30);
+    expect(got).toEqual(await bytesOf(blobOf(30, 2)));
+  });
+
   it('sobrescribir un id no deja restos del contenido anterior', async () => {
     const f = fakeFs();
     const be = native(f, 100);
