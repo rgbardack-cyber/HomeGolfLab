@@ -51,6 +51,10 @@ interface State {
   setProfile: (p: Partial<Profile>) => void;
   addSession: (s: Omit<Session, 'id' | 'at' | 'date' | 'mode'> & { mode?: Mode }) => Session;
   shiftUnlock: () => void;
+  /** Quita la sesión del historial. Quien llama borra sus medios (`deleteSessionMedia`); las medallas ya ganadas se conservan. */
+  removeSession: (id: string) => Session | undefined;
+  /** Olvida los ids de video/pose/vuelo de todas las sesiones (tras borrar los videos guardados). */
+  clearMediaRefs: () => void;
   setSpace: (s: Space, scan?: ScanInfo | null) => void;
   addTrackingTime: (sec: number) => void;
   unlockTracking: () => void;
@@ -95,6 +99,14 @@ export const useStore = create<State>()(
         return session;
       },
       shiftUnlock: () => set({ unlockQueue: get().unlockQueue.slice(1) }),
+      removeSession: (id) => {
+        const found = get().sessions.find((x) => x.id === id);
+        if (found) set({ sessions: get().sessions.filter((x) => x.id !== id) });
+        return found;
+      },
+      clearMediaRefs: () => set({
+        sessions: get().sessions.map((x) => (x.mediaId || x.poseTrackId || x.flightTrackId ? { ...x, mediaId: undefined, poseTrackId: undefined, flightTrackId: undefined } : x)),
+      }),
       setSpace: (space, scan = null) => set({ space, scan, plan: null }),
       addTrackingTime: (sec) => set({ trackingUsedSec: get().trackingUsedSec + sec }),
       unlockTracking: () => set({ trackingUsedSec: 0 }),

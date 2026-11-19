@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Check, Crown, User } from 'lucide-react';
 import { useStore } from '@/store';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
-import { INTERNAL } from '@/lib/flags';
+import { anyMediaFlag, INTERNAL, useFlags } from '@/lib/flags';
+import { clearAllMedia } from '@/lib/media/cleanup';
+import { getMediaStore } from '@/lib/media/store';
+import StorageCard from '@/components/StorageCard';
 import FlagsPanel from '@/components/FlagsPanel';
 
 const PREMIUM = ['Ball tracking sin anuncios ni pausas', 'Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
@@ -11,6 +14,7 @@ const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tr
 export default function Perfil() {
   const { profile, setProfile, reset, sessions } = useStore();
   const [confirm, setConfirm] = useState(false);
+  const flags = useFlags();
   const input = 'mt-1 w-full h-11 rounded-xl border border-border bg-card px-3';
 
   return (
@@ -54,6 +58,8 @@ export default function Perfil() {
         </Button>
       </Card>
 
+      {anyMediaFlag(flags) && <StorageCard />}
+
       {INTERNAL && <FlagsPanel />}
 
       <Card className="space-y-3">
@@ -62,7 +68,7 @@ export default function Perfil() {
         {confirm ? (
           <div className="flex gap-2">
             <Button variant="outline" full onClick={() => setConfirm(false)}>Cancelar</Button>
-            <Button full className="!bg-destructive" onClick={() => { reset(); setConfirm(false); }}>Sí, borrar todo</Button>
+            <Button full className="!bg-destructive" onClick={() => { reset(); setConfirm(false); void getMediaStore().then(clearAllMedia).catch(() => undefined); }}>Sí, borrar todo</Button>
           </div>
         ) : (
           <Button variant="outline" onClick={() => setConfirm(true)}>Borrar todos mis datos</Button>

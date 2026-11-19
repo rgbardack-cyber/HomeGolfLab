@@ -56,6 +56,9 @@ export function parseOverrides(raw: string | null): Partial<Record<FlagName, boo
   } catch { return {}; }
 }
 
+/** ¿Alguna función que guarda videos o pistas está encendida? Si no, la app no abre el almacén de medios. */
+export const anyMediaFlag = (f: FlagValues): boolean => f.videoReview || f.compare || f.flightV2 || f.export || f.liveRecording;
+
 /** ¿Se muestra el panel y se leen los cambios guardados? */
 export const INTERNAL: boolean = import.meta.env.DEV || import.meta.env.VITE_INTERNAL === '1';
 
