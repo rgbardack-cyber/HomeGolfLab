@@ -15,6 +15,7 @@ export interface Session extends SessionLite {
   shotList?: Shot[];
   planTheme?: string;
   minutes?: number;
+  club?: string;              // palo confirmado a mano por el usuario para este swing (la app no lee el número)
 }
 
 export interface Profile { name: string; handicap: string; lefty: boolean; premium: boolean }
@@ -29,8 +30,10 @@ interface State {
   plan: Plan | null;
   scan: ScanInfo | null;            // lo que la IA vio en el último escaneo del espacio
   trackingUsedSec: number;          // segundos de ball tracking usados desde el último desbloqueo
+  currentClub: string | null;       // palo confirmado a mano; se asigna a los swings siguientes hasta que el usuario lo cambie
 
   setMode: (m: Mode) => void;
+  setCurrentClub: (c: string | null) => void;
   setProfile: (p: Partial<Profile>) => void;
   addSession: (s: Omit<Session, 'id' | 'at' | 'date' | 'mode'> & { mode?: Mode }) => Session;
   shiftUnlock: () => void;
@@ -56,6 +59,7 @@ const initial = {
   plan: null as Plan | null,
   scan: null as ScanInfo | null,
   trackingUsedSec: 0,
+  currentClub: null as string | null,
 };
 
 export const useStore = create<State>()(
@@ -63,6 +67,7 @@ export const useStore = create<State>()(
     (set, get) => ({
       ...initial,
       setMode: (mode) => set({ mode }),
+      setCurrentClub: (currentClub) => set({ currentClub }),
       setProfile: (p) => set({ profile: { ...get().profile, ...p } }),
       addSession: (s) => {
         const session: Session = { ...s, id: crypto.randomUUID(), at: new Date().toISOString(), date: todayISO(), mode: s.mode ?? get().mode };

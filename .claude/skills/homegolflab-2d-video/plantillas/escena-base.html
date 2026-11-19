@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Escena base — HomeGolfLab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@700&display=block">
+</head>
+<body>
+<canvas id="stage"></canvas>
+<script src="/_hgl/player.js"></script>
+<script>
+const C = { verde: '#276749', dorado: '#D4A735', fondo: '#F6F9F7', tinta: '#0E1B14', gris: '#5E6E66', suave: '#EAF0EC' };
+
+HGL.scene({
+  width: 1080, height: 1920, fps: 30, duration: 6,
+  draw(ctx, t, W, H) {
+    ctx.fillStyle = C.fondo; ctx.fillRect(0, 0, W, H);
+    // entrada con desplazamiento y aparición
+    const a = HGL.keys(t, [[0.2, 0], [0.9, 1, 'out']]);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = C.tinta; ctx.font = '700 96px "Playfair Display", Georgia, serif'; ctx.textAlign = 'center';
+    ctx.fillText('Tu título aquí', W / 2, H / 2 + (1 - a) * 40);
+    ctx.globalAlpha = 1;
+  },
+});
+</script>
+</body>
+</html>

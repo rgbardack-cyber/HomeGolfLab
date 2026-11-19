@@ -91,6 +91,8 @@ export async function scanSpace(images: ScanImage[], notes?: string): Promise<Sc
     throw new ScanError('No hay conexión con el servicio de escaneo. Revisa tu internet.', 'offline');
   }
   const body = await res.json().catch(() => null);
+  // Sin servidor (por ejemplo, en la versión de prueba publicada en GitHub Pages) /api responde 404 con una página, no con JSON.
+  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new ScanError('Esta versión de prueba no incluye el escaneo con IA.', 'not_configured');
   if (!res.ok) throw new ScanError(body?.error ?? 'El escaneo falló. Inténtalo de nuevo.', body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
   return body as ScanResult;
 }

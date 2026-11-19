@@ -1,0 +1,72 @@
+1
+00:00:00,450 --> 00:00:05,410
+La mayoría de los golfistas amateur llega a la cancha una vez por semana,
+
+2
+00:00:05,450 --> 00:00:08,570
+o menos. El resto del tiempo practica en casa,
+
+3
+00:00:08,610 --> 00:00:11,450
+sin guía y sin saber si lo que hace sirve.
+
+4
+00:00:11,490 --> 00:00:15,560
+Un coach o un simulador cuestan demasiado para el día a día.
+
+5
+00:00:16,200 --> 00:00:20,830
+HomeGolfLab convierte tu teléfono en un laboratorio de práctica.
+
+6
+00:00:20,870 --> 00:00:22,510
+En casa y en la cancha.
+
+7
+00:00:23,150 --> 00:00:26,340
+Graba tu swing y la app analiza tu postura,
+
+8
+00:00:26,380 --> 00:00:30,920
+tu giro y tu tempo. Te dice qué corregir y con qué ejercicio.
+
+9
+00:00:31,560 --> 00:00:36,910
+Con HomeLAB tomas una foto de tu espacio y la app arma tu sesión del día.
+
+10
+00:00:36,950 --> 00:00:39,570
+Sin medir nada y sin hacer cálculos.
+
+11
+00:00:40,210 --> 00:00:44,900
+El ball tracking mide la dirección y la velocidad de tus putts con la cámara,
+
+12
+00:00:44,940 --> 00:00:49,330
+y en la cancha registra tus tiros para mostrarte tu dispersión por palo.
+
+13
+00:00:49,970 --> 00:00:53,490
+Las medallas y los niveles te mantienen practicando.
+
+14
+00:00:54,130 --> 00:00:57,190
+La app es gratis, con anuncios en el tracking.
+
+15
+00:00:57,230 --> 00:01:01,840
+Premium desbloquea el análisis de swing en vivo y quita los anuncios.
+
+16
+00:01:01,880 --> 00:01:04,200
+Ganamos con ambos tipos de usuario.
+
+17
+00:01:04,840 --> 00:01:10,640
+Ya tenemos un prototipo funcionando y vamos por las tiendas de iOS y Android.
+
+18
+00:01:10,680 --> 00:01:14,510
+HomeGolfLab. Practica en casa. Mejora en la cancha.
+

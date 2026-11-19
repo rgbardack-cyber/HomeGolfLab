@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>HomeGolfLab — Brand File</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root { --green:#276749; --green2:#428A68; --gold:#D4A735; --bg:#F6F9F7; --ink:#0E1B14; --muted:#5E6E66; --line:#DCE5DF; --soft:#EAF0EC; --red:#CE2727; }
+  * { box-sizing: border-box; }
+  body { font-family: Inter, Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2 { font-family: "Playfair Display", Georgia, serif; margin: 0; }
+  h1 { font-size: 34pt; line-height: 1.05; }
+  h2 { font-size: 19pt; margin-bottom: 8pt; padding-bottom: 5pt; border-bottom: 2px solid var(--green); }
+  h3 { font-size: 11pt; margin: 12pt 0 3pt; }
+  p { margin: 0 0 7pt; }
+  section { break-before: page; }
+  section.first { break-before: auto; }
+  .cover { background: var(--green); color: #fff; border-radius: 14pt; padding: 34pt 30pt; }
+  .cover img { height: 62pt; margin-bottom: 26pt; display: block; }
+  .cover p { font-size: 13pt; opacity: .92; max-width: 420pt; }
+  .eyebrow { font-size: 8.5pt; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--green); margin-bottom: 4pt; }
+  .cover .eyebrow { color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9.6pt; }
+  th, td { text-align: left; vertical-align: top; padding: 5pt 8pt 5pt 0; border-bottom: 1px solid var(--line); }
+  th { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 9.4pt; background: var(--soft); padding: 1pt 4pt; border-radius: 3pt; }
+  ul { margin: 0 0 8pt; padding-left: 15pt; } li { margin-bottom: 3pt; }
+  .grid { display: grid; gap: 9pt; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: 1fr 1fr 1fr; } .g4 { grid-template-columns: repeat(4, 1fr); }
+  .sw { border: 1px solid var(--line); border-radius: 8pt; overflow: hidden; break-inside: avoid; }
+  .sw i { display: block; height: 44pt; }
+  .sw div { padding: 6pt 8pt; font-size: 8.8pt; } .sw b { display: block; font-size: 9.6pt; }
+  .box { border: 1px solid var(--line); border-radius: 8pt; padding: 10pt 12pt; break-inside: avoid; }
+  .logo { border: 1px solid var(--line); border-radius: 8pt; padding: 10pt; text-align: center; break-inside: avoid; }
+  .logo img { max-width: 100%; height: 58pt; object-fit: contain; }
+  .logo.dark { background: var(--green); } .logo small { display: block; margin-top: 6pt; font-size: 8.4pt; color: var(--muted); }
+  .logo.dark small { color: #fff; }
+  .do { border-left: 3px solid var(--green); } .dont { border-left: 3px solid var(--red); }
+  .note { background: #FBF3DC; border-left: 3px solid var(--gold); padding: 8pt 11pt; border-radius: 0 6pt 6pt 0; margin: 8pt 0; break-inside: avoid; }
+  .shots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7pt; }
+  .shots img { width: 100%; border: 1px solid var(--line); border-radius: 7pt; display: block; }
+  .shots small { font-size: 7.6pt; color: var(--muted); }
+  .type1 { font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 26pt; line-height: 1.1; }
+  .type2 { font-size: 12pt; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; background: var(--soft); border-radius: 6pt; padding: 9pt 11pt; white-space: pre-wrap; margin: 4pt 0 8pt; break-inside: avoid; }
+  footer { margin-top: 14pt; font-size: 8pt; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<section class="first">
+  <div class="cover">
+    <img src="logos/logo-horizontal-blanco-transparente.png" alt="HomeGolfLab">
+    <div class="eyebrow">Brand File · versión 1 · noviembre de 2026</div>
+    <h1>Guía de marca para video, imagen y redes</h1>
+    <p style="margin-top:14pt">Todo lo que necesita una persona o una IA para crear piezas de HomeGolfLab que se vean y suenen como la app: identidad, logo, color, tipografía, estilo visual, tono, mensajes y reglas.</p>
+  </div>
+
+  <h3 style="margin-top:18pt">Cómo usar este archivo</h3>
+  <p>Súbelo como <b>documento</b> del Brand Kit. Los logos están en la carpeta <code>logos/</code> y las capturas reales de la app en <code>capturas/</code>. El archivo <code>campos-para-el-brand-kit.md</code> trae los mismos datos listos para pegar en cada campo del kit (colores, fuentes, reglas).</p>
+
+  <h2 style="margin-top:14pt">1. La marca en una página</h2>
+  <table>
+    <tr><th style="width:26%">Elemento</th><th>Definición</th></tr>
+    <tr><td><b>Nombre</b></td><td>HomeGolfLab. Una sola palabra, con H, G y L en mayúscula. Nunca “Home Golf Lab”, “HomeGolf LAB” ni “HGL” en piezas públicas.</td></tr>
+    <tr><td><b>Qué es</b></td><td>Una app móvil (iOS y Android) que convierte el teléfono en un laboratorio de práctica de golf, en casa y en la cancha.</td></tr>
+    <tr><td><b>Para quién</b></td><td>Golfistas amateur y principiantes de Latinoamérica que quieren mejorar sin depender de una cancha, un instructor ni equipo caro.</td></tr>
+    <tr><td><b>Promesa</b></td><td>Practica con lo que ya tienes y entiende qué corregir. Sin sensores, sin equipo extra.</td></tr>
+    <tr><td><b>Lema</b></td><td>Practica en casa. Mejora en la cancha.</td></tr>
+    <tr><td><b>Idioma</b></td><td>Español latino neutro. Tuteo (“tu swing”, “toma una foto”).</td></tr>
+    <tr><td><b>Personalidad</b></td><td>Un buen coach: claro, cercano, exigente sin ser duro. Serio con los datos, cálido con la persona.</td></tr>
+  </table>
+
+  <h3>Las cuatro piezas del producto</h3>
+  <div class="grid g2">
+    <div class="box"><b>Análisis de swing</b><br>La cámara del teléfono sigue la postura del jugador y devuelve una nota de 0 a 100, seis medidas (tempo, giro de hombros, giro de caderas, postura, cabeza, cadera) y un ejercicio por cada fallo.</div>
+    <div class="box"><b>HomeLAB</b><br>El jugador toma una foto o un video de su sala o patio. La app estima el espacio, le dice qué puede practicar ahí y arma una sesión diaria de unos 15 minutos. No hay que medir nada.</div>
+    <div class="box"><b>Ball tracking</b><br>Mide dirección y velocidad de salida de los putts con la cámara y registra los tiros en un mapa de dispersión.</div>
+    <div class="box"><b>Logros</b><br>20 medallas de cumplimiento y de mérito, XP y seis niveles, de Principiante a Tour Player.</div>
+  </div>
+  <p style="margin-top:8pt"><b>Dos modos:</b> Casa y Cancha. <b>Modelo:</b> gratis con anuncios en el tracking; Premium sin anuncios y con análisis de swing en vivo.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Identidad visual</div>
+  <h2>2. Logo</h2>
+  <p>El símbolo es una <b>H</b> serif blanca dentro de un cuadrado verde de esquinas redondeadas (radio del 22 % del lado). El nombre va en Playfair Display Bold.</p>
+  <div class="grid g3">
+    <div class="logo"><img src="logos/logo-horizontal.png" alt=""><small><b>Principal · horizontal</b><br>logo-horizontal.png</small></div>
+    <div class="logo"><img src="logos/logo-apilado.png" alt=""><small><b>Apilado con lema</b><br>logo-apilado.png</small></div>
+    <div class="logo"><img src="logos/logo-icono.png" alt=""><small><b>Ícono</b><br>logo-icono.png</small></div>
+    <div class="logo dark"><img src="logos/logo-horizontal-blanco-transparente.png" alt=""><small><b>Sobre fondo oscuro</b><br>logo-horizontal-blanco-transparente.png</small></div>
+    <div class="logo dark"><img src="logos/logo-icono-invertido.png" alt=""><small><b>Ícono invertido</b><br>logo-icono-invertido.png</small></div>
+    <div class="logo"><img src="logos/logo-horizontal-fondo-oscuro.png" alt=""><small><b>Con fondo verde incluido</b><br>logo-horizontal-fondo-oscuro.png</small></div>
+  </div>
+  <div class="grid g2" style="margin-top:10pt">
+    <div class="box do"><b>Sí</b>
+      <ul><li>Deja alrededor un espacio libre igual a la mitad del alto del ícono.</li><li>Usa la versión principal sobre fondos claros y la blanca sobre verde, oscuro o fotos.</li><li>En video, el logo aparece al inicio o al cierre, centrado, con una entrada suave.</li><li>Ancho mínimo del horizontal: 120 px en pantalla.</li></ul></div>
+    <div class="box dont"><b>No</b>
+      <ul><li>No cambies los colores, ni apliques degradados, sombras o contornos.</li><li>No estires, gires ni recortes el símbolo.</li><li>No cambies la tipografía del nombre ni lo separes en tres palabras.</li><li>No lo coloques sobre fotos con mucho detalle sin un fondo liso detrás.</li><li>No dejes que una IA redibuje el logo: usa siempre el archivo.</li></ul></div>
+  </div>
+
+  <h2 style="margin-top:14pt">3. Color</h2>
+  <div class="grid g4">
+    <div class="sw"><i style="background:#276749"></i><div><b>Verde golf</b>#276749<br>Principal · dominante</div></div>
+    <div class="sw"><i style="background:#D4A735"></i><div><b>Dorado</b>#D4A735<br>Acento · logros y llamadas</div></div>
+    <div class="sw"><i style="background:#F6F9F7"></i><div><b>Verde niebla</b>#F6F9F7<br>Fondo general</div></div>
+    <div class="sw"><i style="background:#0E1B14"></i><div><b>Tinta</b>#0E1B14<br>Texto y fondos oscuros</div></div>
+    <div class="sw"><i style="background:#428A68"></i><div><b>Verde claro</b>#428A68<br>Fin de degradado</div></div>
+    <div class="sw"><i style="background:#FFFFFF"></i><div><b>Blanco</b>#FFFFFF<br>Tarjetas y logo</div></div>
+    <div class="sw"><i style="background:#EAF0EC"></i><div><b>Verde suave</b>#EAF0EC<br>Bloques secundarios</div></div>
+    <div class="sw"><i style="background:#5E6E66"></i><div><b>Gris verdoso</b>#5E6E66<br>Texto secundario</div></div>
+    <div class="sw"><i style="background:#6DCF8E"></i><div><b>Verde trazo</b>#6DCF8E<br>Esqueleto y trayectorias</div></div>
+    <div class="sw"><i style="background:#E8C04A"></i><div><b>Dorado brillo</b>#E8C04A<br>Puntos y línea al objetivo</div></div>
+    <div class="sw"><i style="background:#DCE5DF"></i><div><b>Borde</b>#DCE5DF<br>Líneas y bordes</div></div>
+    <div class="sw"><i style="background:#CE2727"></i><div><b>Rojo aviso</b>#CE2727<br>Solo errores y “corregir”</div></div>
+  </div>
+  <ul style="margin-top:8pt">
+    <li><b>Proporción:</b> cerca de 60 % fondo claro o verde, 30 % blanco y tinta, 10 % dorado. El dorado es un acento: úsalo para premios, cifras clave y un único llamado a la acción.</li>
+    <li><b>Degradado de marca:</b> de <code>#276749</code> a <code>#428A68</code>, en diagonal de arriba-izquierda a abajo-derecha.</li>
+    <li><b>Contraste:</b> texto blanco sobre verde; texto tinta sobre claro o dorado. Nunca texto dorado sobre blanco en tamaños pequeños.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Identidad visual</div>
+  <h2>4. Tipografía</h2>
+  <div class="grid g2">
+    <div class="box"><div class="type1">Tu laboratorio de golf</div><p style="margin-top:6pt"><b>Playfair Display</b> · 600 y 700<br>Títulos, cifras grandes y el nombre de la marca. Da el tono clásico del golf.</p></div>
+    <div class="box"><div class="type2">Toma una foto de tu sala y la app arma tu práctica del día.</div><p style="margin-top:6pt"><b>Inter</b> · 400, 500, 600 y 700<br>Textos, botones, etiquetas y subtítulos de video. Limpia y muy legible en pantalla.</p></div>
+  </div>
+  <ul style="margin-top:8pt">
+    <li>Ambas son de Google Fonts y de uso libre. Alternativas si no están: Georgia para títulos, Arial o Helvetica para texto.</li>
+    <li>Títulos en mayúscula inicial, nunca todo en mayúsculas. Las etiquetas pequeñas sí pueden ir en mayúsculas con espaciado amplio.</li>
+    <li>En video vertical: título de al menos 64 px, texto de apoyo de al menos 36 px, y un máximo de 8 palabras por pantalla.</li>
+  </ul>
+
+  <h2 style="margin-top:14pt">5. Estilo de la interfaz</h2>
+  <p>Cuando una pieza muestra la app, debe parecerse a estas pantallas reales. Las cifras que aparecen son datos de ejemplo.</p>
+  <div class="shots">
+    <div><img src="capturas/01-inicio.jpg" alt=""><small>Inicio</small></div>
+    <div><img src="capturas/02-analisis-de-swing.jpg" alt=""><small>Análisis de swing</small></div>
+    <div><img src="capturas/03-homelab-plan-del-dia.jpg" alt=""><small>HomeLAB</small></div>
+    <div><img src="capturas/04-tracking-mapa-de-dispersion.jpg" alt=""><small>Ball tracking</small></div>
+    <div><img src="capturas/05-logros-medallas.jpg" alt=""><small>Logros</small></div>
+  </div>
+  <ul style="margin-top:8pt">
+    <li>Tarjetas blancas con esquinas redondeadas (16 px), borde fino y casi sin sombra.</li>
+    <li>Mucho aire: márgenes amplios y un solo mensaje por bloque.</li>
+    <li>Íconos de línea, de trazo fino y uniforme. Los emojis solo aparecen dentro de las medallas.</li>
+    <li>Elementos propios de la marca: el anillo de puntuación, el esqueleto de líneas verdes con puntos dorados sobre el jugador, la línea punteada dorada de la bola al objetivo y el mapa de dispersión de puntos.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Dirección de arte</div>
+  <h2>6. Fotografía e imagen</h2>
+  <div class="grid g2">
+    <div class="box do"><b>Cómo se ve</b>
+      <ul><li>Personas reales practicando en espacios reales: salas, garajes, patios, jardines pequeños, un driving range.</li><li>Golfistas amateur de Latinoamérica, de distintas edades y géneros, con ropa cómoda de todos los días.</li><li>Luz natural y cálida. Colores sobrios, con el verde como hilo conductor.</li><li>El teléfono siempre presente: apoyado en un trípode, en una silla o en la mano.</li><li>Equipo sencillo: un putter, un wedge, un mat de putting, un vaso como objetivo.</li></ul></div>
+    <div class="box dont"><b>Cómo no se ve</b>
+      <ul><li>Clubes exclusivos, yates, autos de lujo ni estética de élite.</li><li>Jugadores profesionales reconocibles o marcas de equipo visibles.</li><li>Simuladores, launch monitors, sensores o pantallas gigantes.</li><li>Imágenes de archivo genéricas con sonrisas forzadas.</li><li>Filtros saturados, neón, efectos futuristas o estética de videojuego.</li></ul></div>
+  </div>
+
+  <h2 style="margin-top:14pt">7. Video y animación</h2>
+  <ul>
+    <li><b>Estilo:</b> motion graphics limpio, 2D o 3D suave, con el teléfono como protagonista y la interfaz dentro de su pantalla. Puede combinarse con tomas reales de personas practicando.</li>
+    <li><b>Movimiento:</b> entradas suaves (aparecer y subir), transiciones fluidas, movimientos de cámara cortos. Enérgico pero sobrio. Sin destellos, sacudidas ni cortes agresivos.</li>
+    <li><b>Ritmo:</b> una idea por escena, de 4 a 8 segundos cada una.</li>
+    <li><b>Estructura base:</b> problema → logo → swing → HomeLAB → tracking → logros → cierre con logo y lema.</li>
+    <li><b>Texto en pantalla:</b> siempre en español, corto, en Playfair Display para la frase principal e Inter para el apoyo.</li>
+    <li><b>Cierre:</b> logo blanco sobre el degradado verde y el lema debajo.</li>
+  </ul>
+  <table>
+    <tr><th>Formato</th><th>Tamaño</th><th>Uso</th></tr>
+    <tr><td>Vertical 9:16</td><td>1080 × 1920</td><td>Reels, TikTok, Shorts, historias. Formato principal.</td></tr>
+    <tr><td>Cuadrado 1:1</td><td>1080 × 1080</td><td>Publicaciones de Instagram y Facebook.</td></tr>
+    <tr><td>Retrato 4:5</td><td>1080 × 1350</td><td>Publicaciones y carruseles.</td></tr>
+    <tr><td>Horizontal 16:9</td><td>1920 × 1080</td><td>YouTube, presentaciones y pitch.</td></tr>
+  </table>
+  <p>En vertical, deja libres 250 px arriba y 350 px abajo: ahí van los controles de cada red.</p>
+
+  <h2 style="margin-top:12pt">8. Voz y sonido</h2>
+  <ul>
+    <li><b>Voz en off:</b> español latino neutro, sin acento marcado de un país. Cálida, segura y cercana; ritmo ágil sin correr. Suena a un coach que te habla de tú, no a un locutor de anuncio.</li>
+    <li><b>Música:</b> instrumental, optimista y moderna, con un fondo acústico o electrónico ligero. Siempre por debajo de la voz.</li>
+    <li><b>Efectos:</b> pocos y reales: el golpe de un putt, la bola cayendo al hoyo, un tono suave al ganar una medalla.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="eyebrow">Mensaje</div>
+  <h2>9. Tono y redacción</h2>
+  <div class="grid g2">
+    <div class="box do"><b>Escribimos así</b>
+      <ul><li>“Toma una foto. La app arma tu práctica.”</li><li>“Tu swing, con nota y con qué corregir.”</li><li>“Quince minutos al día, en tu sala.”</li><li>“Sin sensores. Sin equipo extra.”</li></ul></div>
+    <div class="box dont"><b>No escribimos así</b>
+      <ul><li>“¡Revoluciona tu juego con IA de última generación!”</li><li>“Juega como un profesional en 30 días.”</li><li>“La app n.º 1 de golf.”</li><li>“Precisión de launch monitor en tu bolsillo.”</li></ul></div>
+  </div>
+  <ul style="margin-top:8pt">
+    <li>Frases cortas, verbos en imperativo o en presente, y un beneficio concreto por frase.</li>
+    <li>Números antes que adjetivos: “15 minutos”, “6 medidas”, “20 medallas”.</li>
+    <li>Nombres propios de la app, siempre igual: <b>HomeLAB</b>, <b>Ball tracking</b>, <b>Análisis de swing</b>, <b>Logros</b>, <b>Premium</b>, <b>Casa</b> y <b>Cancha</b>.</li>
+  </ul>
+
+  <h3>Mensajes que se pueden usar</h3>
+  <table>
+    <tr><th style="width:24%">Tema</th><th>Mensaje</th></tr>
+    <tr><td>Lema</td><td>Practica en casa. Mejora en la cancha.</td></tr>
+    <tr><td>Marca</td><td>Tu laboratorio de golf, en tu teléfono.</td></tr>
+    <tr><td>Swing</td><td>Analiza tu swing y te dice qué corregir.</td></tr>
+    <tr><td>HomeLAB</td><td>Toma una foto. La app arma tu práctica.</td></tr>
+    <tr><td>Tracking</td><td>Mide tus putts. Mira tu progreso.</td></tr>
+    <tr><td>Logros</td><td>Cada sesión cuenta.</td></tr>
+    <tr><td>Acceso</td><td>Sin cancha, sin coach, sin equipo caro.</td></tr>
+    <tr><td>Llamado a la acción</td><td>“Empieza a practicar hoy.” Mientras la app no esté en las tiendas: “Muy pronto en iOS y Android.”</td></tr>
+  </table>
+
+  <h2 style="margin-top:10pt">10. Lo que la marca puede y no puede afirmar</h2>
+  <div class="note"><b>Regla central:</b> HomeGolfLab no muestra números que no mide. Toda pieza debe respetar esto.</div>
+  <div class="grid g2">
+    <div class="box do"><b>Se puede decir</b>
+      <ul><li>Analiza la postura del jugador con la cámara del teléfono.</li><li>Mide tempo, giros, postura, cabeza y cadera como estimaciones.</li><li>Mide la dirección y la velocidad de salida de los putts.</li><li>Arma una práctica según tu espacio a partir de una foto.</li><li>Funciona sin sensores ni equipo adicional.</li></ul></div>
+    <div class="box dont"><b>No se puede decir ni mostrar</b>
+      <ul><li>Que mide el palo, la cara del palo o el vuelo de un swing completo.</li><li>Precisión de launch monitor o comparaciones con marcas de ese tipo.</li><li>Cifras de usuarios, descargas, ventas o valoraciones.</li><li>Promesas de resultado: bajar el handicap, tiempos o porcentajes de mejora.</li><li>Premios en dinero o retos: esa función aún no existe.</li><li>Insignias de App Store o Google Play mientras la app no esté publicada.</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Para generar con IA</div>
+  <h2>11. Reglas rápidas</h2>
+  <div class="grid g2">
+    <div class="box do"><b>Hacer siempre</b>
+      <ul><li>Usar verde <code>#276749</code> como color dominante y dorado <code>#D4A735</code> solo como acento.</li><li>Títulos en Playfair Display; textos en Inter.</li><li>Todo el texto en español latino neutro, con tuteo.</li><li>Mostrar la app dentro de un teléfono, basada en las capturas reales.</li><li>Mostrar golfistas amateur en espacios cotidianos.</li><li>Cerrar con el logo oficial y el lema.</li><li>Usar los archivos de logo tal cual, sin redibujarlos.</li></ul></div>
+    <div class="box dont"><b>No hacer nunca</b>
+      <ul><li>Inventar cifras, testimonios, reseñas o premios.</li><li>Mostrar profesionales reconocibles, marcas ajenas o logos de otras apps.</li><li>Usar estética de lujo, neón o videojuego.</li><li>Escribir el nombre en tres palabras o cambiar su tipografía.</li><li>Poner texto en inglés, ilegible o deformado en pantalla.</li><li>Mostrar medidas que la app no toma, como trayectoria del palo o vuelo de la bola en un swing completo.</li><li>Usar rojo fuera de avisos de error.</li></ul></div>
+  </div>
+
+  <h2 style="margin-top:14pt">12. Bloque de estilo para pegar en cualquier prompt</h2>
+<pre>Marca: HomeGolfLab, app móvil de práctica de golf en casa y en la cancha, para golfistas amateur de Latinoamérica.
+Estilo: motion graphics moderno y limpio; un teléfono como protagonista con la interfaz de la app en pantalla; tarjetas blancas de esquinas redondeadas, mucho aire, íconos de línea.
+Colores: verde golf #276749 dominante, dorado #D4A735 solo como acento, fondo claro #F6F9F7, texto #0E1B14. Degradado de marca de #276749 a #428A68.
+Tipografía: títulos en Playfair Display Bold; textos en Inter.
+Personas: golfistas amateur reales en salas, patios o un driving range, con luz natural y equipo sencillo. Sin lujo ni profesionales reconocibles.
+Texto en pantalla: español latino neutro, frases de menos de 8 palabras.
+Voz: española latina neutra, cálida y segura, de coach cercano.
+Cierre: logo oficial de HomeGolfLab sobre el degradado verde y el lema "Practica en casa. Mejora en la cancha."
+No incluir: cifras de usuarios o ventas, marcas ajenas, insignias de tiendas, texto en inglés, estética de neón o de videojuego.</pre>
+
+  <h2 style="margin-top:10pt">13. Archivos del kit</h2>
+  <table>
+    <tr><th>Carpeta</th><th>Contenido</th></tr>
+    <tr><td><code>logos/</code></td><td>Seis PNG: horizontal, apilado con lema, ícono, ícono invertido, horizontal blanco transparente y horizontal con fondo verde.</td></tr>
+    <tr><td><code>capturas/</code></td><td>Cinco pantallas reales de la app en vertical (860 × 1864), con datos de ejemplo.</td></tr>
+    <tr><td><code>campos-para-el-brand-kit.md</code></td><td>Colores, fuentes y reglas listos para pegar en los campos del Brand Kit.</td></tr>
+  </table>
+  <footer>HomeGolfLab · Brand File v1 · El nombre de la marca es provisional; si cambia, este archivo y los logos deben actualizarse.</footer>
+</section>
+
+</body>
+</html>
