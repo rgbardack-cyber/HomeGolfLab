@@ -168,38 +168,45 @@ function segmentTurn(a: Frame, b: Frame, li: number, ri: number) {
 }
 
 /**
- * Candidatos a "tope": mínimos locales de la altura de las manos (en ±0,4 s) cuya subida desde el inicio es más
- * lenta que la bajada que sigue. Así el final del swing (las manos suben rápido y bajan despacio) no se confunde
- * con el tope, y un swing de práctica anterior no tapa al swing real.
+ * Candidatos a "tope": mínimos locales de la altura de las manos (en ±0,4 s) tras los cuales las manos caen rápido.
+ * La bajada del swing es el movimiento de manos más veloz de todos: se pide que recuperen la mitad de lo que subieron
+ * en menos de 0,9 s (la mitad y no más: en el impacto el cuadro sale borroso y el modelo pierde las manos) y se
+ * descartan los candidatos bastante más lentos que el mejor. Así la finalización (manos igual de altas o más que en
+ * el tope, sostenidas, que bajan despacio) y los gestos de recoger el palo no se confunden con el tope, aunque desde
+ * atrás la subida y la bajada midan casi lo mismo a 10 cuadros por segundo. Con la regla anterior ("la bajada más
+ * rápida que la subida") el tope real se descartaba y salía la finalización: la foto "Tope" no mostraba la subida.
  */
 function topCandidates(frames: Frame[], wy: number[], s: number, e: number): number[] {
-  const n = frames.length, out: number[] = [];
+  const n = frames.length, found: { i: number; speed: number; amp: number }[] = [];
   for (let i = s; i < e; i++) {
     let isMin = true;
     for (let j = i - 1; j >= 0 && frames[i].t - frames[j].t <= 400; j--) if (wy[j] < wy[i]) { isMin = false; break; }
     for (let j = i + 1; isMin && j < n && frames[j].t - frames[i].t <= 400; j++) if (wy[j] < wy[i]) isMin = false;
     if (!isMin) continue;
-    if (out.length && frames[i].t - frames[out[out.length - 1]].t <= 400) continue; // meseta del mismo tope
+    if (found.length && frames[i].t - frames[found[found.length - 1].i].t <= 400) continue; // meseta del mismo tope
     // punto más bajo de las manos en los 3 s previos, y de ahí cuánto subieron
     let lo = i;
     for (let j = i - 1; j >= 0 && frames[i].t - frames[j].t <= 3000; j--) if (wy[j] > wy[lo]) lo = j;
     const amp = wy[lo] - wy[i];
     if (amp < torsoLen(frames[i]) * 0.5) continue;
-    // la subida arranca en el último cuadro con las manos casi en ese punto bajo
-    let st = i;
-    for (let j = i; j >= 0; j--) if (wy[j] >= wy[lo] - amp * 0.1) { st = j; break; }
-    // la subida termina cuando las manos LLEGAN arriba (a un 10 % del tope), no en cada cuadro de un final sostenido
-    let reach = st;
-    for (let j = st; j <= i; j++) if (wy[j] <= wy[i] + amp * 0.1) { reach = j; break; }
-    // la bajada: el primer cuadro, dentro de 1,5 s, en que las manos recuperaron el 70 % de lo que subieron
+    // la bajada: el primer cuadro, dentro de 0,9 s, en que las manos recuperaron la mitad de lo que subieron
     let dn = -1;
-    for (let j = i + 1; j < n && frames[j].t - frames[i].t <= 1500; j++) if (wy[j] >= wy[i] + amp * 0.7) { dn = j; break; }
+    for (let j = i + 1; j < n && frames[j].t - frames[i].t <= 900; j++) if (wy[j] >= wy[i] + amp * 0.5) { dn = j; break; }
     if (dn < 0) continue;
-    if (frames[dn].t - frames[i].t > (frames[reach].t - frames[st].t) * 0.95) continue; // la bajada tiene que ser la más rápida
-    out.push(i);
+    if (wy[dn] > wy[lo] + amp * 0.5) continue; // las manos no vuelven a su nivel: es un salto del seguimiento, no una bajada
+    found.push({ i, speed: (wy[dn] - wy[i]) / Math.max(1, frames[dn].t - frames[i].t), amp });
   }
-  return out;
+  const best = found.reduce((m, c) => Math.max(m, c.speed), 0);
+  const fast = found.filter((c) => c.speed >= best * 0.65);
+  // El swing es el mayor movimiento de manos: un gesto posterior bastante más chico (recoger el palo, volver a colocarse)
+  // no le gana por ser el último. Entre swings de tamaño parecido (práctica y real) sigue ganando el último.
+  const big = fast.reduce((m, c) => Math.max(m, c.amp), 0);
+  return fast.filter((c) => c.amp >= big * 0.75).map((c) => c.i);
 }
+
+// Bajada (tope→impacto) posible a velocidad normal. Abajo de 0,15 s: el modelo perdió las manos. Arriba de 0,6 s: no es una bajada
+// normal (en 90 clips reales la mayor válida fue 0,43 s) sino cámara lenta o un clip mal leído; una cámara lenta 4× midió 0,8 s.
+const MIN_DOWNSWING_SEC = 0.15, MAX_DOWNSWING_SEC = 0.6;
 
 /** Localiza inicio (address), tope y impacto dentro de una secuencia de cuadros. */
 export function findEvents(frames: Frame[]) {
@@ -244,7 +251,7 @@ export function findEvents(frames: Frame[]) {
   for (let i = address + 1; i <= top; i++) vmax = Math.max(vmax, speed(i));
   const tMin = frames[address].t - 1500;
   while (address > 0 && frames[address].t > tMin && speed(address) > vmax * 0.1) address--;
-  return { address, top, impact, amplitude: amp };
+  return { address, top, impact, amplitude: amp, swings: cands.length };
 }
 
 const hipWidth = (f: Frame) => Math.hypot(f.lm[LM.L_HIP].x - f.lm[LM.R_HIP].x, f.lm[LM.L_HIP].y - f.lm[LM.R_HIP].y);
@@ -438,16 +445,17 @@ export function stableFrames(frames: Frame[]): Frame[] {
 
 /**
  * Dónde está el swing dentro de un video muestreado de forma gruesa: desde 0,9 s antes del inicio hasta 0,7 s
- * después del impacto (ms de video), o null si no se ve un swing. Sirve para muestrear fino solo ahí.
+ * después del impacto (ms de video), o null si no se ve un swing. Sirve para muestrear fino solo ahí. `swings` cuenta los
+ * swings del video (con varios, se ubica el último).
  */
-export function findSwingWindow(input: Frame[], opts: { aspect?: number } = {}): { from: number; to: number } | null {
+export function findSwingWindow(input: Frame[], opts: { aspect?: number } = {}): { from: number; to: number; swings: number } | null {
   const aspect = opts.aspect && opts.aspect > 0 ? opts.aspect : 1;
   const frames = stableFrames(input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect)));
   if (frames.length < 8) return null;
   const ev = findEvents(frames);
   const A = frames[ev.address], I = frames[ev.impact];
   if (ev.amplitude < torsoLen(A) * 0.5 || ev.impact <= ev.top || ev.top <= ev.address) return null;
-  return { from: Math.max(0, A.t - 900), to: I.t + 700 };
+  return { from: Math.max(0, A.t - 900), to: I.t + 700, swings: ev.swings };
 }
 
 const withMismatch = <R extends SwingResult>(r: R, mismatch?: SwingView): R => (mismatch ? { ...r, viewMismatch: mismatch } : r);
@@ -463,7 +471,8 @@ export function framingCheck(lm: Pt[]): Framing {
   if (!lm || lm.length < 29 || !frameVisible(lm)) return bad('No te veo: entra de cuerpo entero');
   const nose = lm[LM.NOSE], la = lm[LM.L_ANKLE], ra = lm[LM.R_ANKLE];
   const feetY = Math.max(la.y, ra.y);
-  if (Math.min(la.v, ra.v) < 0.5 || feetY > 0.97) return bad('No veo tus pies: aleja el teléfono');
+  // Basta ver un tobillo: de perfil (vista trasera) el pie lejano queda tapado por el cercano y su visibilidad cae aunque los pies estén en cuadro.
+  if (Math.max(la.v, ra.v) < 0.5 || feetY > 0.97) return bad('No veo tus pies: aleja el teléfono');
   if (nose.y < 0.16) return bad('Deja aire sobre tu cabeza para el palo: aléjate un poco');
   if (feetY - nose.y < 0.35) return bad('Acércate: te ves muy pequeño');
   const hipX = (lm[LM.L_HIP].x + lm[LM.R_HIP].x) / 2;
@@ -480,7 +489,8 @@ export function framingCheck(lm: Pt[]): Framing {
 export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingResult | SwingError {
   const aspect = opts.aspect && opts.aspect > 0 ? opts.aspect : 1;
   // Quita los cuadros donde el seguimiento salta a otra persona (alguien en el cubículo de al lado).
-  const frames = stableFrames(input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect)));
+  const visibles = input.filter((f) => frameVisible(f.lm)).map((f) => scaleX(f, aspect));
+  const frames = stableFrames(visibles);
   // Los cuadros donde el modelo no detectó a nadie no llegan aquí: "sampled" los cuenta.
   const total = Math.max(input.length, opts.sampled ?? 0);
   if (total >= 12 && frames.length < total * 0.4) return 'low_visibility';
@@ -493,7 +503,16 @@ export function analyzeSwing(input: Frame[], opts: AnalyzeOptions = {}): SwingRe
 
   const backswingSec = (T.t - A.t) / 1000;
   const downswingSec = Math.max((I.t - T.t) / 1000, 0.001);
-  if (backswingSec < 0.25 || backswingSec > 3 || downswingSec > 1.2) return 'no_swing';
+  // Una bajada de menos de 0,15 s no existe a velocidad normal: es el modelo perdiendo las manos en el impacto
+  // (el impacto cae en el primer cuadro de recuperación) y daría un tempo imposible (4–79:1).
+  if (backswingSec < 0.25 || backswingSec > 3 || downswingSec < MIN_DOWNSWING_SEC || downswingSec > MAX_DOWNSWING_SEC) return 'no_swing';
+
+  // Si el seguimiento saltó en más de 30 % de los cuadros alrededor del swing (el palo tapa la lente, otra persona,
+  // la persona sale del cuadro), lo que se midió no es el jugador. En un clip real con el palo sobre la lente saltó 46 %;
+  // en los demás clips, 9 % como máximo.
+  const lo = A.t - 1000, hi = I.t + 1000;
+  const around = (l: Frame[]) => l.filter((f) => f.t >= lo && f.t <= hi).length;
+  if (around(frames) < around(visibles) * 0.7) return 'no_swing';
 
   const auto = detectView(frames, ev.address);
   const view = !opts.view || opts.view === 'auto' ? auto : opts.view;

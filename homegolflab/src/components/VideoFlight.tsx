@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Crosshair, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { analysisSize, BallTracker, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
 import type { P2 } from '@/lib/tracking';
+import { seekVideo } from '@/lib/videoSeek';
 import { Button, Card, Notice, Segmented, Stat } from '@/components/ui';
 
 /**
@@ -23,19 +24,8 @@ type Fps = '30' | '60';
 interface Meta { w: number; h: number; dur: number }
 interface Outcome { res: TrackResult; summary: FlightSummary }
 
-/** Salta a `sec` y espera 'seeked'. Falla con timeout o error del video (no se queda colgado). */
-function seekTo(v: HTMLVideoElement, sec: number, ms = WAIT_MS): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const clean = () => { clearTimeout(timer); v.removeEventListener('seeked', ok); v.removeEventListener('error', bad); };
-    const ok = () => { clean(); resolve(); };
-    const bad = () => { clean(); reject(new Error('error')); };
-    const timer = setTimeout(() => { clean(); reject(new Error('timeout')); }, ms);
-    v.addEventListener('seeked', ok);
-    v.addEventListener('error', bad);
-    if (Math.abs(v.currentTime - sec) < 1e-3 && !v.seeking && v.readyState >= 2) { clean(); resolve(); return; }
-    v.currentTime = sec;
-  });
-}
+/** Salta a `sec` y espera 'seeked' (espera más si el equipo está cargado; falla si el video se cuelga o da error). */
+const seekTo = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS);
 
 const fmtS = (s: number) => s.toFixed(1).replace('.', ',');
 
@@ -134,7 +124,8 @@ export default function VideoFlight() {
     const W = c.width, H = c.height, u = Math.max(W, H) / 320;
 
     if (out) {
-      const pts = out.res.points;
+      // Sin confirmar que la bola salió de donde se tocó, lo que se siguió no es su vuelo: no se dibuja.
+      const pts = out.summary.released ? out.res.points : [];
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       const seg = (i: number, color: string, width: number, dash: number[]) => {
         ctx.setLineDash(dash.map((d) => d * u)); ctx.strokeStyle = color; ctx.lineWidth = width * u;
@@ -202,7 +193,8 @@ export default function VideoFlight() {
         if (want > tEnd + 1e-6) break;
         if (runRef.current !== run) return; // cancelado (otro video, reinicio o salida de la pantalla)
         // Si en 6 s de video no apareció ninguna mancha, no tiene caso seguir recorriendo cientos de cuadros.
-        if (tracker.firstDetectedMs === null && want - startT > 6) break;
+        // (Mientras se espera a que la bola salga de su sitio no se corta: el golpe puede llegar más tarde.)
+        if (!tracker.waiting && tracker.firstDetectedMs === null && want - startT > 6) break;
         await seekTo(v, want);
         if (runRef.current !== run) return;
         const tMs = v.currentTime * 1000; // el tiempo real del cuadro, no el pedido
@@ -324,7 +316,10 @@ export default function VideoFlight() {
             />
           </div>
           <Legend />
-          {s.detected === 0 && (
+          {s.detected === 0 && !s.released && (
+            <Notice tone="error">No se detectó la bola: no pude confirmar que estuviera quieta en el punto que tocaste, que saliera de ahí y que se alejara como un vuelo. Lo que se mueve antes (el palo, las manos, el cuerpo) no es su vuelo, así que no dibujo ninguna línea. Toca la bola justo antes del golpe y empieza el video unos segundos antes de pegar. Con bola blanca contra cielo claro es lo esperado.</Notice>
+          )}
+          {s.detected === 0 && s.released && (
             <Notice tone="error">No encontré la bola. Es lo esperado con bola blanca contra cielo claro, o si el toque quedó lejos de la bola. Toca otro punto o prueba con otro tramo del video.</Notice>
           )}
           {s.detected > 0 && s.detected < 3 && (

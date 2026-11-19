@@ -181,6 +181,102 @@ describe('seguimiento', () => {
     });
   });
 
+  // Medido con 4 tiros reales (nov 2026): 0/8 seguimientos eran la bola; seguían el palo y los brazos MIENTRAS la bola estaba quieta.
+  // Mientras la bola siga en su sitio no hay vuelo: un objeto que se mueve cerca no debe seguirse, solo la bola una vez que sale.
+  it('no sigue a un objeto en movimiento mientras la bola sigue quieta; sigue la bola cuando sale', () => {
+    const LEAVE = 6;
+    const frames = Array.from({ length: 16 }, (_, k) => {
+      const ball = k < LEAVE ? { ...START } : { x: START.x + STEP.x * (k - LEAVE + 1), y: START.y + STEP.y * (k - LEAVE + 1) };
+      const club = { x: START.x + 14 + 1.5 * k, y: START.y + 5 - 0.3 * k, r: 3, v: 240 }; // "palo/mano" que se mueve junto a la bola
+      return { gray: frame(30, [{ ...ball, r: 3, v: 240 }, club], k), t: 1000 + k * DT };
+    });
+    const r = trackFrames(frames, norm(START), OPTS);
+    expect(r.released).toBe(true);
+    expect(r.points.length).toBeGreaterThanOrEqual(5);
+    expect(r.points[0].t).toBeGreaterThanOrEqual(frames[LEAVE].t - 1); // nada antes de que la bola salga
+    r.points.forEach((p) => {
+      const k = Math.round((p.t - 1000) / DT);
+      const truth = { x: START.x + STEP.x * (k - LEAVE + 1), y: START.y + STEP.y * (k - LEAVE + 1) };
+      expect(Math.hypot(p.x * W - truth.x, p.y * H - truth.y)).toBeLessThan(2.5);
+    });
+  });
+  it('si no se vio la bola quieta donde se tocó, no se confirma y no hay trayectoria ni ángulo', () => {
+    // El toque cae en el pasto vacío y lo único que se mueve es un objeto: se detecta una mancha, pero no es la bola.
+    const frames = Array.from({ length: 14 }, (_, k) => ({ gray: frame(30, [{ x: START.x + 10 + 9 * k, y: START.y - 6 * k, r: 3, v: 240 }], k), t: 1000 + k * DT }));
+    const r = trackFrames(frames, norm(START), { ...OPTS, polarity: 'bright' });
+    expect(r.released).toBe(false);
+    const s = summarizeFlight(r, W / H);
+    expect(s).toMatchObject({ released: false, detected: 0, launchAngleDeg: null });
+  });
+
+  // Caso real i9_sr_f01: en la subida el palo pasa rozando la bola (que sigue en su sitio). Eso no es una bola que sale.
+  it('un palo oscuro que pasa cerca de la bola no la da por salida ni se sigue', () => {
+    const frames = Array.from({ length: 16 }, (_, k) => ({
+      gray: frame(30, [{ ...START, r: 3, v: 240 }, { x: START.x + 8 + 2 * k, y: START.y - 1, r: 3, v: 0 }], k), t: 1000 + k * DT,
+    }));
+    const r = trackFrames(frames, norm(START), OPTS);
+    expect(r.released).toBe(false);
+    expect(r.points).toEqual([]);
+  });
+  it('si tras salir la bola no aparece nada en 0,3 s, algo posterior ya no es su vuelo', () => {
+    const frames = Array.from({ length: 40 }, (_, k) => ({
+      gray: frame(30, [...(k < 6 ? [{ ...START, r: 3, v: 240 }] : []), ...(k >= 25 ? [{ x: START.x + 4 * (k - 24), y: START.y - 3, r: 3, v: 240 }] : [])], k), t: 1000 + k * DT,
+    }));
+    const r = trackFrames(frames, norm(START), OPTS);
+    expect(r.points).toEqual([]);
+    expect(r.endReason).toBe('lost');
+  });
+
+  // Tras el golpe lo que más se mueve cerca del toque es el palo y los brazos (caso real pw_sr_f01: la "bola" subía por el cuerpo).
+  it('tras salir la bola no toma como bola una mancha alargada (varilla) ni una mucho más grande (cabeza del palo)', () => {
+    const LEAVE = 6;
+    // Varilla: barra de 2 px de alto y 7 de largo, más cerca del toque que la bola. Se sigue la bola.
+    const withBar = Array.from({ length: 16 }, (_, k) => {
+      const jj = k - LEAVE + 1;
+      const ball = k < LEAVE ? { ...START } : { x: START.x + STEP.x * jj, y: START.y + STEP.y * jj };
+      const bar: Disc[] = k < LEAVE ? [] : Array.from({ length: 7 }, (_, i) => ({ x: START.x + 1 + i - 0.5 * (k - LEAVE), y: START.y + 5.5, r: 0.9, v: 240 }));
+      return { gray: frame(30, [{ ...ball, r: 3, v: 240 }, ...bar], k), t: 1000 + k * DT };
+    });
+    const r = trackFrames(withBar, norm(START), OPTS);
+    expect(r.points.length).toBeGreaterThanOrEqual(5);
+    r.points.forEach((p) => {
+      const jj = Math.round((p.t - 1000) / DT) - LEAVE + 1;
+      expect(Math.hypot(p.x * W - (START.x + STEP.x * jj), p.y * H - (START.y + STEP.y * jj))).toBeLessThan(2.5);
+    });
+    // Cabeza del palo: la bola desaparece y solo aparece, saltando de lugar, una mancha de 7 veces su área: no es la bola.
+    const big = Array.from({ length: 16 }, (_, k) => ({
+      gray: frame(30, [...(k < LEAVE ? [{ ...START, r: 3, v: 240 }] : [{ x: 30 + 30 * ((k - LEAVE) % 2), y: 60, r: 8, v: 240 }])], k), t: 1000 + k * DT,
+    }));
+    expect(trackFrames(big, norm(START), { ...OPTS, maxAreaFrac: 0.05 }).points).toEqual([]);
+  });
+  it('un recorrido que da vueltas cerca del toque (palo, manos) no se confirma como vuelo', () => {
+    const frames = Array.from({ length: 22 }, (_, k) => {
+      const j = Math.max(0, k - 5), th = 0.28 * j, rad = 16 - 0.9 * j; // espiral hacia adentro alrededor del toque
+      const disc: Disc[] = k >= 6 ? [{ x: START.x + rad * Math.cos(th), y: START.y - rad * Math.sin(th), r: 3, v: 240 }] : [];
+      return { gray: frame(30, [...(k < 6 ? [{ ...START, r: 3, v: 240 }] : []), ...disc], k), t: 1000 + k * DT };
+    });
+    const r = trackFrames(frames, norm(START), OPTS);
+    expect(r.points.length).toBeGreaterThanOrEqual(5); // sí lo siguió...
+    expect(r.released).toBe(false);                     // ...pero no se parece a un vuelo
+    expect(summarizeFlight(r, W / H)).toMatchObject({ detected: 0, launchAngleDeg: null });
+  });
+
+  // Tras un arranque falso (reset) se sigue esperando 0,3 s más y se conserva el tamaño de la bola para filtrar manchas grandes.
+  it('un arranque falso tras salir la bola no corta la espera ni olvida el tamaño de la bola', () => {
+    const D = 100, at = (k: number) => 1000 + k * D;
+    const frames = Array.from({ length: 24 }, (_, k) => {
+      const discs: Disc[] = [];
+      if (k < 6) discs.push({ ...START, r: 3, v: 240 });                                        // la bola quieta; sale en k=6
+      if (k === 7) discs.push({ x: 20, y: 70, r: 3, v: 240 });                                  // destello: arranque falso, se pierde
+      if (k === 12) discs.push({ x: 40, y: 50, r: 8, v: 240 });                                 // mancha grande: no es la bola
+      if (k >= 13 && k <= 15) discs.push({ x: START.x + 9 * (k - 12), y: START.y - 6 * (k - 12), r: 3, v: 240 }); // la bola, tarde
+      return { gray: frame(30, discs, k), t: at(k) };
+    });
+    const r = trackFrames(frames, norm(START), { ...OPTS, maxAreaFrac: 0.05 });
+    expect(r.points.length).toBeGreaterThanOrEqual(2);
+    expect(r.points.every((p) => p.t >= at(13) - 1)).toBe(true);
+  });
+
   it('sin detecciones devuelve vacío, sin lanzar', () => {
     const frames = Array.from({ length: 10 }, (_, k) => ({ gray: frame(90, [], k), t: k * DT }));
     const r = trackFrames(frames, norm(START), OPTS);

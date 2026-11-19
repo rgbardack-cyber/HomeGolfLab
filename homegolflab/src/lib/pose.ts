@@ -8,12 +8,14 @@ const MODEL_PATH = `${import.meta.env.BASE_URL}models/pose_landmarker_lite.task`
 let loader: Promise<PoseLandmarker> | null = null;
 let lastTs = 0;
 
-export function loadPose(): Promise<PoseLandmarker> {
-  if (!loader) {
+/** `cpuOnly`: rehace el modelo en CPU (cuando el GPU falló al detectar, no solo al crear el modelo). */
+export function loadPose(cpuOnly = false): Promise<PoseLandmarker> {
+  if (!loader || cpuOnly) {
     loader = (async () => {
       const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
       const make = (delegate: 'GPU' | 'CPU') =>
         PoseLandmarker.createFromOptions(fileset, { baseOptions: { modelAssetPath: MODEL_PATH, delegate }, runningMode: 'VIDEO', numPoses: 1 });
+      if (cpuOnly) return await make('CPU');
       try { return await make('GPU'); } catch { return await make('CPU'); }
     })();
     loader.catch(() => { loader = null; });
@@ -32,6 +34,22 @@ export function detect(pose: PoseLandmarker, video: HTMLVideoElement, t: number)
   const r = pose.detectForVideo(video, lastTs);
   if (!r.landmarks?.length) return null;
   return { t, lm: toPts(r.landmarks[0]), world: r.worldLandmarks?.[0] ? toPts(r.worldLandmarks[0]) : undefined };
+}
+
+/**
+ * Como `detect`, pero si el GPU aborta al detectar (pasa con el equipo cargado) rehace el modelo en CPU y reintenta ese cuadro
+ * una vez. Devuelve el modelo vigente: quien llama debe seguir usando ese.
+ */
+export async function detectResilient(
+  pose: PoseLandmarker, video: HTMLVideoElement, t: number, reload: () => Promise<PoseLandmarker> = () => loadPose(true),
+): Promise<{ frame: Frame | null; pose: PoseLandmarker }> {
+  try {
+    return { frame: detect(pose, video, t), pose };
+  } catch {
+    try { pose.close?.(); } catch { /* ya estaba caído */ } // suelta GPU y memoria del modelo que falló
+    const cpu = await reload();
+    return { frame: detect(cpu, video, t), pose: cpu };
+  }
 }
 
 const BONES: [number, number][] = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [15, 17], [15, 19], [16, 18], [16, 20]];

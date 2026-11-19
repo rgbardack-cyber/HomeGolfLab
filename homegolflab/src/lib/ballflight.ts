@@ -152,6 +152,20 @@ export function detectBlobs(prev: Gray, cur: Gray, o: BlobOptions = {}): Blob[] 
  * los dos signos y el seguimiento es mucho menos fiable.
  */
 export function estimatePolarity(g: Gray, x: number, y: number, minDelta = 12): 'bright' | 'dark' | 'any' {
+  const best = ballContrast(g, x, y);
+  return best >= minDelta ? 'bright' : best <= -minDelta ? 'dark' : 'any';
+}
+
+/**
+ * Contraste con signo de lo que haya alrededor del punto (±5 px) contra la mediana de un anillo a 12 px: positivo = algo más
+ * claro que su entorno (una bola blanca sobre pasto), negativo = más oscuro, cerca de 0 = nada que se distinga.
+ */
+export function ballContrast(g: Gray, x: number, y: number, reach = 5): number {
+  return ballSpot(g, x, y, reach).delta;
+}
+
+/** Como `ballContrast`, pero también dice DÓNDE (px) está ese contraste máximo: el centro de la bola. */
+export function ballSpot(g: Gray, x: number, y: number, reach = 5): { delta: number; x: number; y: number; bg: number } {
   const at = (px: number, py: number) => g.data[Math.min(g.h - 1, Math.max(0, Math.round(py))) * g.w + Math.min(g.w - 1, Math.max(0, Math.round(px)))];
   const ring: number[] = [];
   for (let k = 0; k < 16; k++) {
@@ -160,16 +174,16 @@ export function estimatePolarity(g: Gray, x: number, y: number, minDelta = 12): 
   }
   ring.sort((a, b) => a - b);
   const bg = (ring[7] + ring[8]) / 2; // mediana: robusta a un borde cercano
-  let best = 0;
-  for (let dy = -5; dy <= 5; dy++) {
-    for (let dx = -5; dx <= 5; dx++) {
+  let best = 0, bx = x, by = y;
+  for (let dy = -reach; dy <= reach; dy++) {
+    for (let dx = -reach; dx <= reach; dx++) {
       let s = 0;
       for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) s += at(x + dx + i, y + dy + j);
       const d = s / 9 - bg;
-      if (Math.abs(d) > Math.abs(best)) best = d;
+      if (Math.abs(d) > Math.abs(best)) { best = d; bx = x + dx; by = y + dy; }
     }
   }
-  return best >= minDelta ? 'bright' : best <= -minDelta ? 'dark' : 'any';
+  return { delta: best, x: bx, y: by, bg };
 }
 
 /* ───────────────────────── Seguimiento ───────────────────────── */
@@ -201,6 +215,11 @@ export interface TrackResult {
   /** Instante (ms de video) del primer cuadro en que ya no se vio la bola; null si no se perdió. */
   lostAtMs: number | null;
   endReason: EndReason;
+  /**
+   * ¿Se vio la bola quieta donde se tocó y luego salir de ahí? Solo entonces los puntos pueden ser su vuelo: antes de que
+   * la bola salga, lo que se mueve cerca (palo, manos, cuerpo) no es la bola. false = no se pudo confirmar.
+   */
+  released?: boolean;
 }
 
 export class BallTracker {
@@ -222,6 +241,11 @@ export class BallTracker {
   private misses = 0;
   private missStartT = 0;
   private firstT: number | null = null;
+  private refContrast = 0;   // contraste de la bola quieta en el primer cuadro; 0 = no se distinguía
+  private spot: P2 = { x: 0, y: 0 };
+  private released = false;
+  private releasedT: number | null = null;
+  private ballArea: number | null = null; // área de la bola quieta (px): se restituye tras un arranque falso
 
   /** `start`: punto tocado por el usuario, normalizado 0–1. */
   constructor(start: P2, opts: TrackerOptions) {
@@ -236,12 +260,28 @@ export class BallTracker {
     this.startPx = { x: start.x * this.w, y: start.y * this.h };
   }
 
+  /** ¿Se está esperando a que la bola salga de su sitio? (con contraste suficiente para saberlo). */
+  get waiting(): boolean { return this.ready && this.refContrast !== 0 && !this.released; }
+
   /** Instante (ms) del primer punto detectado, o null si aún no hay. */
   get firstDetectedMs(): number | null { return this.firstT; }
 
   private init(first: Gray) {
     const p = this.o.polarity === 'auto' ? estimatePolarity(first, this.startPx.x, this.startPx.y) : this.o.polarity;
     this.sign = p === 'bright' ? 1 : p === 'dark' ? -1 : 0;
+    const spot = ballSpot(first, this.startPx.x, this.startPx.y);
+    this.refContrast = this.sign === 0 ? 0 : spot.delta;
+    this.spot = { x: spot.x, y: spot.y };
+    // Tamaño de la bola quieta (px que contrastan como ella en ±8 px): lo que sea mucho más grande no es la bola.
+    if (this.refContrast !== 0) {
+      let area = 0;
+      for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) {
+        const px = Math.round(spot.x + dx), py = Math.round(spot.y + dy);
+        if (px < 0 || py < 0 || px >= first.w || py >= first.h) continue;
+        if ((first.data[py * first.w + px] - spot.bg) * Math.sign(spot.delta) >= Math.abs(spot.delta) * 0.5) area++;
+      }
+      if (area >= this.o.minArea) this.refArea = this.ballArea = area;
+    }
     this.ready = true;
   }
 
@@ -274,6 +314,18 @@ export class BallTracker {
   feed(prev: Gray, cur: Gray, t: number): FlightPoint | null {
     if (this.done) return null;
     if (!this.ready) this.init(prev);
+    // Mientras la bola siga quieta en su sitio no puede haber vuelo: lo que se mueve cerca (palo, manos, cuerpo) no cuenta.
+    // Sin contraste con el entorno (bola blanca contra cielo claro) no se puede saber cuándo sale y no se confirma nada.
+    if (this.refContrast !== 0 && !this.released) {
+      const c = ballContrast(cur, this.spot.x, this.spot.y, 2);
+      if (c * this.refContrast > 0 && Math.abs(c) >= Math.abs(this.refContrast) * 0.5) return null;
+      this.released = true; this.releasedT = t;
+    }
+    // La bola sale de golpe: si tras soltarse no aparece nada en 0,3 s, lo que aparezca después ya no es su vuelo.
+    if (this.releasedT !== null && this.firstT === null && t - this.releasedT > 300) {
+      this.done = true; this.endReason = 'lost'; this.lostAtMs = this.releasedT;
+      return null;
+    }
     if (this.firstT !== null && t - this.firstT > this.o.maxFollowMs) {
       this.done = true; this.endReason = 'window';
       return null;
@@ -288,6 +340,8 @@ export class BallTracker {
     let best: Blob | null = null, bestD = Infinity;
     for (const b of blobs) {
       if (b.area > absMax || b.area > refMax) continue; // demasiado grande: cuerpo, palo, sombra
+      const bw = b.maxX - b.minX + 1, bh = b.maxY - b.minY + 1;
+      if (Math.max(bw, bh) > 3 * Math.min(bw, bh)) continue; // alargada (varilla, brazo): una bola es compacta
       const d = Math.hypot(b.cx - pred.x, b.cy - pred.y);
       // Sin polaridad conocida también llegan las manchas donde la bola ESTABA; la detección debe haberse movido respecto al último punto (o al toque).
       if (!this.vel && this.sign === 0 && d < minFirst) continue;
@@ -313,20 +367,34 @@ export class BallTracker {
     if (this.misses === 0) this.missStartT = t;
     this.misses++;
     if (this.misses >= this.o.maxMisses) {
-      if (this.points.length < this.o.minPoints) this.reset(); // arranque falso: seguir esperando
+      if (this.points.length < this.o.minPoints) this.reset(t); // arranque falso: seguir esperando
       else { this.done = true; this.endReason = 'lost'; this.lostAtMs = this.missStartT; }
     }
     return null;
   }
 
-  private reset() {
+  /**
+   * Una bola que sale se ALEJA de donde estaba. Un palo o una mano que dan vueltas cerca del toque (puntos que regresan, que
+   * se enroscan) no son su vuelo. Con menos de 3 puntos no se puede juzgar.
+   */
+  private flightLike(): boolean {
+    const p = this.points;
+    if (p.length < 3) return true;
+    const d = p.map((q) => Math.hypot(q.x * this.w - this.startPx.x, q.y * this.h - this.startPx.y));
+    let away = 0;
+    for (let i = 1; i < d.length; i++) if (d[i] >= d[i - 1] - 1.5) away++;
+    return away >= (d.length - 1) * 0.8 && d[d.length - 1] > d[0];
+  }
+
+  private reset(t: number) {
     this.points.length = 0;
-    this.last = null; this.vel = null; this.refArea = null;
+    this.last = null; this.vel = null; this.refArea = this.ballArea;
+    if (this.releasedT !== null) this.releasedT = t; // otros 0,3 s de espera, no los que ya pasaron
     this.misses = 0; this.firstT = null;
   }
 
   result(): TrackResult {
-    return { points: [...this.points], lostAtMs: this.lostAtMs, endReason: this.endReason };
+    return { points: [...this.points], lostAtMs: this.lostAtMs, endReason: this.endReason, released: this.released && this.flightLike() };
   }
 }
 
@@ -372,18 +440,22 @@ export interface FlightSummary {
   /** Ángulo en la imagen, no real. */
   launchAngleDeg: number | null;
   endReason: EndReason;
+  /** Ver TrackResult.released. Sin confirmar, no se muestra trayectoria ni ángulo. */
+  released: boolean;
 }
 
 export function summarizeFlight(res: TrackResult, aspect: number): FlightSummary {
-  const det = res.points.filter((p) => p.source === 'detected');
+  const released = res.released ?? true;
+  const det = released ? res.points.filter((p) => p.source === 'detected') : [];
   const first = det[0], last = det[det.length - 1];
   const r1 = (v: number) => Math.round(v * 10) / 10;
   return {
     detected: det.length,
-    estimated: res.points.length - det.length,
+    estimated: released ? res.points.length - det.length : 0,
     followedS: first && last ? r1((last.t - first.t) / 1000) : 0,
     lostAtS: first && res.lostAtMs !== null ? r1(Math.max(0, res.lostAtMs - first.t) / 1000) : null,
-    launchAngleDeg: launchAngleDeg(res.points, aspect),
+    launchAngleDeg: released ? launchAngleDeg(res.points, aspect) : null,
     endReason: res.endReason,
+    released,
   };
 }

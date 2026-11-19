@@ -5,7 +5,8 @@ import { FREE, swingUploadsToday, useStore } from '@/store';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
-import { detect, drawSkeleton, loadPose } from '@/lib/pose';
+import { detect, detectResilient, drawSkeleton, loadPose } from '@/lib/pose';
+import { seekVideo } from '@/lib/videoSeek';
 import { CLUBS } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
 
@@ -380,13 +381,7 @@ const VIDEO_ERR = 'No se pudo leer el video. Graba en MP4 (H.264) o pon la cáma
 const WAIT_MS = 8000;
 
 /** Mueve el video a `sec` y espera a que muestre ese cuadro. Falla con un mensaje claro si el video no responde. */
-const seek = (v: HTMLVideoElement, sec: number) =>
-  new Promise<void>((res, rej) => {
-    const done = () => { clearTimeout(timer); res(); };
-    const timer = setTimeout(() => { v.removeEventListener('seeked', done); rej(new Error(VIDEO_ERR)); }, WAIT_MS);
-    v.addEventListener('seeked', done, { once: true });
-    v.currentTime = sec;
-  });
+const seek = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS).catch(() => { throw new Error(VIDEO_ERR); });
 
 /** Espera a que el video tenga sus datos básicos (duración y tamaño). */
 const metadata = (v: HTMLVideoElement) =>
@@ -407,7 +402,8 @@ const FINE = 1 / 30;
  * el análisis diga por qué.
  */
 async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, dur: number, aspect: number, onProgress: (pct: number) => void) {
-  const grab = async (t: number) => { await seek(v, t); return detect(pose, v, v.currentTime * 1000); };
+  let model = pose; // si el GPU falla al detectar, pasa a CPU y se sigue con ese modelo
+  const grab = async (t: number) => { await seek(v, t); const r = await detectResilient(model, v, v.currentTime * 1000); model = r.pose; return r.frame; };
   const coarse: Frame[] = [];
   let coarseN = 0;
   for (let t = 0; t < dur; t += COARSE) {
@@ -417,7 +413,7 @@ async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof 
     onProgress(Math.round((t / dur) * 60));
   }
   const win = findSwingWindow(coarse, { aspect });
-  if (!win) return { frames: coarse, sampled: coarseN, coarse: null as { frames: Frame[]; sampled: number } | null };
+  if (!win) return { frames: coarse, sampled: coarseN, coarse: null as { frames: Frame[]; sampled: number } | null, swings: 0 };
   const to = Math.min(dur, win.to / 1000), from = win.from / 1000;
   const fine: Frame[] = [];
   let fineN = 0;
@@ -427,7 +423,7 @@ async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof 
     if (f) fine.push(f);
     onProgress(60 + Math.round(((t - from) / Math.max(0.1, to - from)) * 40));
   }
-  return { frames: fine, sampled: fineN, coarse: { frames: coarse, sampled: coarseN } };
+  return { frames: fine, sampled: fineN, coarse: { frames: coarse, sampled: coarseN }, swings: win.swings };
 }
 
 /** El cuadro actual del video, sin marcas y a hasta 1024 px por lado: es lo que ve el coach con IA. */
@@ -607,7 +603,9 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         const start = frames.find((x) => x.t === r.times?.address);
         if (start) {
           const fr = framingCheck(start.lm);
-          if (!fr.ok) setWarn(`Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`);
+          // Con varios swings se analiza el último (el de la bola suele ser el último): se dice, para que no parezca un error.
+          const several = sampled.swings > 1 ? `Se vieron ${sampled.swings} swings en el video; se analizó el último. ` : '';
+          if (several || !fr.ok) setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
           // El palo es un extra: si algo falla al buscarlo, el análisis del cuerpo se muestra igual.
           try {
             const key = await captureKeyFrames(v, frames, r);

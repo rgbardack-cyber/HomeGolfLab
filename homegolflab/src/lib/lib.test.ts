@@ -424,6 +424,14 @@ describe('brazos, manos y encuadre', () => {
     expect(framingCheck(with_(0, pt(0.5, 0.6))).hint).toMatch(/Acércate/);
     expect(framingCheck(lm.map((q) => ({ ...q, x: q.x + 0.3 }))).hint).toMatch(/centro/);
   });
+  it('de perfil no avisa de los pies si se ve un tobillo (el lejano queda tapado)', () => {
+    const lm: Pt[] = Array.from({ length: 33 }, () => pt(0.5, 0.5));
+    lm[0] = pt(0.5, 0.25); lm[27] = pt(0.45, 0.9); lm[28] = pt(0.55, 0.9); lm[23] = pt(0.47, 0.55); lm[24] = pt(0.53, 0.55);
+    const vis = (l: number, r: number) => lm.map((q, k) => (k === 27 ? { ...q, v: l } : k === 28 ? { ...q, v: r } : q));
+    expect(framingCheck(vis(0.2, 0.95)).ok).toBe(true);
+    expect(framingCheck(vis(0.95, 0.1)).ok).toBe(true);
+    expect(framingCheck(vis(0.2, 0.3)).hint).toMatch(/pies/); // ninguno se ve: sí avisa
+  });
 });
 
 describe('palo (experimental)', () => {
@@ -633,6 +641,57 @@ describe('eventos con varios swings y final alto', () => {
     expect(f[ev.top].t).toBeGreaterThan(1300);
     expect(f[ev.top].t).toBeLessThan(1700);
   });
+  // Caso real visto desde atrás a 10 cuadros por segundo (clips de driving range, nov 2026): la subida llega al tope en
+  // ~0,3 s, el cuadro del impacto sale borroso (las manos solo recuperan ~55 %) y la finalización queda MÁS ALTA que el
+  // tope y se sostiene varios segundos. Antes se descartaba el tope real y salía la finalización como "tope".
+  const rapido: [number, number][] = [
+    [0, 0.6], [6.3, 0.6], [6.6, 0.18], [6.9, 0.2], [7.0, 0.42], [7.1, 0.6], [7.5, 0.2], [7.8, 0.12], [13, 0.12], [14, 0.5],
+  ];
+  it('con subida rápida, impacto borroso y final alto sostenido, el tope es el de la subida', () => {
+    const f = synthWrist(rapido, 10);
+    const ev = findEvents(f);
+    expect(f[ev.top].t).toBeGreaterThan(6400);
+    expect(f[ev.top].t).toBeLessThan(7000);
+    expect(f[ev.impact].t).toBeGreaterThan(6900);
+    expect(f[ev.impact].t).toBeLessThan(7400);
+    expect(findSwingWindow(f)!.to).toBeLessThan(9000); // la ventana no se va a la finalización ni al final del clip
+  });
+  // Un salto del seguimiento tras el swing (el jugador se mueve o sale y las manos pasan de 0,10 a 0,50 en 0,3 s) parece
+  // la bajada más rápida de todas: no debe ganarle al swing real. Caso real: pw_sr_f01.
+  it('no toma un salto del seguimiento por la bajada del swing', () => {
+    const f = synthWrist([
+      [0, 0.6], [6.3, 0.6], [6.6, 0.18], [6.9, 0.2], [7.2, 0.45], [7.3, 0.6], [7.5, 0.2], [7.8, 0.12], // swing real: bajada de ~0,8/s
+      [9, 0.12], [11, 0.25], [12.2, 0.25], [12.6, 0.1], [12.7, 0.5], [16, 0.5], // la finalización baja despacio y luego el seguimiento salta (un solo cuadro, >1,3/s)
+    ], 10);
+    const ev = findEvents(f);
+    expect(f[ev.top].t).toBeGreaterThan(6400);
+    expect(f[ev.top].t).toBeLessThan(7000);
+  });
+  // Un gesto posterior más chico (el jugador levanta un poco el palo y lo baja rápido) no debe ganarle al swing real.
+  it('un gesto posterior más chico no le gana al swing real', () => {
+    const f = synthWrist([
+      [0, 0.6], [3, 0.6], [3.6, 0.15], [4.0, 0.15], [4.3, 0.6], [4.6, 0.12], [8, 0.12], [9.5, 0.55], // swing real: sube 0,45
+      [11, 0.55], [11.6, 0.38], [11.9, 0.55], [14, 0.55], // gesto: sube 0,17 y baja rápido
+    ], 10);
+    const ev = findEvents(f);
+    expect(f[ev.top].t).toBeGreaterThan(3400);
+    expect(f[ev.top].t).toBeLessThan(4200);
+  });
+  // Cuando el modelo pierde las manos en el impacto, éste cae en el primer cuadro de recuperación y la bajada sale de ~0,05 s
+  // (tempos de 4 a 79:1 en 10 clips reales, nov 2026). Una bajada < 0,15 s no existe a velocidad normal: no se acepta.
+  it('rechaza una bajada imposible (< 0,15 s o > 0,6 s) y acepta una normal', () => {
+    const swing = (down: number) => synthWrist([[0, 0.6], [1.0, 0.6], [1.7, 0.18], [1.7 + down, 0.62], [2.3, 0.12], [3.5, 0.12], [4.5, 0.6]], 30);
+    expect(analyzeSwing(swing(0.07))).toBe('no_swing');
+    expect(analyzeSwing(swing(0.8))).toBe('no_swing'); // una cámara lenta 4× midió 0,8 s de bajada
+    const ok = analyzeSwing(swing(0.3));
+    if (typeof ok === 'string') throw new Error(ok);
+    expect(ok.metrics.downswingSec).toBeGreaterThan(0.2);
+  });
+  // Con varios swings se analiza el último; findSwingWindow cuenta cuántos hay para que la pantalla lo avise (casos reales: i9_sr_t04, i6_ps_t01).
+  it('cuenta los swings del video', () => {
+    expect(findSwingWindow(synthWrist(real, 10))!.swings).toBe(2);
+    expect(findSwingWindow(synthWrist([[0, 0.6], [0.6, 0.6], [1.5, 0.18], [1.8, 0.62], [2.2, 0.12], [3.5, 0.12], [4.5, 0.6]], 10))!.swings).toBe(1);
+  });
   it('ubica la ventana del swing en un muestreo grueso y rechaza un video quieto', () => {
     const coarse = synthWrist(real, 10);
     const w = findSwingWindow(coarse)!;
@@ -664,6 +723,14 @@ describe('otra persona en el cuadro', () => {
     const dirty = analyzeSwing(f.map((fr, i) => (i === 15 || i === 16 ? { ...fr, lm: fr.lm.map((p) => ({ ...p, x: p.x + 0.35 })) } : fr)));
     if (typeof base === 'string' || typeof dirty === 'string') throw new Error('sin resultado');
     expect(Math.abs(dirty.metrics.tempoRatio - base.metrics.tempoRatio)).toBeLessThan(0.25); // quitar 2 cuadros mueve el evento un cuadro de 33 ms
+  });
+  // Caso real pw_ps_t01 (el palo tapa la lente): el seguimiento salta de sitio en cuadros alternos y los que quedan parecen
+  // un swing. Si saltó en más de 30 % de los cuadros alrededor del swing, no se mide al jugador: no se acepta.
+  it('rechaza un video donde el seguimiento salta en muchos cuadros alrededor del swing', () => {
+    const f = synthSwing();
+    const jumpy = f.map((fr, i) => (i % 2 === 1 && fr.t >= 500 && fr.t <= 2500 ? { ...fr, lm: fr.lm.map((p) => ({ ...p, y: p.y + 0.4 })) } : fr));
+    expect(analyzeSwing(jumpy)).toBe('no_swing');
+    expect(typeof analyzeSwing(f)).not.toBe('string');
   });
   it('avisa de que se perdió al jugador si el modelo no lo detectó en la mayoría de los cuadros', () => {
     expect(analyzeSwing(synthSwing().slice(0, 40), { sampled: 200 })).toBe('low_visibility');
