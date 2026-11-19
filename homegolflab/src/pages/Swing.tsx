@@ -7,7 +7,7 @@ import { drainLiveSwings } from '@/lib/liveSession';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
-import { detect, detectResilient, drawSkeleton, loadPose } from '@/lib/pose';
+import { createLiveDetector, detectResilient, drawSkeleton, loadPose, PoseFailure } from '@/lib/pose';
 import { seekVideo } from '@/lib/videoSeek';
 import { CLUBS } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
@@ -728,6 +728,8 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
     if (fresh) { swingsRef.current = []; setSwings([]); }
     try {
       const pose = await loadPose();
+      // Con respaldo a CPU y corte tras 3 fallos seguidos (#20): el detector nunca deja la cámara congelada en silencio.
+      const detector = createLiveDetector(pose);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
       streamRef.current = stream;
       const v = videoRef.current!;
@@ -738,12 +740,25 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       const buf: Frame[] = [];
       let phase: Phase = 'ready', tTop = 0, tImp = 0, lowSince = 0;
 
+      let busy = false;
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop);
-        if (v.readyState < 2) return;
+        if (busy || v.readyState < 2) return;
+        busy = true;
         const now = performance.now();
-        const f = detect(pose, v, now);
-        const c = canvasRef.current!;
+        detector(v, now)
+          .then((f) => { if (streamRef.current) step(f, now); })
+          .catch((e) => {
+            stop();
+            setError(e instanceof PoseFailure
+              ? 'El análisis de postura falló varias veces seguidas. Cierra otras apps o pestañas y vuelve a iniciar.'
+              : 'Se interrumpió el análisis en vivo. ' + (e instanceof Error ? e.message : ''));
+          })
+          .finally(() => { busy = false; });
+      };
+      const step = (f: Frame | null, now: number) => {
+        const c = canvasRef.current;
+        if (!c) return;
         if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
         const ctx = c.getContext('2d')!;
         ctx.clearRect(0, 0, c.width, c.height);

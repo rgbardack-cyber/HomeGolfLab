@@ -52,6 +52,38 @@ export async function detectResilient(
   }
 }
 
+/** El modelo de postura falló varias veces seguidas incluso con el respaldo a CPU. */
+export class PoseFailure extends Error {
+  constructor(public readonly fails: number) {
+    super(`La detección de postura falló ${fails} veces seguidas`);
+    this.name = 'PoseFailure';
+  }
+}
+
+/**
+ * Detector para el modo en vivo (#20): usa `detectResilient` (si el GPU aborta, rehace el modelo en CPU y reintenta el cuadro).
+ * Un cuadro que falla incluso así se omite (devuelve null); tras `maxFails` fallos SEGUIDOS lanza `PoseFailure` para que la
+ * pantalla corte con un mensaje en vez de quedarse congelada. Un cuadro bueno reinicia la cuenta.
+ */
+export function createLiveDetector(
+  pose: PoseLandmarker, reload?: () => Promise<PoseLandmarker>, maxFails = 3,
+): (video: HTMLVideoElement, t: number) => Promise<Frame | null> {
+  let cur = pose;
+  let fails = 0;
+  return async (video, t) => {
+    try {
+      const r = await detectResilient(cur, video, t, reload);
+      cur = r.pose;
+      fails = 0;
+      return r.frame;
+    } catch {
+      fails++;
+      if (fails >= maxFails) throw new PoseFailure(fails);
+      return null;
+    }
+  };
+}
+
 const BONES: [number, number][] = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [15, 17], [15, 19], [16, 18], [16, 20]];
 
 export function drawSkeleton(ctx: CanvasRenderingContext2D, lm: Pt[], w: number, h: number) {
