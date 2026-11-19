@@ -23,7 +23,7 @@ describe('migración del store v0 → v1 con un JSON real (F2.1)', () => {
   });
 
   it('no pierde sesiones, medallas, perfil ni trackingUsedSec con datos más completos', () => {
-    const rich = {
+    const rich: Record<string, unknown> = {
       ...structuredClone(real.state),
       trackingUsedSec: 421,
       currentClub: 'Hierro 7',
