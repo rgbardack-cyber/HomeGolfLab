@@ -35,6 +35,11 @@ Lo que se aprendió al probar con swings reales (nov 2026, cuatro swings de una 
 - `src/lib/tracking.ts` — detección de bola por diferencia de cuadros, análisis de putt, dispersión.
 - `src/lib/homelab.ts` — zonas viables y plan diario según espacio y equipo.
 - `src/lib/badges.ts` — medallas (cumplimiento y mérito), XP y niveles. Se otorgan una sola vez, al guardar una sesión.
+- `src/lib/quota.ts` — regla pura de la cuota gratis de análisis de video: se cuenta por archivo analizado, no por clic (#17).
+- `src/lib/liveSession.ts` — cierre idempotente de la sesión en vivo (`drainLiveSwings`, #18). `src/lib/debugHook.ts` — ganchos de QA solo en desarrollo.
+- `src/lib/media/clock.ts` — reloj de medio (plan 4.1): `MediaMs`, `Clock {fpsNominal, timeScale, firstFrameMs}`, `frameOf`/`msOfFrame`, `realMs`/`realDeltaMs`. Los umbrales en segundos reales (bajada, ventana del tracker, tempo) deben usar `realMs`, no la diferencia de `MediaMs`: un clip a media velocidad se carga con `fpsNominal 30` y `timeScale 0.5`.
+- `src/lib/overlay/` — compositor único de la revisión y la exportación (plan 4.8). `viewport.ts`: coordenadas normalizadas 0–1 del cuadro mostrado, `project`/`unproject` con letterbox y recorte, escala `u = max(dstW,dstH)/320`. `model.ts`: capas (esqueleto, guías, trazo de la bola, etiquetas) y TODOS los estilos como constantes (verde observado, dorado descenso, gris punteado hueco, morado punteado estimado, anillo de bola perdida). `draw.ts`: `buildDrawList(modelo, t, vista)` es puro y `paint(ctx, ops)` solo ejecuta; nada se dibuja con confianza < 0,4 y entre 0,4 y 0,6 va atenuado y punteado. Todavía ninguna pantalla lo usa (llega con F3/F5).
+- `src/lib/flags.ts` + `components/FlagsPanel.tsx` — nueve banderas de funciones, todas apagadas (`VITE_FLAG_VIDEO_REVIEW=1`…). El panel "Funciones de prueba" de Perfil y la lectura de lo guardado en el navegador solo existen con `import.meta.env.DEV` o `VITE_INTERNAL=1`; la build de producción no los contiene.
 - `src/pages/` — Home, Swing, HomeLab, Tracking, Logros, Perfil.
 
 ## Cómo se muestrea y se leen los videos (17 nov 2026, tras una auditoría con agentes)

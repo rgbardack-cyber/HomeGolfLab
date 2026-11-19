@@ -6,7 +6,7 @@
 import type { MediaMs } from '@/lib/media/clock';
 import type { Pt2 } from './viewport';
 
-/** Confianza 0–1. Por debajo de `hide` no se dibuja nada; entre `hide` y `solid` se dibuja atenuado y punteado. */
+/** Confianza 0–1. Por debajo de `hide` no se dibuja nada; entre `hide` y `solid` se dibuja atenuado y (líneas) punteado. */
 export const CONF = { hide: 0.4, solid: 0.6 } as const;
 
 /* ───────────────────────── Esqueleto ───────────────────────── */
@@ -58,7 +58,7 @@ export const FLIGHT_STYLES: Record<FlightKind, FlightStyle> = {
   estimated: { color: '#9B7BEA', width: 1.2, dash: [3, 2.5], label: 'Trayectoria estimada · no medida' },
 };
 export const FLIGHT_OUTLINE = { color: 'rgba(0,0,0,0.55)', extra: 1.4 } as const;
-/** La continuación estimada se desvanece de 0,9 a 0,4 a lo largo de su recorrido. */
+/** La continuación estimada se desvanece de 0,9 a 0,4 a lo largo de su recorrido (longitud acumulada, en orden cronológico). */
 export const ESTIMATED_ALPHA = { from: 0.9, to: 0.4 } as const;
 export const LOST_LABEL = 'Última vez vista';
 

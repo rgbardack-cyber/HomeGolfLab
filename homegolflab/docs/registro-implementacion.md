@@ -32,3 +32,26 @@ Base: `feat/mvp-driving-range` @ `d9f4d3e`. Línea base: typecheck OK, 107/107 p
 
 ### Bloqueos
 - Ninguno en F0.
+
+## F1. Contratos y compositor puro (19 nov 2026)
+
+| # | Estado | Commit | Verificación |
+|---|---|---|---|
+| 1.1 | hecho | `aaba4ae` | `lib/media/clock.ts`; 6 pruebas (60 fps, 30 fps, media velocidad, `firstFrameMs` ≠ 0, equivalencia 60 fps ↔ 30 fps a media velocidad, relojes inválidos). |
+| 1.3 | hecho | `f9b7c97` | `lib/overlay/viewport.ts`; 8 pruebas. Ida y vuelta con letterbox y con recorte: error < 0,5 px. |
+| 1.2 | hecho | `880f58a` + corrección de la revisión | `lib/overlay/{model,draw}.ts`; 33 pruebas en `lib/overlay`. Estilos de la tabla 4.6 como constantes. Dos mutaciones del código (quitar el umbral de confianza, quitar el desvanecido) hicieron fallar las pruebas. |
+| 1.4 | hecho | `cf06e54` | `lib/flags.ts` + `components/FlagsPanel.tsx`; 6 pruebas. Navegador (Chrome limpio): panel con 9 banderas apagadas; 2 encendidas persisten tras recargar; "Restablecer" limpia. Build de producción: 0 apariciones de "Funciones de prueba" y de `hgl-flags-v1` (control positivo: "Subir video" sí aparece). |
+
+### Revisión adversarial (workflow, 3 lentes + verificador escéptico por hallazgo)
+10 hallazgos, 3 confirmados y corregidos (todos en `draw.ts`), 7 refutados:
+- Confirmado: `show: { flight: undefined }` apagaba la capa (spread). Ahora `??` por capa.
+- Confirmado: el esqueleto entre 0,4 y 0,6 iba atenuado pero no punteado, contra el contrato documentado. Ahora los huesos van punteados y atenuados (las articulaciones, que son puntos rellenos, solo atenuadas).
+- Confirmado: el desvanecido de la continuación estimada iba por posición en el arreglo (un solo segmento largo quedaba fijo en 0,9; los ocultos por confianza contaban). Ahora va por longitud acumulada en orden cronológico y cada segmento se parte en 4 trozos. Se perdió la igualdad exacta 0,9/0,4 en los extremos: ahora el primer trozo queda cerca de 0,9 y el último cerca de 0,4 (media del trozo).
+- Refutados (no son defectos hoy): `frameOf` con instantes anteriores al primer cuadro devuelve −0/−1 (es la fórmula del plan; recortar es decisión del llamador, F3/F5); `makeViewport` no valida recortes fuera de 0–1; pruebas de ida y vuelta algo tautológicas (hay pruebas de esquinas y letterbox que sí fijan valores); NaN en confianza; `pickSample` exige muestras ordenadas (precondición documentada); el trazo de la bola no usa la banda 0,4–0,6 (el plan solo la define para guías). La lente de banderas no halló nada.
+
+### Lo no medido
+- Contraste del morado `#9B7BEA` contra fondos reales (cielo, pasto): solo se midió ≥ 3:1 contra negro y blanco. Se valida con capturas reales en F5.6.
+- Ninguna pantalla usa aún el compositor ni el reloj (llegan con F3/F5): lo de F1 está probado con pruebas unitarias y el panel de banderas, no con video real.
+
+### Incidencia
+- La caché de Vite (`node_modules/.vite`) quedó desfasada y el servidor devolvía 504 "Outdated Optimize Dep" (la comparten `vite build` y vitest). Se borró (es solo caché) y se reinició el servidor.

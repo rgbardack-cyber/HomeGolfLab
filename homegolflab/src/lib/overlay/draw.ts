@@ -9,7 +9,7 @@
 import type { MediaMs } from '@/lib/media/clock';
 import {
   BONES, CONF, ESTIMATED_ALPHA, FLIGHT_OUTLINE, FLIGHT_STYLES, GUIDE_STYLE, JOINTS, LABEL_STYLE, LOST_LABEL, SKELETON_STYLE,
-  type GuideItem, type OverlayModel, type SkeletonSample,
+  type FlightSegment, type GuideItem, type OverlayModel, type SkeletonSample,
 } from './model';
 import { project, screenUnit, type Viewport } from './viewport';
 
@@ -31,12 +31,15 @@ export function pickSample(samples: readonly SkeletonSample[], t: MediaMs, tolMs
 }
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+/** En cuántos trozos se parte un segmento estimado para desvanecerlo a lo largo de su longitud. */
+const ESTIMATED_PIECES = 4;
 
 export function buildDrawList(model: OverlayModel, t: MediaMs, vp: Viewport): DrawOp[] {
   const u = screenUnit(vp);
   const d = vp.dstRect;
   const ops: DrawOp[] = [{ op: 'clip', x: d.x, y: d.y, w: d.w, h: d.h }];
-  const show = { skeleton: true, guides: true, flight: true, labels: true, ...model.show };
+  // `??` y no un spread: un `undefined` explícito debe quedar en el valor por defecto (visible), no apagar la capa.
+  const show = { skeleton: model.show?.skeleton ?? true, guides: model.show?.guides ?? true, flight: model.show?.flight ?? true, labels: model.show?.labels ?? true };
   const P = (p: { x: number; y: number }) => project(p, vp);
 
   /* Esqueleto */
@@ -48,7 +51,8 @@ export function buildDrawList(model: OverlayModel, t: MediaMs, vp: Viewport): Dr
         if (!a || !b || a.conf < CONF.hide || b.conf < CONF.hide) continue;
         const pa = P(a), pb = P(b);
         const faded = Math.min(a.conf, b.conf) < CONF.solid;
-        ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: SKELETON_STYLE.bone, width: SKELETON_STYLE.boneWidth * u, dash: [], alpha: faded ? GUIDE_STYLE.faded.alpha : 1 });
+        // Entre CONF.hide y CONF.solid: hueso punteado y atenuado (las articulaciones, que son puntos rellenos, solo se atenúan).
+        ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: SKELETON_STYLE.bone, width: SKELETON_STYLE.boneWidth * u, dash: faded ? GUIDE_STYLE.faded.dash.map((x) => x * u) : [], alpha: faded ? GUIDE_STYLE.faded.alpha : 1 });
       }
       for (const i of JOINTS) {
         const a = s.pts[i];
@@ -70,22 +74,33 @@ export function buildDrawList(model: OverlayModel, t: MediaMs, vp: Viewport): Dr
   /* Trazo de la bola */
   const fl = model.flight;
   if (show.flight && fl) {
-    const estIdx = fl.segments.map((sg, i) => (sg.kind === 'estimated' ? i : -1)).filter((i) => i >= 0);
-    for (let i = 0; i < fl.segments.length; i++) {
-      const sg = fl.segments[i];
+    // Continuación estimada: el desvanecido (0,9 → 0,4) va por el RECORRIDO acumulado de los segmentos estimados visibles,
+    // en orden cronológico (no por su posición en el arreglo), y cada segmento se parte en trozos para que también se
+    // desvanezca dentro de sí mismo (un único segmento largo no queda a opacidad fija).
+    const visible = fl.segments.filter((sg) => !(sg.conf !== undefined && sg.conf < CONF.hide));
+    const estSegs = visible.filter((sg) => sg.kind === 'estimated').sort((a, b) => a.tA - b.tA || a.tB - b.tB);
+    const estStart = new Map<FlightSegment, number>();
+    let estTotal = 0;
+    for (const sg of estSegs) { estStart.set(sg, estTotal); estTotal += Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y); }
+    const alphaAt = (cum: number) => (estTotal > 0 ? lerp(ESTIMATED_ALPHA.from, ESTIMATED_ALPHA.to, Math.min(1, cum / estTotal)) : ESTIMATED_ALPHA.from);
+    for (const sg of fl.segments) {
       if ((sg.conf !== undefined && sg.conf < CONF.hide) || t < sg.tA) continue;
       const k = sg.tB > sg.tA ? Math.min(1, (t - sg.tA) / (sg.tB - sg.tA)) : 1;
-      const end = { x: lerp(sg.a.x, sg.b.x, k), y: lerp(sg.a.y, sg.b.y, k) };
-      const pa = P(sg.a), pb = P(end);
       const st = FLIGHT_STYLES[sg.kind];
-      let alpha = 1;
-      if (sg.kind === 'estimated') {
-        const pos = estIdx.indexOf(i);
-        alpha = estIdx.length > 1 ? lerp(ESTIMATED_ALPHA.from, ESTIMATED_ALPHA.to, pos / (estIdx.length - 1)) : ESTIMATED_ALPHA.from;
-      }
       const dash = st.dash.map((x) => x * u);
-      ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: FLIGHT_OUTLINE.color, width: (st.width + FLIGHT_OUTLINE.extra) * u, dash, alpha });
-      ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: st.color, width: st.width * u, dash, alpha });
+      const piece = (f0: number, f1: number, alpha: number) => {
+        const pa = P({ x: lerp(sg.a.x, sg.b.x, f0), y: lerp(sg.a.y, sg.b.y, f0) });
+        const pb = P({ x: lerp(sg.a.x, sg.b.x, f1), y: lerp(sg.a.y, sg.b.y, f1) });
+        ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: FLIGHT_OUTLINE.color, width: (st.width + FLIGHT_OUTLINE.extra) * u, dash, alpha });
+        ops.push({ op: 'line', x1: pa.x, y1: pa.y, x2: pb.x, y2: pb.y, color: st.color, width: st.width * u, dash, alpha });
+      };
+      if (sg.kind !== 'estimated') { piece(0, k, 1); continue; }
+      const len = Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y), c0 = estStart.get(sg) ?? 0;
+      for (let j = 0; j < ESTIMATED_PIECES; j++) {
+        const f0 = j / ESTIMATED_PIECES, f1 = Math.min(k, (j + 1) / ESTIMATED_PIECES);
+        if (f0 >= k) break;
+        piece(f0, f1, alphaAt(c0 + len * ((j + 0.5) / ESTIMATED_PIECES)));
+      }
     }
     for (const dot of fl.dots ?? []) {
       if (t < dot.t || (dot.conf !== undefined && dot.conf < CONF.hide)) continue;

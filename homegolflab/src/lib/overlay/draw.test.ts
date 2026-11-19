@@ -31,6 +31,11 @@ describe('buildDrawList: determinismo y recorte (1.2)', () => {
     expect(ops[ops.length - 1]).toEqual({ op: 'endClip' });
   });
 
+  it('un `undefined` explícito en `show` deja la capa visible (no la apaga)', () => {
+    const base = buildDrawList(model, 250, vp);
+    expect(buildDrawList({ ...model, show: { flight: undefined, skeleton: undefined, guides: undefined, labels: undefined } }, 250, vp)).toEqual(base);
+  });
+
   it('los interruptores por capa apagan esa capa y solo esa', () => {
     const all = buildDrawList(model, 250, vp).length;
     const noFlight = buildDrawList({ ...model, show: { flight: false } }, 250, vp);
@@ -43,9 +48,8 @@ describe('estilos del trazo de la bola (tabla 4.6)', () => {
   const colored = (kind: FlightKind) => {
     const ops = buildDrawList({ flight: { segments: [seg(kind, 0)] } }, 1000, vp);
     const l = lines(ops);
-    expect(l).toHaveLength(2);
     expect(l[0].color).toBe(FLIGHT_OUTLINE.color); // el contorno oscuro va primero
-    return l[1];
+    return l.find((x) => x.color === FLIGHT_STYLES[kind].color)!;
   };
 
   it('observado = verde continuo; descenso = dorado continuo del mismo grosor', () => {
@@ -70,13 +74,39 @@ describe('estilos del trazo de la bola (tabla 4.6)', () => {
     expect(e.width).toBeLessThan(o.width);
   });
 
-  it('la continuación estimada se desvanece de 0,9 a 0,4 a lo largo de su recorrido', () => {
-    const segs = [0, 1, 2, 3, 4].map((i) => seg('estimated', i));
-    const al = lines(buildDrawList({ flight: { segments: segs } }, 10_000, vp)).filter((l) => l.color === '#9B7BEA').map((l) => l.alpha);
-    expect(al).toHaveLength(5);
-    expect(al[0]).toBeCloseTo(ESTIMATED_ALPHA.from, 9);
-    expect(al[4]).toBeCloseTo(ESTIMATED_ALPHA.to, 9);
-    for (let i = 1; i < al.length; i++) expect(al[i]).toBeLessThan(al[i - 1]);
+  const estAlphas = (segs: FlightSegment[], t = 10_000) =>
+    lines(buildDrawList({ flight: { segments: segs } }, t, vp)).filter((l) => l.color === FLIGHT_STYLES.estimated.color).map((l) => l.alpha);
+
+  it('la continuación estimada se desvanece de ~0,9 a ~0,4 a lo largo de su recorrido', () => {
+    const al = estAlphas([0, 1, 2, 3, 4].map((i) => seg('estimated', i)));
+    expect(al[0]).toBeLessThanOrEqual(ESTIMATED_ALPHA.from);
+    expect(al[0]).toBeGreaterThan(0.85);
+    expect(al[al.length - 1]).toBeGreaterThanOrEqual(ESTIMATED_ALPHA.to);
+    expect(al[al.length - 1]).toBeLessThan(0.45);
+    for (let i = 1; i < al.length; i++) expect(al[i]).toBeLessThanOrEqual(al[i - 1]);
+  });
+
+  it('un único segmento estimado también se desvanece dentro de sí mismo (no queda fijo en 0,9)', () => {
+    const al = estAlphas([seg('estimated', 0)]);
+    expect(al.length).toBeGreaterThan(1);
+    expect(al[0]).toBeGreaterThan(al[al.length - 1] + 0.3);
+  });
+
+  it('un segmento estimado oculto por confianza no cuenta: el último visible llega al final del desvanecido', () => {
+    const segs = [seg('estimated', 0), seg('estimated', 1), seg('estimated', 2, 0.2)];
+    const al = estAlphas(segs);
+    expect(al[al.length - 1]).toBeLessThan(0.5);
+  });
+
+  it('el desvanecido no depende del orden del arreglo (va por tiempo)', () => {
+    const segs = [0, 1, 2].map((i) => seg('estimated', i));
+    expect(estAlphas([...segs].reverse()).sort()).toEqual(estAlphas(segs).sort());
+  });
+
+  it('mientras el trazo crece, los trozos ya dibujados no cambian de opacidad', () => {
+    const segs = [0, 1, 2].map((i) => seg('estimated', i));
+    const early = estAlphas(segs, 150), late = estAlphas(segs, 10_000);
+    expect(late.slice(0, early.length)).toEqual(early);
   });
 
   it('el morado se distingue del negro y del blanco (≥ 3:1); contra fondos reales: no medido', () => {
@@ -130,7 +160,10 @@ describe('nada se dibuja con confianza < 0,4 (4.3)', () => {
   it('esqueleto: entre 0,4 y 0,6 se dibuja atenuado', () => {
     const confs = Array(33).fill(0.9); confs[13] = 0.5;
     const l = lines(buildDrawList({ skeleton: [sk(0, confs)] }, 0, vp));
-    expect(l.filter((x) => x.alpha < 1)).toHaveLength(2);
+    const f = l.filter((x) => x.alpha < 1);
+    expect(f).toHaveLength(2);
+    for (const x of f) expect(x.dash.length).toBeGreaterThan(0); // atenuado Y punteado (regla 4.3)
+    for (const x of l.filter((y) => y.alpha === 1)) expect(x.dash).toEqual([]);
   });
 
   it('guías: < 0,4 no se dibuja; 0,4–0,6 atenuada y punteada; ≥ 0,6 normal', () => {
