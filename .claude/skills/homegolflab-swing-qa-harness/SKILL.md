@@ -50,6 +50,8 @@ $env:HGL_URL = 'http://127.0.0.1:5211'
 node scripts/run_swing.mjs 1 0/2 i7_sr_t01,pw_sr_f01     # corrida 1, fragmento 0 de 2, solo esos ids  (all = todos + controles)
 node scripts/run_swing.mjs 2 0/2 all                       # corrida 2 (determinismo)
 node scripts/run_ball.mjs i4_sr_f01                        # Ball tracker; HGL_STARTT=7.9 cambia el segundo de inicio
+$env:HGL_BALL_SHOTS = "$env:HGL_PRUEBAS/ball_shots.json"; $env:HGL_OUT = "$env:HGL_PRUEBAS/resultados/ball_v2"
+node scripts/run_ball.mjs i5_sr_t01                        # tiros del manifiesto (tap, startT, fps, timeScale); los de tap null se saltan
 ```
 
 `HGL_OUT` también cambia dónde guarda `run_ball` (por defecto `resultados/ball`, que es la evidencia original: usa otra carpeta para no pisarla). `run_swing` guarda por clip `<id>.run<N>.json` (resultado, `debug`, texto de pantalla, tiempos), la captura completa y las fotos clave `Inicio/Tope/Impacto.jpg` (solo corrida 1). Salta lo que ya existe (reanudable). `HGL_PRIO=id1,id2` los corre primero. `run_ball` sube el clip a la pestaña Video, fija inicio, 60 fps, toca la bola en la posición marcada a mano (`tap`) y guarda `resultados/ball/<id>.json` y capturas.
@@ -80,7 +82,7 @@ Calcula pose presente, vista, mano, eventos vs referencia manual (±100 ms), imp
 - **Controles** (esperados: **rechazo**): sin persona (debe dar `low_visibility`), persona sin swing (`no_swing`), cámara lenta 2× y 4× de un frontal y un trasero: `node scripts/make_controls.mjs <clip.mp4> 2 "$env:HGL_PRUEBAS/controles/lento2x_f01.mp4"` (ffmpeg `setpts`; no es slow-mo real de 240 fps). Cualquier `.mp4` en `controles/` entra solo en `run_swing.mjs all` con el prefijo `ctl_`.
 
 ## 5b. Ball tracker
-`run_ball.mjs` corre 4 tiros frontales con el toque marcado a mano y `HGL_STARTT` (6,8 y 7,9 s). Compara `__hglBall.res.points` (t, x, y) con el impacto (7,95–8,01 s) y mira la captura `*_resultado.png`: la línea debe salir de la bola, no subir por el cuerpo. Sin referencia de vuelo solo se miden falsos positivos (puntos antes del impacto o sobre el cuerpo); posición, continuidad y ángulo son "no medido".
+`run_ball.mjs` corre los 4 tiros frontales por defecto, o los de un **manifiesto** (`HGL_BALL_SHOTS=<json>`, p. ej. `$HGL_PRUEBAS/ball_shots.json`, fuera del repo: `id`, `file`, `tap {x,y}` marcado a mano o `null` si falta, `startT`, `fps` 30/60, `timeScale`, `impactGT`, `nota`), con el toque marcado a mano y `HGL_STARTT` (6,8 y 7,9 s). Guarda en `HGL_OUT` (usa `resultados/ball_v2` para no pisar `resultados/ball`). `timeScale` solo se guarda: el tracker aún no lo usa (F5.2). Compara `__hglBall.res.points` (t, x, y) con el impacto (7,95–8,01 s) y mira la captura `*_resultado.png`: la línea debe salir de la bola, no subir por el cuerpo. Sin referencia de vuelo solo se miden falsos positivos (puntos antes del impacto o sobre el cuerpo); posición, continuidad y ángulo son "no medido".
 
 ## 6. Reproducir en el navegador los clips que cambian
 
