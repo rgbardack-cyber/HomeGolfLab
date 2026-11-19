@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench, Sparkles } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
+import { drainLiveSwings } from '@/lib/liveSession';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
@@ -721,8 +722,10 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   };
   useEffect(() => stop, []);
 
-  const start = async (face = facing) => {
+  // `fresh`: sesión nueva (vacía los swings de la anterior). Al cambiar de cámara en plena sesión no se vacía.
+  const start = async (face = facing, fresh = true) => {
     setError(null); setLoading(true);
+    if (fresh) { swingsRef.current = []; setSwings([]); }
     try {
       const pose = await loadPose();
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
@@ -795,14 +798,12 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
 
   const finish = () => {
     stop();
-    const list = swingsRef.current;
-    if (list.length) {
-      const best = list.reduce((a, b) => (b.score > a.score ? b : a));
-      addSession({ type: 'swing', live: true, score: best.score, tempoRatio: best.metrics.tempoRatio, swing: best, shots: list.length });
-    }
+    // Idempotente: vacía la lista, así un doble toque no guarda dos veces (#18).
+    const payload = drainLiveSwings(swingsRef);
+    if (payload) addSession(payload);
   };
 
-  const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n); };
+  const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n, false); };
   const last = swings[0];
   const topIssue = last?.feedback.find((f) => f.severity !== 'good');
 
