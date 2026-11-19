@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Crosshair, Loader2, RefreshCw, Upload } from 'lucide-react';
-import { analysisSize, BallTracker, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
+import { analysisSize, BallTracker, flightStatCards, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
 import type { P2 } from '@/lib/tracking';
 import { seekVideo } from '@/lib/videoSeek';
 import { Button, Card, Notice, Segmented, Stat } from '@/components/ui';
@@ -231,7 +231,6 @@ export default function VideoFlight() {
   };
 
   const s = out?.summary;
-  const angle = s?.launchAngleDeg ?? null;
 
   return (
     <div className="space-y-3">
@@ -306,14 +305,8 @@ export default function VideoFlight() {
 
       {out && s && (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            <Stat label="Puntos detectados" value={s.detected} />
-            <Stat label="Bola seguida" value={s.detected > 1 ? fmtS(s.followedS) : '—'} unit={s.detected > 1 ? 's' : ''} />
-            <Stat
-              label="ángulo en la imagen, no real"
-              value={angle === null ? '—' : `${Math.abs(angle)}°`}
-              unit={angle === null || angle === 0 ? '' : angle > 0 ? 'a la derecha' : 'a la izquierda'}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            {flightStatCards(s).map((c) => <Stat key={c.label} label={c.label} value={c.value} unit={c.unit} />)}
           </div>
           <Legend />
           {s.detected === 0 && !s.released && (
@@ -323,7 +316,7 @@ export default function VideoFlight() {
             <Notice tone="error">No encontré la bola. Es lo esperado con bola blanca contra cielo claro, o si el toque quedó lejos de la bola. Toca otro punto o prueba con otro tramo del video.</Notice>
           )}
           {s.detected > 0 && s.detected < 3 && (
-            <Notice>Solo {s.detected} {s.detected === 1 ? 'punto' : 'puntos'}: es muy poco para hablar de una trayectoria y no se calcula ningún ángulo.</Notice>
+            <Notice>Solo {s.detected} {s.detected === 1 ? 'punto' : 'puntos'}: es muy poco para hablar de una trayectoria.</Notice>
           )}
           {s.lostAtS !== null && (
             <Notice>Bola perdida a los {fmtS(s.lostAtS)} s de seguirla (contados desde su primer punto). No se dibuja nada más allá: no adivino por dónde fue.</Notice>

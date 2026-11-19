@@ -444,6 +444,19 @@ export interface FlightSummary {
   released: boolean;
 }
 
+/**
+ * Tarjetas de resumen que muestra la pantalla. El ángulo de salida EN LA IMAGEN NO se muestra (#4): depende de dónde
+ * esté la cámara y, sin una referencia de vuelo, no hay forma de decir que se parece al real. `launchAngleDeg` queda
+ * como dato interno para probar y para la clasificación futura.
+ */
+export function flightStatCards(s: FlightSummary): { label: string; value: string; unit: string }[] {
+  const fmt = (n: number) => n.toFixed(1).replace('.', ',');
+  return [
+    { label: 'Puntos detectados', value: String(s.detected), unit: '' },
+    { label: 'Bola seguida', value: s.detected > 1 ? fmt(s.followedS) : '—', unit: s.detected > 1 ? 's' : '' },
+  ];
+}
+
 export function summarizeFlight(res: TrackResult, aspect: number): FlightSummary {
   const released = res.released ?? true;
   const det = released ? res.points.filter((p) => p.source === 'detected') : [];

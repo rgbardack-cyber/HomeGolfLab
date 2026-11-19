@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  analysisSize, BallTracker, detectBlobs, estimatePolarity, framesIdentical, launchAngleDeg, summarizeFlight, trackFrames, toGray,
+  analysisSize, BallTracker, detectBlobs, flightStatCards, estimatePolarity, framesIdentical, launchAngleDeg, summarizeFlight, trackFrames, toGray,
   type FlightPoint, type Gray, type TrackerOptions,
 } from './ballflight';
 
@@ -361,5 +361,16 @@ describe('ayudas de imagen', () => {
     const g = toGray([255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
     expect(g.data[0]).toBe(255);
     expect(g.data[1]).toBe(0);
+  });
+});
+
+describe('tarjetas de resumen (#4: el ángulo en la imagen no se muestra)', () => {
+  it('no hay ninguna tarjeta de ángulo ni de grados, ni con ángulo calculable', () => {
+    const r = trackFrames(flight(30, 240, 14), norm(START), OPTS);
+    const sum = summarizeFlight(r, W / H);
+    expect(sum.launchAngleDeg).not.toBeNull(); // el dato interno sigue existiendo...
+    const cards = flightStatCards(sum);
+    expect(cards.map((c) => c.label)).toEqual(['Puntos detectados', 'Bola seguida']); // ...pero no se enseña
+    for (const c of cards) expect(`${c.label} ${c.value} ${c.unit}`).not.toMatch(/ángulo|°|grados/i);
   });
 });
