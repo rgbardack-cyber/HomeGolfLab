@@ -42,7 +42,7 @@ $env:HGL_URL = 'http://127.0.0.1:5211'
 - Mantén dos copias: `app/` **intacta** (la línea base, "antes") y `app_fix/` (con el cambio, "después"). Cada una con su **puerto** y su **caché de Vite** (`cacheDir` distinto): compartir caché hace que dos servidores se pisen al reiniciar.
 - Tras cambiar `src/` del repo hay que volver a copiar (`prepare_app_copy.mjs`).
 - `patch_app.mjs` queda **solo como respaldo** para copias de versiones anteriores al gancho oficial: si la copia trae `src/lib/debugHook.ts` no hace nada. Si dice "No encontrado en…", el código que parchea cambió: actualizar las cadenas, no forzar.
-- Premium de prueba: el script escribe en `localStorage` la clave `homegolflab-v1` con `profile.premium: true` antes de cargar la página (la cuota gratis es 1 video al día).
+- Premium de prueba: el script escribe en `localStorage` la clave `homegolflab-v1` con `profile.premium: true` antes de cargar la página (la cuota gratis es 1 video al día). La app migra ese JSON (`version: 0`) al formato vigente (`version: 1`) al cargar, así que los scripts viejos siguen valiendo.
 
 ## 2. Correr clips
 

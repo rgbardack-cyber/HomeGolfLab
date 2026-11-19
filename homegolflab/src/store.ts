@@ -5,6 +5,7 @@ import type { Plan, Space } from '@/lib/homelab';
 import type { SwingResult } from '@/lib/swing';
 import type { Shot } from '@/lib/tracking';
 import type { ScanInfo } from '@/lib/scan';
+import { migrateStore, STORE_VERSION } from '@/lib/storeMigrate';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -16,6 +17,18 @@ export interface Session extends SessionLite {
   planTheme?: string;
   minutes?: number;
   club?: string;              // palo confirmado a mano por el usuario para este swing (la app no lee el número)
+  // Datos pesados guardados FUERA de localStorage (lib/media/store.ts); aquí solo van los ids.
+  mediaId?: string;           // video fuente de la revisión
+  poseTrackId?: string;       // pista de postura de la pasada fina
+  flightTrackId?: string;     // seguimiento de bola v2
+}
+
+/** Pase de exportación (plan 4.8). La máquina de estados que lo emite llega con F9. */
+export interface ExportPass {
+  id: string; analysisId: string; specHash: string;
+  grantedAt: number; expiresAt: number;
+  via: 'premium' | 'reward' | 'placeholder';
+  rewardEventId?: string; uses: number; consumed: boolean;
 }
 
 export interface Profile { name: string; handicap: string; lefty: boolean; premium: boolean }
@@ -31,6 +44,7 @@ interface State {
   scan: ScanInfo | null;            // lo que la IA vio en el último escaneo del espacio
   trackingUsedSec: number;          // segundos de ball tracking usados desde el último desbloqueo
   currentClub: string | null;       // palo confirmado a mano; se asigna a los swings siguientes hasta que el usuario lo cambie
+  exportPasses: ExportPass[];       // pases de exportación vigentes (F9); sobreviven al cierre de la app
 
   setMode: (m: Mode) => void;
   setCurrentClub: (c: string | null) => void;
@@ -60,6 +74,7 @@ const initial = {
   scan: null as ScanInfo | null,
   trackingUsedSec: 0,
   currentClub: null as string | null,
+  exportPasses: [] as ExportPass[],
 };
 
 export const useStore = create<State>()(
@@ -86,7 +101,8 @@ export const useStore = create<State>()(
       setPlan: (plan) => set({ plan }),
       reset: () => set({ ...initial }),
     }),
-    { name: 'homegolflab-v1' },
+    // version 1 (F2.1): agrega `exportPasses` y los ids de medios. `migrate` conserva todo lo que ya había guardado.
+    { name: 'homegolflab-v1', version: STORE_VERSION, migrate: (persisted, version) => migrateStore(persisted, version) as unknown as State },
   ),
 );
 
