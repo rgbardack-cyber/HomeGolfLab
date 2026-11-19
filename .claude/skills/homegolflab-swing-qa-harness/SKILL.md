@@ -20,18 +20,28 @@ Mide la app **como la usa una persona**: sube el video por el `input[type=file]`
 
 Los scripts están en `scripts/` (`node scripts/<x>.mjs`). Antes de empezar: `node scripts/inventario.mjs` genera `resultados/inventario.json` (lo leen `run_swing` y `analyze_swing`).
 
-## 1. Servir una copia con el gancho `window.__hglDebug` (sin tocar `src/` del repo)
+## 1. Servir la app con el gancho `window.__hglDebug` / `window.__hglBall`
 
-El gancho no existe en el repo: `patch_app.mjs` lo inserta en `Swing.tsx` y `VideoFlight.tsx` **de una copia**. Expone `window.__hglDebug` (cuadros gruesos y finos, ventana, resultado, encuadre, fotos, palo) y `window.__hglBall` (cuadros, puntos, resumen).
+**Desde el 19 nov 2026 el gancho es oficial** (`homegolflab/src/lib/debugHook.ts`, usado por `Swing.tsx` y `VideoFlight.tsx`). Solo existe con `import.meta.env.DEV`: el servidor de desarrollo (`npm run dev`, o una copia servida con Vite) lo trae y el build de producción **no** (se comprueba con `grep -r __hgl homegolflab/dist/`, debe dar 0). Expone `window.__hglDebug` (cuadros gruesos y finos, ventana, resultado, encuadre, fotos, palo, `done`, `ms`, `thrown`) y `window.__hglBall` (cuadros, puntos, resumen, `done`; si el seguimiento falla marca `done` y `error`).
+
+Lo más simple: apuntar el harness al servidor del propio repo, sin copia ni parche.
 
 ```powershell
-node scripts/prepare_app_copy.mjs "$env:HGL_PRUEBAS/harness/app_nueva" vite-cache-nueva   # copia + enlace a node_modules + caché propia + parche
+npm --prefix "$env:HGL_REPO" run dev -- --port 5173 --strictPort     # en segundo plano
+$env:HGL_URL = 'http://127.0.0.1:5173'
+```
+
+Para comparar **antes y después** sí hace falta una copia congelada (la línea base) con su puerto y su caché de Vite propios:
+
+```powershell
+node scripts/prepare_app_copy.mjs "$env:HGL_PRUEBAS/harness/app_nueva" vite-cache-nueva   # copia + enlace a node_modules + caché propia
 node scripts/serve_app.mjs "$env:HGL_PRUEBAS/harness/app_nueva" 5211                       # en segundo plano
 $env:HGL_URL = 'http://127.0.0.1:5211'
 ```
 
 - Mantén dos copias: `app/` **intacta** (la línea base, "antes") y `app_fix/` (con el cambio, "después"). Cada una con su **puerto** y su **caché de Vite** (`cacheDir` distinto): compartir caché hace que dos servidores se pisen al reiniciar.
-- Tras cambiar `src/` del repo hay que volver a copiar (`prepare_app_copy.mjs`). Si `patch_app.mjs` dice "No encontrado en…", el código que parchea cambió: actualizar las cadenas del parche, no forzar.
+- Tras cambiar `src/` del repo hay que volver a copiar (`prepare_app_copy.mjs`).
+- `patch_app.mjs` queda **solo como respaldo** para copias de versiones anteriores al gancho oficial: si la copia trae `src/lib/debugHook.ts` no hace nada. Si dice "No encontrado en…", el código que parchea cambió: actualizar las cadenas, no forzar.
 - Premium de prueba: el script escribe en `localStorage` la clave `homegolflab-v1` con `profile.premium: true` antes de cargar la página (la cuota gratis es 1 video al día).
 
 ## 2. Correr clips

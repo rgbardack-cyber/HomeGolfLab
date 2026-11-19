@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Crosshair, Loader2, RefreshCw, Upload } from 'lucide-react';
+import { debugBall, type DebugBag } from '@/lib/debugHook';
 import { analysisSize, BallTracker, flightStatCards, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
 import type { P2 } from '@/lib/tracking';
 import { seekVideo } from '@/lib/videoSeek';
@@ -171,6 +172,9 @@ export default function VideoFlight() {
     setBusy(true); setError(null); setOut(null); setProgress(0);
     let tracker: BallTracker | null = null;
     let aspect = 1;
+    // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts).
+    let dbg: DebugBag | null = null;
+    const dbgFrames: { t: number; det: boolean; skipped: boolean }[] = [];
     try {
       // Si la vista previa del deslizador sigue saltando, se espera: dos saltos a la vez leerían un cuadro equivocado.
       pendingT.current = null;
@@ -183,6 +187,7 @@ export default function VideoFlight() {
       if (!ctx) throw new Error('canvas');
 
       v.pause();
+      dbg = import.meta.env.DEV ? debugBall({ done: false, tap, startT, fps, w, h, aspect, frames: dbgFrames }) : null;
       tracker = new BallTracker(tap, { w, h });
       const step = 1 / Number(fps);
       const tEnd = Math.min(meta.dur - step, startT + MAX_SCAN_S);
@@ -201,9 +206,11 @@ export default function VideoFlight() {
         ctx.drawImage(v, 0, 0, w, h);
         const cur = toGray(ctx.getImageData(0, 0, w, h).data, w, h);
         if (prev && !framesIdentical(prev, cur)) {
+          const before = tracker.points.length;
           tracker.feed(prev, cur, tMs);
+          if (dbg) dbgFrames.push({ t: tMs, det: tracker.points.length > before, skipped: false });
           if (tracker.done) break;
-        }
+        } else if (dbg) dbgFrames.push({ t: tMs, det: false, skipped: !!prev });
         prev = cur;
 
         let p = tEnd > startT ? (want - startT) / (tEnd - startT) : 1;
@@ -216,7 +223,9 @@ export default function VideoFlight() {
       const res = tracker.result();
       setOut({ res, summary: summarizeFlight(res, aspect) });
       setProgress(100);
+      if (dbg) Object.assign(dbg, { res, summary: summarizeFlight(res, aspect), done: true });
     } catch {
+      if (dbg) Object.assign(dbg, { done: true, error: true });
       if (runRef.current === run) {
         // Si el video dejó de responder a mitad del seguimiento, no se tira lo que ya se había visto.
         const res = tracker?.result();

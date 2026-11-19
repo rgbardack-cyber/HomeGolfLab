@@ -4,6 +4,7 @@ import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, 
 import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
+import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
@@ -591,6 +592,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     // Defensa extra contra dobles toques y reanálisis gratis del mismo archivo (el botón ya viene deshabilitado).
     if (!profile.premium && savedRef.current) return;
     setBusy(true); setError(null); setResult(null); setShots([]); setWarn(null);
+    // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts): en producción `dbg` es null y nada de esto entra al paquete.
+    const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view }) : null;
     try {
       const pose = await loadPose();
       await metadata(v);
@@ -598,28 +601,45 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       const dur = Math.min(v.duration || 0, MAX_SECONDS);
       if (!(dur > 0.5)) throw new Error(VIDEO_ERR);
       const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+      if (dbg) Object.assign(dbg, { aspect, dur, videoW: v.videoWidth, videoH: v.videoHeight });
       const sampled = await sampleVideo(v, pose, dur, aspect, setProgress);
       let frames = sampled.frames;
+      if (dbg) {
+        Object.assign(dbg, {
+          sampled: { n: sampled.sampled, got: sampled.frames.length, coarse: sampled.coarse ? { n: sampled.coarse.sampled, got: sampled.coarse.frames.length } : null },
+          frames: sampled.frames, coarseFrames: sampled.coarse?.frames ?? null,
+          window: findSwingWindow(sampled.coarse?.frames ?? sampled.frames, { aspect }),
+        });
+      }
       let r = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: sampled.sampled });
+      if (dbg) Object.assign(dbg, { fineResult: r, usedCoarse: false });
       // Si la pasada fina no da un swing (el video no era lo que parecía), se prueba con la gruesa.
       if (typeof r === 'string' && sampled.coarse) {
         const c = analyzeSwing(sampled.coarse.frames, { lefty: profile.lefty, view, aspect, sampled: sampled.coarse.sampled });
-        if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; }
+        if (dbg) dbg.coarseResult = c;
+        if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; if (dbg) dbg.usedCoarse = true; }
       }
-      if (typeof r === 'string') setError(SWING_ERROR_TEXT[r]);
+      if (dbg) Object.assign(dbg, { result: r, analysisFrames: frames });
+      if (typeof r === 'string') { setError(SWING_ERROR_TEXT[r]); if (dbg) dbg.errorText = SWING_ERROR_TEXT[r]; }
       else {
         const start = frames.find((x) => x.t === r.times?.address);
         if (start) {
           const fr = framingCheck(start.lm);
+          if (dbg) Object.assign(dbg, { framing: fr, framingFrame: start });
           // Con varios swings se analiza el último (el de la bola suele ser el último): se dice, para que no parezca un error.
           const several = sampled.swings > 1 ? `Se vieron ${sampled.swings} swings en el video; se analizó el último. ` : '';
-          if (several || !fr.ok) setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
+          if (several || !fr.ok) {
+            setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
+            if (dbg) Object.assign(dbg, { warnText: several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}.`), swings: sampled.swings });
+          }
           // El palo es un extra: si algo falla al buscarlo, el análisis del cuerpo se muestra igual.
           try {
             const key = await captureKeyFrames(v, frames, r);
             setShots(key.shots);
+            if (dbg) Object.assign(dbg, { shots: key.shots.map((x) => ({ label: x.label, url: x.url })), shaftAddress: key.address, shaftTop: key.top });
             r.club = readClub(r.view ?? 'frente', key.address, key.top, targetSide(start.lm, r.lefty ?? profile.lefty)) ?? undefined;
-          } catch { /* sin fotos ni palo */ }
+            if (dbg) dbg.club = r.club ?? null;
+          } catch (e) { if (dbg) dbg.clubError = String(e); /* sin fotos ni palo */ }
         }
         setResult(r);
         addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
@@ -627,8 +647,10 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       }
     } catch (e) {
       setError('No se pudo analizar el video. ' + (e instanceof Error ? e.message : ''));
+      if (dbg) dbg.thrown = 'No se pudo analizar el video. ' + (e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      if (dbg) Object.assign(dbg, { done: true, ms: Math.round(performance.now() - (dbg.t0 as number)) });
     }
   };
 
