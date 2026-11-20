@@ -4,6 +4,7 @@ import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, 
 import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
+import { LiveSwingDetector } from '@/lib/live/detector';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
 import VideoReview from '@/components/VideoReview';
@@ -890,8 +891,6 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
 
 /* ───────────────────────── En vivo (Premium) ───────────────────────── */
 
-type Phase = 'ready' | 'top' | 'settle' | 'rearm';
-
 function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, addSession } = useStore();
   // El bucle de la cámara vive fuera del render: lee la vista elegida desde una referencia.
@@ -939,8 +938,9 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       await v.play();
       setOn(true);
 
-      const buf: Frame[] = [];
-      let phase: Phase = 'ready', tTop = 0, tImp = 0, lowSince = 0;
+      // La detección de cada swing (histéresis, bajada en tiempo real, separación de 3 s, rearme y bloqueo de identidad) vive en
+      // `lib/live/detector.ts`, probada con cuadros sintéticos (F10.2).
+      const det = new LiveSwingDetector({ lefty: profile.lefty, view: () => viewRef.current, aspect: () => (v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1) });
 
       let busy = false;
       const loop = () => {
@@ -964,42 +964,19 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
         if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
         const ctx = c.getContext('2d')!;
         ctx.clearRect(0, 0, c.width, c.height);
-        if (!f) { if (phase === 'ready') { setStatus('No te veo: aléjate hasta que entres de cuerpo entero'); putGuide({ ...guideRef.current, ok: false, show: true }); } return; }
+        if (!f) { const r = det.noPerson(); if (r.status) setStatus(r.status); if (r.guide) putGuide(r.guide); return; }
         drawSkeleton(ctx, f.lm, c.width, c.height);
-        buf.push(f);
-        while (buf.length && now - buf[0].t > 8000) buf.shift();
-
-        const wy = (f.lm[LM.L_WRIST].y + f.lm[LM.R_WRIST].y) / 2;
-        const shY = (f.lm[LM.L_SHOULDER].y + f.lm[LM.R_SHOULDER].y) / 2;
-        const hipY = (f.lm[LM.L_HIP].y + f.lm[LM.R_HIP].y) / 2;
-        const handsHigh = wy < shY - 0.02;
-        const handsLow = wy > hipY - 0.04;
-
-        const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
-        if (phase === 'ready') {
-          const seen = viewRef.current === 'auto' ? viewOfFrame(f, aspect) : viewRef.current;
-          const fr = framingCheck(f.lm);
-          putGuide({ view: seen, ok: fr.ok, show: true });
-          setStatus(fr.ok ? `Listo (${VIEW_LABEL[seen].toLowerCase()}). Haz tu swing cuando quieras` : fr.hint);
-          if (handsHigh) { phase = 'top'; tTop = now; putGuide({ ...guideRef.current, show: false }); }
-        } else if (phase === 'top') {
-          if (handsLow) { phase = 'settle'; tImp = now; }
-          else if (now - tTop > 2500) phase = 'rearm';
-        } else if (phase === 'settle') {
-          if (now - tImp > 600) {
-            const seg = buf.filter((b) => b.t >= tTop - 2500 && b.t <= tImp + 500);
-            const r = analyzeSwing(seg, { lefty: profile.lefty, view: viewRef.current, aspect });
-            if (typeof r !== 'string') {
-              swingsRef.current = [r, ...swingsRef.current];
-              setSwings(swingsRef.current);
-              setStatus(`Swing ${swingsRef.current.length}: ${r.score}/100`);
-            } else setStatus('No pude leer ese swing. Repítelo de cuerpo entero');
-            phase = 'rearm'; lowSince = 0;
-          }
-        } else if (phase === 'rearm') {
-          // vuelve a armar solo cuando las manos llevan medio segundo abajo (posición de inicio)
-          if (handsLow) { if (!lowSince) lowSince = now; if (now - lowSince > 500) phase = 'ready'; }
-          else lowSince = 0;
+        const r = det.step(f, now);
+        if (r.status) setStatus(r.status);
+        if (r.guide) putGuide(r.guide);
+        if (r.swing) {
+          const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+          const res = analyzeSwing(r.swing, { lefty: profile.lefty, view: viewRef.current, aspect });
+          if (typeof res !== 'string') {
+            swingsRef.current = [res, ...swingsRef.current];
+            setSwings(swingsRef.current);
+            setStatus(`Swing ${swingsRef.current.length}: ${res.score}/100`);
+          } else setStatus('No pude leer ese swing. Repítelo de cuerpo entero');
         }
       };
       loop();

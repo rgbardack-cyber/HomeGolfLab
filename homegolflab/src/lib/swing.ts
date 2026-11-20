@@ -208,7 +208,7 @@ function topCandidates(frames: Frame[], wy: number[], s: number, e: number): num
 
 // Bajada (tope→impacto) posible a velocidad normal. Abajo de 0,15 s: el modelo perdió las manos. Arriba de 0,6 s: no es una bajada
 // normal (en 90 clips reales la mayor válida fue 0,43 s) sino cámara lenta o un clip mal leído; una cámara lenta 4× midió 0,8 s.
-const MIN_DOWNSWING_SEC = 0.15, MAX_DOWNSWING_SEC = 0.6;
+export const MIN_DOWNSWING_SEC = 0.15, MAX_DOWNSWING_SEC = 0.6;
 
 /** Localiza inicio (address), tope y impacto dentro de una secuencia de cuadros. */
 export function findEvents(frames: Frame[]) {
