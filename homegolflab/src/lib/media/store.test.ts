@@ -120,6 +120,7 @@ function fakeFs(opts: { failAppendAt?: number; failWith?: string } = {}) {
       files.set(path, cat(files.get(path) ?? new Uint8Array(), fromB64(data)));
     },
     async readFile({ path }) { const f = files.get(path); if (!f) throw new Error('File does not exist'); return { data: new TextDecoder().decode(f) }; },
+    async rename({ from, to }) { const f = files.get(from); if (!f) throw new Error('File does not exist'); files.set(to, f); files.delete(from); },
     async deleteFile({ path }) { if (!files.delete(path)) throw new Error('File does not exist'); },
     async readdir() { return { files: [...files].map(([p, b]) => ({ name: p.split('/').pop()!, type: 'file', size: b.length })) }; },
     async getUri({ path }) { return { uri: 'file://' + path }; },
@@ -135,7 +136,7 @@ describe('backend nativo: escritura por bloques (F2.2)', () => {
     const be = native(f, 1000);
     const blob = blobOf(3500);
     await be.putBlob('m_a', blob);
-    const w = f.calls.filter((c) => c.path.endsWith('m_a.bin'));
+    const w = f.calls.filter((c) => c.path.endsWith('m_a.tmp'));
     expect(w.map((c) => c.op)).toEqual(['write', 'append', 'append', 'append']); // 1000+1000+1000+500
     expect(await bytesOf((await be.getBlob('m_a'))!)).toEqual(await bytesOf(blob));
   });
@@ -148,14 +149,15 @@ describe('backend nativo: escritura por bloques (F2.2)', () => {
     expect(lens.length).toBe(3);
     expect(Math.max(...lens)).toBeLessThanOrEqual(Math.ceil((DEFAULT_CHUNK_BYTES / 3) * 4));
     expect(f.files.get('hgl-media/m_big.bin')!.length).toBe(7 * 1024 * 1024);
+    expect(f.files.has('hgl-media/m_big.tmp')).toBe(false); // el temporal ya se renombró
   });
 
   it('el tamaño de bloque se redondea a múltiplo de 3', async () => {
     const f = fakeFs();
     await native(f, 1000).putBlob('m_b', blobOf(100));
     await native(f, 10).putBlob('m_c', blobOf(100));
-    expect(f.calls.filter((c) => c.path.endsWith('m_b.bin')).length).toBe(1);
-    expect(f.calls.filter((c) => c.path.endsWith('m_c.bin')).length).toBe(Math.ceil(100 / 9)); // 10 → 9
+    expect(f.calls.filter((c) => c.path.endsWith('m_b.tmp')).length).toBe(1);
+    expect(f.calls.filter((c) => c.path.endsWith('m_c.tmp')).length).toBe(Math.ceil(100 / 9)); // 10 → 9
   });
 
   it('si falla a mitad, borra el archivo parcial y explica "sin espacio"', async () => {
@@ -176,6 +178,16 @@ describe('backend nativo: escritura por bloques (F2.2)', () => {
     const got = await bytesOf((await be.getBlob('m_c'))!);
     expect(got.length).toBe(30);
     expect(got).toEqual(await bytesOf(blobOf(30, 2)));
+  });
+
+  it('reemplazar un id existente: si la escritura falla a mitad, la versión anterior sigue intacta', async () => {
+    const f = fakeFs({ failAppendAt: 2 });
+    const be = native(f, 300);
+    await be.putBlob('m_r', blobOf(200, 5));            // cabe en un bloque: no usa appendFile
+    const antes = await bytesOf((await be.getBlob('m_r'))!);
+    await expect(be.putBlob('m_r', blobOf(2000, 9))).rejects.toMatchObject({ code: 'no_space' });
+    expect(await bytesOf((await be.getBlob('m_r'))!)).toEqual(antes);
+    expect([...f.files.keys()].some((k) => k.endsWith('.tmp'))).toBe(false); // sin temporales a medias
   });
 
   it('sobrescribir un id no deja restos del contenido anterior', async () => {

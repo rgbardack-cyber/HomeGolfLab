@@ -1,5 +1,5 @@
 import type { Session } from '@/store';
-import { planCleanup, type CleanupPlan } from './policy';
+import { planCleanup, planOrphans, type CleanupPlan } from './policy';
 import type { MediaStore } from './store';
 
 /** Ids de medios que alguna sesión del usuario referencia: la limpieza automática no los toca. */
@@ -17,11 +17,15 @@ async function storageQuota(): Promise<number | undefined> {
  * Limpieza al arrancar la app (y al terminar una exportación o grabación): borra lo temporal de más de 24 h, lo vencido,
  * y lo necesario para bajar del tope sin tocar los videos de las sesiones. Devuelve el plan aplicado.
  */
-export async function runCleanup(store: MediaStore, sessions: readonly Session[], now = Date.now(), quotaBytes?: number): Promise<CleanupPlan> {
+export async function runCleanup(store: MediaStore, sessions: readonly Session[], now = Date.now(), quotaBytes?: number): Promise<CleanupPlan & { orphans: string[] }> {
+  const referenced = referencedMediaIds(sessions);
   const refs = await store.listRefs();
-  const plan = planCleanup(refs, now, { referencedIds: referencedMediaIds(sessions), quotaBytes: quotaBytes ?? (await storageQuota()) });
+  const plan = planCleanup(refs, now, { referencedIds: referenced, quotaBytes: quotaBytes ?? (await storageQuota()) });
   for (const r of plan.remove) await store.deleteMedia(r.id);
-  return plan;
+  // Huérfanos: se mira el almacén DESPUÉS de lo anterior, con lo que realmente quedó.
+  const orphans = planOrphans(await store.backend.list(), now, referenced);
+  for (const id of orphans) await store.backend.delete(id);
+  return { ...plan, orphans };
 }
 
 /** Borra los medios de UNA sesión (al borrar la sesión): video, pista de postura y seguimiento de bola. */

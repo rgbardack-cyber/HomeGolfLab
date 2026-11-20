@@ -30,7 +30,11 @@ export class MediaStore {
     const ref: MediaRef = { ...meta, id, bytes: blob.size, createdAt: new Date(this.now()).toISOString() };
     await this.backend.putBlob(id, blob);
     try { await this.backend.putJson(id + REF_SUFFIX, ref); }
-    catch (e) { await this.backend.delete(id).catch(() => undefined); throw e; }
+    catch (e) {
+      // Si tampoco se puede deshacer, el blob queda huérfano: la limpieza (`planOrphans`) lo borra pasadas 24 h.
+      await this.backend.delete(id).catch((e2) => console.warn('No se pudo deshacer el guardado del video', e2));
+      throw e;
+    }
     return ref;
   }
 

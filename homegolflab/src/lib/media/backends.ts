@@ -24,9 +24,10 @@ export class MemoryBackend implements MediaBackend {
   readonly persistent = false;
   private blobs = new Map<string, Blob>();
   private jsons = new Map<string, string>();
-  async putBlob(id: string, data: Blob) { assertId(id); this.blobs.set(id, data); }
+  private at = new Map<string, number>();
+  async putBlob(id: string, data: Blob) { assertId(id); this.blobs.set(id, data); this.at.set('b:' + id, Date.now()); }
   async getBlob(id: string) { assertId(id); return this.blobs.get(id) ?? null; }
-  async putJson(id: string, value: unknown) { assertId(id); this.jsons.set(id, JSON.stringify(value)); }
+  async putJson(id: string, value: unknown) { assertId(id); this.jsons.set(id, JSON.stringify(value)); this.at.set('j:' + id, Date.now()); }
   async getJson<T>(id: string) {
     assertId(id);
     const s = this.jsons.get(id);
@@ -36,8 +37,8 @@ export class MemoryBackend implements MediaBackend {
   async delete(id: string) { assertId(id); this.blobs.delete(id); this.jsons.delete(id); }
   async list(): Promise<BackendEntry[]> {
     return [
-      ...[...this.blobs].map(([id, b]) => ({ id, kind: 'blob' as const, bytes: b.size })),
-      ...[...this.jsons].map(([id, s]) => ({ id, kind: 'json' as const, bytes: s.length })),
+      ...[...this.blobs].map(([id, b]) => ({ id, kind: 'blob' as const, bytes: b.size, modifiedAt: this.at.get('b:' + id) })),
+      ...[...this.jsons].map(([id, s]) => ({ id, kind: 'json' as const, bytes: s.length, modifiedAt: this.at.get('j:' + id) })),
     ];
   }
 }
@@ -79,8 +80,8 @@ export class IndexedDbBackend implements MediaBackend {
     } catch (e) { throw toMediaError(e); }
   }
 
-  async putBlob(id: string, data: Blob) { assertId(id); await this.write('blobs', id, { blob: data, bytes: data.size }); }
-  async putJson(id: string, value: unknown) { assertId(id); const s = JSON.stringify(value); await this.write('json', id, { data: s, bytes: s.length }); }
+  async putBlob(id: string, data: Blob) { assertId(id); await this.write('blobs', id, { blob: data, bytes: data.size, at: Date.now() }); }
+  async putJson(id: string, value: unknown) { assertId(id); const s = JSON.stringify(value); await this.write('json', id, { data: s, bytes: s.length, at: Date.now() }); }
 
   async getBlob(id: string) {
     assertId(id);
@@ -112,7 +113,8 @@ export class IndexedDbBackend implements MediaBackend {
         cur.onsuccess = () => {
           const c = cur.result;
           if (!c) return res();
-          out.push({ id: String(c.key), kind, bytes: (c.value as { bytes: number }).bytes });
+          const v = c.value as { bytes: number; at?: number };
+          out.push({ id: String(c.key), kind, bytes: v.bytes, modifiedAt: v.at });
           c.continue();
         };
         cur.onerror = () => rej(cur.error);
@@ -130,7 +132,8 @@ export interface FsLike {
   appendFile(o: { path: string; data: string; directory: string; encoding?: string }): Promise<void>;
   readFile(o: { path: string; directory: string; encoding?: string }): Promise<{ data: string | Blob }>;
   deleteFile(o: { path: string; directory: string }): Promise<void>;
-  readdir(o: { path: string; directory: string }): Promise<{ files: { name: string; type?: string; size: number }[] }>;
+  rename(o: { from: string; to: string; directory: string }): Promise<void>;
+  readdir(o: { path: string; directory: string }): Promise<{ files: { name: string; type?: string; size: number; mtime?: number }[] }>;
   mkdir(o: { path: string; directory: string; recursive?: boolean }): Promise<void>;
   getUri(o: { path: string; directory: string }): Promise<{ uri: string }>;
 }
@@ -180,7 +183,7 @@ export class NativeFsBackend implements MediaBackend {
     });
     return this.ready;
   }
-  private path(id: string, ext: 'bin' | 'json') { return `${this.root}/${id}.${ext}`; }
+  private path(id: string, ext: 'bin' | 'json' | 'tmp') { return `${this.root}/${id}.${ext}`; }
   private async rm(path: string) {
     try { await this.o.fs.deleteFile({ path, directory: this.o.directory }); } catch (e) { if (!NOT_FOUND.test(String((e as Error)?.message ?? e))) throw e; }
   }
@@ -190,19 +193,25 @@ export class NativeFsBackend implements MediaBackend {
     return this.serial(id, () => this.putBlobNow(id, data));
   }
 
+  /**
+   * Escribe a `<id>.tmp` por bloques y solo al terminar reemplaza `<id>.bin`: si algo falla a mitad, la versión anterior
+   * sigue intacta (antes se borraba primero y se perdían las dos). La ventana entre borrar el viejo y renombrar es mínima.
+   */
   private async putBlobNow(id: string, data: Blob) {
-    const path = this.path(id, 'bin');
+    const path = this.path(id, 'bin'), tmp = this.path(id, 'tmp');
     try {
       await this.dir();
-      await this.rm(path);
-      if (data.size === 0) { await this.o.fs.writeFile({ path, data: '', directory: this.o.directory }); return; }
+      await this.rm(tmp);
+      if (data.size === 0) await this.o.fs.writeFile({ path: tmp, data: '', directory: this.o.directory });
       for (let off = 0, first = true; off < data.size; off += this.chunk, first = false) {
         const b64 = toBase64(new Uint8Array(await data.slice(off, off + this.chunk).arrayBuffer()));
-        if (first) await this.o.fs.writeFile({ path, data: b64, directory: this.o.directory });
-        else await this.o.fs.appendFile({ path, data: b64, directory: this.o.directory });
+        if (first) await this.o.fs.writeFile({ path: tmp, data: b64, directory: this.o.directory });
+        else await this.o.fs.appendFile({ path: tmp, data: b64, directory: this.o.directory });
       }
+      await this.rm(path);
+      await this.o.fs.rename({ from: tmp, to: path, directory: this.o.directory });
     } catch (e) {
-      try { await this.rm(path); } catch { /* sin archivo a medio escribir */ }
+      try { await this.rm(tmp); } catch { /* sin archivo temporal que limpiar */ }
       throw toMediaError(e);
     }
   }
@@ -241,17 +250,17 @@ export class NativeFsBackend implements MediaBackend {
 
   delete(id: string): Promise<void> {
     assertId(id);
-    return this.serial(id, async () => { await this.rm(this.path(id, 'bin')); await this.rm(this.path(id, 'json')); });
+    return this.serial(id, async () => { await this.rm(this.path(id, 'bin')); await this.rm(this.path(id, 'json')); await this.rm(this.path(id, 'tmp')); });
   }
 
   async list(): Promise<BackendEntry[]> {
-    let files: { name: string; size: number }[];
+    let files: { name: string; size: number; mtime?: number }[];
     try { files = (await this.o.fs.readdir({ path: this.root, directory: this.o.directory })).files; }
     catch (e) { if (NOT_FOUND.test(String((e as Error)?.message ?? e))) return []; throw toMediaError(e); }
     const out: BackendEntry[] = [];
     for (const f of files) {
       const m = /^([A-Za-z0-9_-]{1,80})\.(bin|json)$/.exec(f.name);
-      if (m) out.push({ id: m[1], kind: m[2] === 'bin' ? 'blob' : 'json', bytes: f.size });
+      if (m) out.push({ id: m[1], kind: m[2] === 'bin' ? 'blob' : 'json', bytes: f.size, modifiedAt: f.mtime });
     }
     return out;
   }

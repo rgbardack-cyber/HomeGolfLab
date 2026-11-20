@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { clearAllMedia, deleteSessionMedia, referencedMediaIds, runCleanup } from './cleanup';
 import { makeClock } from './clock';
 import { MemoryBackend } from './backends';
-import { effectiveCap, formatBytes, planCleanup, POLICY } from './policy';
+import { effectiveCap, formatBytes, planCleanup, planOrphans, POLICY } from './policy';
+import type { BackendEntry } from './types';
 import { MediaStore } from './store';
 import type { MediaRef } from './types';
 import type { Session } from '@/store';
@@ -76,7 +77,43 @@ describe('política de limpieza (F2.3, fechas simuladas)', () => {
   });
 });
 
+describe('huérfanos (revisión F2)', () => {
+  const e = (id: string, kind: 'blob' | 'json', ageH: number | undefined, bytes = 10): BackendEntry => ({ id, kind, bytes, modifiedAt: ageH === undefined ? undefined : NOW - ageH * H });
+
+  it('un blob sin referencia y de más de 24 h es huérfano; uno reciente (guardado en curso) no', () => {
+    expect(planOrphans([e('m_old', 'blob', 30), e('m_new', 'blob', 1)], NOW)).toEqual(['m_old']);
+  });
+
+  it('un blob con su referencia, o que una sesión referencia, no es huérfano', () => {
+    const entries = [e('m_ok', 'blob', 99), e('m_ok-ref', 'json', 99), e('p_s', 'blob', 99), e('f_s', 'json', 99)];
+    expect(planOrphans(entries, NOW, new Set(['p_s', 'f_s']))).toEqual([]);
+  });
+
+  it('una referencia cuyo video no existe es huérfana (solo si es vieja)', () => {
+    expect(planOrphans([e('m_x-ref', 'json', 30), e('m_y-ref', 'json', 2)], NOW)).toEqual(['m_x-ref']);
+  });
+
+  it('sin fecha de modificación no se borra nada (no se puede saber la edad)', () => {
+    expect(planOrphans([e('m_sin', 'blob', undefined)], NOW)).toEqual([]);
+  });
+});
+
 describe('limpieza aplicada sobre el almacén', () => {
+  it('runCleanup borra un blob huérfano viejo y deja un guardado reciente sin referencia', async () => {
+    const be = new MemoryBackend();
+    const st = new MediaStore(be);
+    await be.putBlob('m_huerfano', new Blob([new Uint8Array(10)]));
+    await be.putBlob('m_reciente', new Blob([new Uint8Array(10)]));
+    // hace 48 h para el primero: se simula adelantando el reloj de la limpieza para el viejo y comprobando el reciente aparte
+    const farFuture = Date.now() + 30 * H;
+    const plan = await runCleanup(st, [], farFuture, 10 * 1024 ** 3);
+    expect(plan.orphans.sort()).toEqual(['m_huerfano', 'm_reciente']); // con +30 h ambos son viejos
+    await be.putBlob('m_nuevo', new Blob([new Uint8Array(10)]));
+    const plan2 = await runCleanup(st, [], Date.now(), 10 * 1024 ** 3);
+    expect(plan2.orphans).toEqual([]);                                  // recién guardado: no se toca
+    expect((await be.list()).map((x) => x.id)).toEqual(['m_nuevo']);
+  });
+
   const blob = (mb: number) => new Blob([new Uint8Array(mb * 1024)]); // KB reales; el tamaño que cuenta es el de la referencia
   const meta = (kind: MediaRef['kind']) => ({ kind, mime: 'video/mp4', durationMs: 1, w: 1, h: 1, rotation: 0 as const, clock: makeClock({ fpsNominal: 60 }) });
   const sess = (o: Partial<Session>): Session => ({ id: 's', at: '', date: '', mode: 'casa', type: 'swing', ...o } as Session);

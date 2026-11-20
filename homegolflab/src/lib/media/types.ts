@@ -17,7 +17,8 @@ export interface MediaRef {
 }
 
 export type BackendEntryKind = 'blob' | 'json';
-export interface BackendEntry { id: string; kind: BackendEntryKind; bytes: number }
+/** `modifiedAt` (ms desde 1970) permite saber la edad de un archivo, p. ej. para detectar huérfanos; puede faltar. */
+export interface BackendEntry { id: string; kind: BackendEntryKind; bytes: number; modifiedAt?: number }
 
 /**
  * Almacenamiento de datos pesados. Dos "cajones" por id: un blob binario y un JSON. Implementaciones: IndexedDB (web),

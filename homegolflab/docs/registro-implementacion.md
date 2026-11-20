@@ -69,10 +69,10 @@ Corregido (commit de revisión de F2):
 - `NativeFsBackend.putBlob`/`delete` ahora se serializan por id (dos `putBlob` concurrentes del mismo id mezclaban bloques y dejaban un archivo corrupto). Prueba nueva que falla sin el arreglo.
 - "Borrar todos mis datos" borra primero los videos y, si falla, avisa y NO borra el resto (antes hacía `reset()` y tragaba el error: videos huérfanos sin sesión).
 
-**PENDIENTE (confirmado, sin corregir por haberse agotado el uso):**
-1. Reemplazar un id existente en el backend nativo borra la versión anterior ANTES de escribir; si falla a mitad se pierden ambas (IndexedDB sí es atómico). Hay que escribir a un archivo temporal y reemplazar al terminar. Latente: hoy ningún llamador reemplaza ids (los ids son UUID nuevos).
-2. Blobs huérfanos (el proceso muere entre `putBlob` y la referencia): `usage()` los cuenta pero `runCleanup` solo ve referencias. Falta una pasada que borre blobs sin referencia de más de 24 h y no referenciados por sesiones.
-3. `saveMedia` esconde un fallo del rollback (`.catch(() => undefined)`).
+**Los tres pendientes quedaron CORREGIDOS en el commit siguiente (19 nov 2026):**
+1. Reemplazo en el backend nativo: ahora escribe a `<id>.tmp` por bloques y solo al terminar borra el viejo y renombra; si falla a mitad, la versión anterior queda intacta (prueba nueva).
+2. Huérfanos: `planOrphans` (pura) + `runCleanup`. Borra blobs/pistas/vuelos sin referencia y referencias sin video, SOLO si llevan más de 24 h (por eso un guardado en curso no se toca) y no los referencia una sesión. Las entradas del backend ahora traen `modifiedAt` (IndexedDB `at`, memoria, `mtime` nativo). Una mutación de la guarda de edad hizo fallar las pruebas.
+3. El rollback de `saveMedia` ya no es silencioso (`console.warn`); si queda un huérfano, la pasada 2 lo borra.
 
 Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona con el estado inicial), guardado de versión futura, colisión del sufijo `-ref` (ids de usuario, que no existen), borrar recién guardados al pasar el tope (precondición documentada), foto de sesiones en `runCleanup`, `NaN` en fechas.
 

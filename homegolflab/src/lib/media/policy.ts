@@ -1,4 +1,4 @@
-import type { MediaRef } from './types';
+import type { BackendEntry, MediaRef } from './types';
 
 /**
  * Política de limpieza de medios (plan 4.9, F2.3). Pura: recibe las referencias, la hora y los límites, y dice qué
@@ -70,6 +70,27 @@ export function planCleanup(refs: readonly MediaRef[], now: number, o: CleanupOp
     }
   }
   return { remove, capBytes: cap, bytesAfter: total, needsUserAction: total > cap };
+}
+
+/**
+ * Huérfanos (revisión F2): datos que quedaron sin dueño, p. ej. porque el proceso murió entre guardar el video y su referencia.
+ * Se borran SOLO si llevan más de 24 h (así un guardado en curso nunca se toca) y si no los referencia ninguna sesión:
+ * - un blob/pista/seguimiento (id que no termina en "-ref") sin su referencia `<id>-ref` y que ninguna sesión menciona;
+ * - una referencia `<id>-ref` cuyo video ya no existe.
+ * Sin `modifiedAt` no se puede saber la edad: no se borra.
+ */
+export function planOrphans(entries: readonly BackendEntry[], now: number, referencedIds: ReadonlySet<string> = new Set()): string[] {
+  const blobs = new Set(entries.filter((e) => e.kind === 'blob').map((e) => e.id));
+  const refs = new Set(entries.filter((e) => e.kind === 'json' && e.id.endsWith('-ref')).map((e) => e.id.slice(0, -4)));
+  const old = (e: BackendEntry) => e.modifiedAt !== undefined && now - e.modifiedAt > POLICY.tempMaxAgeMs;
+  const out = new Set<string>();
+  for (const e of entries) {
+    if (!old(e)) continue;
+    if (e.kind === 'json' && e.id.endsWith('-ref')) { if (!blobs.has(e.id.slice(0, -4))) out.add(e.id); continue; }
+    if (referencedIds.has(e.id) || refs.has(e.id)) continue;
+    out.add(e.id);
+  }
+  return [...out];
 }
 
 /** "24,0 MB", "1,3 GB", "512 KB" (coma decimal). */
