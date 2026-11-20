@@ -12,7 +12,10 @@ import {
 } from '@/lib/reviewPlayer';
 import { DEFAULT_GUIDES, GUIDE_LABEL, guidesAllowed, guidesAt, headUsesNose, hiddenGuides, reviewModelAt, type GuideSet } from '@/lib/swingReview';
 import type { SwingResult } from '@/lib/swing';
-import { Notice, Segmented } from '@/components/ui';
+import { Button, Notice, Segmented } from '@/components/ui';
+import ExportSheet from '@/components/ExportSheet';
+import { useFlags } from '@/lib/flags';
+import { useStore } from '@/store';
 
 interface Props {
   r: SwingResult;
@@ -31,6 +34,9 @@ const chip = (on: boolean) => `h-9 px-3 rounded-full text-xs font-semibold borde
  * con el cuadro PRESENTADO (`requestVideoFrameCallback`); sin esa función se usa `seeked`/`timeupdate`.
  */
 export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn, onManual }: Props) {
+  const flags = useFlags();
+  const premium = useStore((s) => s.profile.premium);
+  const [exporting, setExporting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -252,6 +258,8 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
       </div>
       </fieldset>
       {probing && <p className="text-xs text-muted-foreground">Midiendo los cuadros por segundo…</p>}
+      {flags.export && !exporting && <Button full variant="outline" onClick={() => setExporting(true)}>Exportar video</Button>}
+      {flags.export && exporting && <ExportSheet r={r} mediaId={mediaId} poseTrackId={poseTrackId} manual={manual} premium={premium} onClose={() => setExporting(false)} />}
       <p className="text-[11px] text-muted-foreground">Las guías son una referencia del seguimiento de postura, no un veredicto. Dónde se ve mal, se atenúan o se ocultan.</p>
     </div>
   );

@@ -9,7 +9,7 @@
  */
 export type DebugBag = Record<string, unknown>;
 
-function publish(name: '__hglDebug' | '__hglBall' | '__hglReview', init: DebugBag): DebugBag {
+function publish(name: '__hglDebug' | '__hglBall' | '__hglReview' | '__hglExport', init: DebugBag): DebugBag {
   const bag: DebugBag = { ...init };
   (window as unknown as Record<string, unknown>)[name] = bag;
   return bag;
@@ -29,4 +29,10 @@ export function debugReview(init: DebugBag): DebugBag | null {
 export function debugBall(init: DebugBag): DebugBag | null {
   if (!import.meta.env.DEV) return null;
   return publish('__hglBall', init);
+}
+
+/** `window.__hglExport`: exportación de video (resultado, plantilla, línea de tiempo y utilidades de paridad). */
+export function debugExport(init: DebugBag): DebugBag | null {
+  if (!import.meta.env.DEV) return null;
+  return publish('__hglExport', init);
 }
