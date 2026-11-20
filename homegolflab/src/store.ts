@@ -6,6 +6,7 @@ import type { SwingResult } from '@/lib/swing';
 import type { Shot } from '@/lib/tracking';
 import type { ScanInfo } from '@/lib/scan';
 import { migrateStore, STORE_VERSION } from '@/lib/storeMigrate';
+import type { ShotShape } from '@/lib/shotShape';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -21,6 +22,8 @@ export interface Session extends SessionLite {
   mediaId?: string;           // video fuente de la revisión
   poseTrackId?: string;       // pista de postura de la pasada fina
   flightTrackId?: string;     // seguimiento de bola v2
+  /** «Etiqueta tuya» (F6.1): lo que el usuario dice que fue el tiro. Nunca se presenta como detectado. */
+  shapeManual?: ShotShape;
   /** Fases ajustadas a mano en la revisión (ms de medio del archivo fuente); mandan sobre las automáticas. */
   reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }
@@ -59,6 +62,8 @@ interface State {
   removeSession: (id: string) => Session | undefined;
   /** Enlaza a una sesión los datos pesados guardados fuera de localStorage (ids). */
   attachMedia: (sessionId: string, ids: Pick<Session, 'mediaId' | 'poseTrackId' | 'flightTrackId'>) => void;
+  /** F6.1: guarda o quita (null) la etiqueta de forma del tiro de una sesión. */
+  setShapeManual: (sessionId: string, shape: ShotShape | null) => void;
   setReviewMarks: (sessionId: string, marks: NonNullable<Session['reviewMarks']>) => void;
   /** Cambia el swing analizado de una sesión (el usuario eligió otro del mismo video): NO cuenta como otro análisis. */
   replaceSessionSwing: (sessionId: string, swing: SwingResult) => void;
@@ -123,6 +128,7 @@ export const useStore = create<State>()(
       },
       replaceSessionSwing: (sessionId, swing) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, swing, score: swing.score, tempoRatio: swing.metrics.tempoRatio, reviewMarks: undefined } : x)) }),
       setReviewMarks: (sessionId, marks) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, reviewMarks: marks } : x)) }),
+      setShapeManual: (sessionId, shape) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, shapeManual: shape ?? undefined } : x)) }),
       attachMedia: (sessionId, ids) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, ...ids } : x)) }),
       clearMediaRefs: () => set({
         sessions: get().sessions.map((x) => (x.mediaId || x.poseTrackId || x.flightTrackId ? { ...x, mediaId: undefined, poseTrackId: undefined, flightTrackId: undefined } : x)),

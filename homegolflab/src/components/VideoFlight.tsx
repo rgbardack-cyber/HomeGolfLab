@@ -11,6 +11,7 @@ import FlightPlayer from '@/components/FlightPlayer';
 import { persistFlight } from '@/lib/media/persistFlight';
 import { getMediaStore } from '@/lib/media/store';
 import { useStore } from '@/store';
+import { MANUAL_SHAPES, SHAPE_LABEL, type ShotShape } from '@/lib/shotShape';
 import { Button, Card, Notice, Segmented, Stat } from '@/components/ui';
 
 /**
@@ -59,6 +60,9 @@ export default function VideoFlight() {
   const [frameTick, setFrameTick] = useState(0);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  /** F6.1: «Etiqueta tuya». La elige el usuario; nunca se presenta como detectada. */
+  const [shape, setShape] = useState<ShotShape | null>(null);
+  const savedId = useRef<string | null>(null);
 
   useEffect(() => () => { runRef.current++; }, []);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -73,7 +77,7 @@ export default function VideoFlight() {
   const pick = (f?: File) => {
     if (!f) return;
     runRef.current++;
-    fileRef.current = f; setSaveMsg(null);
+    fileRef.current = f; setSaveMsg(null); setShape(null); savedId.current = null;
     setUrl(URL.createObjectURL(f));
     setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
@@ -81,7 +85,7 @@ export default function VideoFlight() {
 
   const reset = () => {
     runRef.current++;
-    fileRef.current = null; setSaveMsg(null);
+    fileRef.current = null; setSaveMsg(null); setShape(null); savedId.current = null;
     setUrl(null); setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
   };
@@ -268,7 +272,8 @@ export default function VideoFlight() {
       setSaving(false); return;
     }
     if (r.ok) {
-      useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId });
+      const sess = useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId, ...(shape ? { shapeManual: shape } : {}) });
+      savedId.current = sess.id;
       setSaveMsg({ ok: true, text: r.persistent ? 'Tiro guardado en este dispositivo.' : 'Tiro guardado solo mientras la app esté abierta: este navegador no deja guardar videos.' });
     } else setSaveMsg({ ok: false, text: r.message });
     setSaving(false);
@@ -357,6 +362,15 @@ export default function VideoFlight() {
             {flightStatCards(s).map((c) => <Stat key={c.label} label={c.label} value={c.value} unit={c.unit} />)}
           </div>
           {!out.track && <Legend />}
+          <div className="space-y-1.5" data-shape-label>
+            <p className="text-xs text-muted-foreground">Etiqueta tuya (la pones tú; la app no detecta el tipo de tiro)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {MANUAL_SHAPES.map((sh) => (
+                <button key={sh} aria-pressed={shape === sh} className={`h-8 px-3 rounded-full text-xs font-semibold border ${shape === sh ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'}`}
+                  onClick={() => { const next = shape === sh ? null : sh; setShape(next); if (savedId.current) useStore.getState().setShapeManual(savedId.current, next); }}>{SHAPE_LABEL[sh]}</button>
+              ))}
+            </div>
+          </div>
           {out.track && out.track.observed.length > 0 && (
             <div className="space-y-2">
               <Button variant="outline" full disabled={saving || saveMsg?.ok === true} onClick={() => void saveFlight()}>{saveMsg?.ok ? 'Guardado' : saving ? 'Guardando…' : 'Guardar este tiro'}</Button>
