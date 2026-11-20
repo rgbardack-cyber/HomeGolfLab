@@ -80,3 +80,31 @@ Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona 
 - Backend nativo: no probado en un dispositivo (no hay carpetas `android`/`ios`), solo con un sistema de archivos falso.
 - Cuota del navegador casi llena: no probada en un navegador real.
 - No hay pantalla para borrar una sesión: `removeSession`/`deleteSessionMedia` existen y tienen pruebas, pero ninguna pantalla los usa.
+
+## F3. Revisión de swing en video, un ángulo (19 nov 2026)
+
+| # | Estado | Commit | Verificación |
+|---|---|---|---|
+| 3.1 | hecho | `1102165` | `persistReview`; con `i5_sr_t01`: 1 video idéntico (23 564 157 bytes) y 1 pista de **42 KB** (< 200 KB, 79 muestras de 6,10 a 8,70 s) enlazados a la sesión (`mediaId`, `poseTrackId`). |
+| 3.2 | hecho | `72696e8` | `lib/swingReview.ts`; 16 pruebas sintéticas (oclusión, zurdo/diestro, salto, interpolación). La mutación de invertir zurdo/diestro hizo fallar 5 pruebas. |
+| 3.3 | hecho | `1fbd9fa` | `VideoReview`. Chrome con `i5_sr_t01` (atrás) e `i7_sr_f01` (frente): el cuadro mostrado en Inicio/Tope/Impacto coincide con `frameOf(t)` (diferencia 0 en los 6: 424/460/480 y 374/424/444); el paso de ±1 cuadro avanza 16,67 ms (60 fps estimados solos). Capturas del esqueleto y las guías. |
+| 3.4 | hecho | `d5b97a6` | `lib/phases.ts` (10 pruebas; mutación detectada). **Laboratorio anti-regresión sobre los 96 conjuntos: 0 clips cambian** (no_swing 9, plausibles 67, ±0,5 s 66, referencia manual 5/7 · 6/7 · 7/7: idéntico a la línea base). `swing.ts` solo recibió dos campos de TIPO (`times.finish`, `phaseConf`). |
+| 3.5 | hecho | `cec2e4c` | `lib/swingWindows.ts` (4 pruebas). Con cuadros guardados: `i9_sr_t04` (2 ventanas: 4,8–7,3 s y 14,9–17,5 s; el swing real ≈ 6,5 s cae en la primera, la que la app NO analizaba), `i9_ps_t02` (2), `i7_stinger_sr_03` (2). Chrome con `i7_stinger_sr_03` y Premium apagado: 2 miniaturas; al elegir el 1.º, la sesión cambió (inicio 7,10 → 1,77 s, nota 84 → 85), sigue 1 sola sesión, el botón continúa "Ya analizado" y la revisión se recargó en el cuadro 106. |
+| 3.6 | hecho | `1fbd9fa` | La sesión MIGRADA del fixture real (sin video) abre `/swing?ver=` con el aviso "Este análisis es anterior y no guardó el video" y el resultado; con la bandera apagada no cambia nada. |
+
+### Adaptaciones y decisiones
+- **Confianza de landmark = visibilidad**: el JS de MediaPipe no entrega `presence` y `pose.ts` solo guarda `visibility`; la pista guarda la visibilidad en ambos canales. Se mejora si algún día se captura `presence`.
+- **Los fps no se leen del archivo** (hace falta un demultiplexor, F8.1): el reloj guardado es `estimated`/30 y se corrige al cargar con una reproducción muda a 0,5× (`estimateFps`, probada). Si no hay evidencia suficiente se deja 30 y el usuario fija 30/60.
+- **3.4 no amplía el muestreo de `analyzeSwing`**: `findEvents` usa `s = floor(n·0,1)` y `e = ceil(n·0,92)`, así que añadir cuadros movería los índices. El final sale de un tramo extra de 30 cuadros/s hasta 2,3 s tras el impacto, solo con la bandera encendida (+≈1,5 s de análisis).
+- **3.5**: reanalizar otro swing REEMPLAZA el análisis de esa sesión (`replaceSessionSwing`), no guarda otra. Los ajustes manuales de fase se borran al cambiar de swing.
+- Los umbrales de `phases.ts` (0,3 s de quietud, 0,06 del torso de radio, pesos de nitidez) son [PROPUESTA]; no se movieron mirando clips.
+
+### Lo medido / lo no medido
+- **Confianza por fase, sin calibrar**: en `i5_sr_t01` salió inicio 0,06, tope 0,53, impacto 0,51, final 0,73; en `i7_sr_f01` inicio 0,36, tope 0,82, impacto 0,83. El chip "Revisa esta fase" aparece en el **Inicio** de los dos clips. No sé si refleja un error real: la referencia manual de `i7_sr_f01` (auto-anotada, NO verificada por Ryan) pone el inicio en ≈6,40 s y la app en 6,23 s (167 ms, fuera de ±100 ms), pero con n = 7 clips anotados no se puede declarar nada ni ajustar el umbral.
+- **Final**: en `i5_sr_t01` se encontró (8,567 s); en `i7_sr_f01` no (`null`: las manos no quedaron quietas 0,3 s en el tramo muestreado). Sin referencia manual del final: no medido.
+- **No se corrió `run_swing.mjs` sobre los 90 clips** (≈100 s por clip) tras F3; como `analyzeSwing` no cambió y el laboratorio da 0 diferencias, no se espera diferencia, pero no está medido en el navegador.
+- **Dispositivos reales (iPhone/Android)**: `requestVideoFrameCallback`, la estimación de fps y el rendimiento de la revisión solo se probaron en Chrome de escritorio. `i7_sr_f01`/`i5_sr_t01` son de un solo golfista zurdo y un teléfono.
+- **Diestros**: la inversión del brazo guía está probada con puntos sintéticos, no con video de un diestro (no hay clips).
+
+### Incidente del flujo de trabajo
+- Un commit de F3.5 salió con 298 archivos "borrados" (`swingiq/`, `video-pitch/`, `.claude/`…) porque el índice de git quedó incompleto antes de confirmar (causa no determinada; el repo vive en iCloud Drive). Los archivos nunca salieron del disco. Se deshizo con `git reset --mixed HEAD~1` (commit local, sin push) y se rehízo con rutas explícitas (380 archivos en HEAD). **Desde aquí cada commit usa rutas explícitas y se revisa `git diff --cached --stat` antes de confirmar.** Los commits anteriores se comprobaron: 378 archivos en cada uno.
