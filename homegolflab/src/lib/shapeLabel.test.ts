@@ -26,6 +26,18 @@ describe('etiqueta del tiro y pases en el store (F6.1, F9)', () => {
     expect(useStore.getState().sessions.find((x) => x.id === t.id)!.shapeManual).toBe('slice');
   });
 
+  it('la distancia anotada se guarda en metros con la sesión, se puede quitar y no toca otras', async () => {
+    const { useStore } = await import('../store');
+    const { manualDistance } = await import('./distance');
+    const s1 = useStore.getState().addSession({ type: 'tracking', flightOnly: true });
+    const s2 = useStore.getState().addSession({ type: 'tracking', flightOnly: true });
+    useStore.getState().setDistance(s1.id, manualDistance(137.16, 'carry'));
+    expect(useStore.getState().sessions.find((x) => x.id === s1.id)!.distance).toMatchObject({ state: 'measured_manual', meters: 137.16, kind: 'carry' });
+    expect(useStore.getState().sessions.find((x) => x.id === s2.id)!.distance).toBeUndefined();
+    useStore.getState().setDistance(s1.id, null);
+    expect(useStore.getState().sessions.find((x) => x.id === s1.id)!.distance).toBeUndefined();
+  });
+
   it('los pases se guardan, vencen al guardar otro y cuentan usos; la gratis del día y el consentimiento persisten', async () => {
     const { useStore } = await import('../store');
     const now = 1_800_000_000_000;

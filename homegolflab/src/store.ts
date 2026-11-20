@@ -8,6 +8,7 @@ import type { ScanInfo } from '@/lib/scan';
 import { migrateStore, STORE_VERSION } from '@/lib/storeMigrate';
 import type { ShotShape } from '@/lib/shotShape';
 import { asUnit, DEFAULT_UNIT, type DistUnit } from '@/lib/units';
+import type { DistanceResult } from '@/lib/distance';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -25,6 +26,8 @@ export interface Session extends SessionLite {
   flightTrackId?: string;     // seguimiento de bola v2
   /** «Etiqueta tuya» (F6.1): lo que el usuario dice que fue el tiro. Nunca se presenta como detectado. */
   shapeManual?: ShotShape;
+  /** Distancia del tiro: solo la que anotó el usuario («Medida por ti») o una estimación interna con intervalo. En metros. */
+  distance?: DistanceResult;
   /** Fases ajustadas a mano en la revisión (ms de medio del archivo fuente); mandan sobre las automáticas. */
   reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }
@@ -66,6 +69,8 @@ interface State {
   attachMedia: (sessionId: string, ids: Pick<Session, 'mediaId' | 'poseTrackId' | 'flightTrackId'>) => void;
   /** F6.1: guarda o quita (null) la etiqueta de forma del tiro de una sesión. */
   setShapeManual: (sessionId: string, shape: ShotShape | null) => void;
+  /** F7.2: guarda o quita (null) la distancia de un tiro. */
+  setDistance: (sessionId: string, d: DistanceResult | null) => void;
   setReviewMarks: (sessionId: string, marks: NonNullable<Session['reviewMarks']>) => void;
   /** Cambia el swing analizado de una sesión (el usuario eligió otro del mismo video): NO cuenta como otro análisis. */
   replaceSessionSwing: (sessionId: string, swing: SwingResult) => void;
@@ -130,6 +135,7 @@ export const useStore = create<State>()(
       },
       replaceSessionSwing: (sessionId, swing) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, swing, score: swing.score, tempoRatio: swing.metrics.tempoRatio, reviewMarks: undefined } : x)) }),
       setReviewMarks: (sessionId, marks) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, reviewMarks: marks } : x)) }),
+      setDistance: (sessionId, d) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, distance: d ?? undefined } : x)) }),
       setShapeManual: (sessionId, shape) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, shapeManual: shape ?? undefined } : x)) }),
       attachMedia: (sessionId, ids) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, ...ids } : x)) }),
       clearMediaRefs: () => set({

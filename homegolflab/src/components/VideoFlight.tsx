@@ -10,8 +10,10 @@ import { makeClock } from '@/lib/media/clock';
 import FlightPlayer from '@/components/FlightPlayer';
 import { persistFlight } from '@/lib/media/persistFlight';
 import { getMediaStore } from '@/lib/media/store';
-import { useStore } from '@/store';
+import { useStore, useUnit } from '@/store';
 import { MANUAL_SHAPES, SHAPE_LABEL, type ShotShape } from '@/lib/shotShape';
+import { distanceView, KIND_LABEL, manualDistance, type DistanceKind, type DistanceResult } from '@/lib/distance';
+import { inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
 import { Button, Card, Notice, Segmented, Stat } from '@/components/ui';
 
 /**
@@ -63,6 +65,10 @@ export default function VideoFlight() {
   /** F6.1: «Etiqueta tuya». La elige el usuario; nunca se presenta como detectada. */
   const [shape, setShape] = useState<ShotShape | null>(null);
   const savedId = useRef<string | null>(null);
+  /** F7.2: la distancia, solo la que escribe el usuario. */
+  const unit = useUnit();
+  const [distance, setDistance] = useState<DistanceResult | null>(null);
+  const [distEdit, setDistEdit] = useState<{ text: string; kind: DistanceKind } | null>(null);
 
   useEffect(() => () => { runRef.current++; }, []);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -77,7 +83,7 @@ export default function VideoFlight() {
   const pick = (f?: File) => {
     if (!f) return;
     runRef.current++;
-    fileRef.current = f; setSaveMsg(null); setShape(null); savedId.current = null;
+    fileRef.current = f; setSaveMsg(null); setShape(null); setDistance(null); setDistEdit(null); savedId.current = null;
     setUrl(URL.createObjectURL(f));
     setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
@@ -85,7 +91,7 @@ export default function VideoFlight() {
 
   const reset = () => {
     runRef.current++;
-    fileRef.current = null; setSaveMsg(null); setShape(null); savedId.current = null;
+    fileRef.current = null; setSaveMsg(null); setShape(null); setDistance(null); setDistEdit(null); savedId.current = null;
     setUrl(null); setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
   };
@@ -272,7 +278,7 @@ export default function VideoFlight() {
       setSaving(false); return;
     }
     if (r.ok) {
-      const sess = useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId, ...(shape ? { shapeManual: shape } : {}) });
+      const sess = useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId, ...(shape ? { shapeManual: shape } : {}), ...(distance ? { distance } : {}) });
       savedId.current = sess.id;
       setSaveMsg({ ok: true, text: r.persistent ? 'Tiro guardado en este dispositivo.' : 'Tiro guardado solo mientras la app esté abierta: este navegador no deja guardar videos.' });
     } else setSaveMsg({ ok: false, text: r.message });
@@ -371,6 +377,40 @@ export default function VideoFlight() {
               ))}
             </div>
           </div>
+          {(() => {
+            const dv = distanceView(distance, unit);
+            return (
+              <div className="rounded-xl border border-border p-3 space-y-2 text-sm" data-distance>
+                <p className="font-medium">{dv.title}{dv.badge && <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-muted font-semibold">{dv.badge}</span>}</p>
+                <p className="text-xs text-muted-foreground">{dv.text}</p>
+                {distEdit ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <input type="number" inputMode="decimal" min="0" aria-label={`Distancia en ${UNIT_SHORT[unit]}`} value={distEdit.text} onChange={(e) => setDistEdit({ ...distEdit, text: e.target.value })} className="w-28 h-10 rounded-xl border border-border px-2 text-center" />
+                      <span className="text-sm text-muted-foreground">{UNIT_SHORT[unit]}</span>
+                      {(['carry', 'total'] as DistanceKind[]).map((k) => (
+                        <button key={k} aria-pressed={distEdit.kind === k} onClick={() => setDistEdit({ ...distEdit, kind: k })} className={`h-8 px-3 rounded-full text-xs font-semibold border ${distEdit.kind === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'}`}>{KIND_LABEL[k]}</button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button full disabled={manualDistance(parseToMeters(distEdit.text, unit) ?? 0, distEdit.kind) === null} onClick={() => {
+                        const d = manualDistance(parseToMeters(distEdit.text, unit) ?? 0, distEdit.kind);
+                        if (!d) return;
+                        setDistance(d); setDistEdit(null);
+                        if (savedId.current) useStore.getState().setDistance(savedId.current, d);
+                      }}>Guardar distancia</Button>
+                      <Button variant="outline" onClick={() => setDistEdit(null)}>Cancelar</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 items-center">
+                    <button className="text-xs underline font-medium" onClick={() => setDistEdit({ text: distance?.meters ? inputValue(distance.meters, unit) : '', kind: distance?.kind ?? 'carry' })}>{distance ? 'Cambiar' : 'Registrar a mano'}</button>
+                    {distance && <button className="text-xs underline" onClick={() => { setDistance(null); if (savedId.current) useStore.getState().setDistance(savedId.current, null); }}>Quitar</button>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {out.track && out.track.observed.length > 0 && (
             <div className="space-y-2">
               <Button variant="outline" full disabled={saving || saveMsg?.ok === true} onClick={() => void saveFlight()}>{saveMsg?.ok ? 'Guardado' : saving ? 'Guardando…' : 'Guardar este tiro'}</Button>
