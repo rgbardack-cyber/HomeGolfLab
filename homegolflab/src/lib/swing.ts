@@ -94,7 +94,9 @@ interface ResultBase {
   focus: string[];
   events: { address: number; top: number; impact: number };
   /** Momento (ms del video) de cada posición clave, para volver a esos cuadros. */
-  times?: { address: number; top: number; impact: number };
+  times?: { address: number; top: number; impact: number; /** Final del swing (F3.4): solo si se vio la pose sostenida; opcional. */ finish?: number };
+  /** Confianza 0–1 de cada fase (F3.4, ver phases.ts). Debajo de 0,5 la revisión pide ajustar esa fase. No cambia la nota. */
+  phaseConf?: { address: number; top: number; impact: number; finish?: number };
   /** Mano dominante que se usó. Sale del propio swing cuando se puede; si no, del perfil. */
   lefty?: boolean;
   /** Si el jugador eligió la vista a mano y el video parece de la otra, la que parece. Solo para avisar. */

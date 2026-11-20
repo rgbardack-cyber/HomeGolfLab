@@ -4,9 +4,9 @@
  */
 import { frameDurationMs, frameOf, msOfFrame, type Clock, type MediaMs } from './media/clock';
 
-export type PhaseKey = 'address' | 'top' | 'impact';
-export const PHASE_KEYS: readonly PhaseKey[] = ['address', 'top', 'impact'];
-export const PHASE_LABEL: Record<PhaseKey, string> = { address: 'Inicio', top: 'Tope', impact: 'Impacto' };
+export type PhaseKey = 'address' | 'top' | 'impact' | 'finish';
+export const PHASE_KEYS: readonly PhaseKey[] = ['address', 'top', 'impact', 'finish'];
+export const PHASE_LABEL: Record<PhaseKey, string> = { address: 'Inicio', top: 'Tope', impact: 'Impacto', finish: 'Final' };
 export const SPEEDS = [1, 0.5, 0.25] as const;
 export type Speed = (typeof SPEEDS)[number];
 export const SPEED_LABEL: Record<Speed, string> = { 1: '1×', 0.5: '0,5×', 0.25: '0,25×' };
@@ -21,11 +21,12 @@ export interface PhaseMark { key: PhaseKey; t: MediaMs; frame: number; source: '
  * `times` son MediaMs del archivo fuente; el cuadro se calcula con el reloj.
  */
 export function phaseMarks(
-  clock: Clock, times: Record<PhaseKey, MediaMs>, manual: Partial<Record<PhaseKey, MediaMs>> = {}, conf: Partial<Record<PhaseKey, number>> = {},
+  clock: Clock, times: { address: MediaMs; top: MediaMs; impact: MediaMs; finish?: MediaMs }, manual: Partial<Record<PhaseKey, MediaMs>> = {}, conf: Partial<Record<PhaseKey, number>> = {},
 ): PhaseMark[] {
-  return PHASE_KEYS.map((key) => {
+  // El final es opcional: solo hay marca si el análisis lo encontró (o el usuario lo puso a mano).
+  return PHASE_KEYS.filter((key) => times[key] !== undefined || manual[key] !== undefined).map((key) => {
     const isManual = manual[key] !== undefined;
-    const t = manual[key] ?? times[key];
+    const t = (manual[key] ?? times[key]) as MediaMs;
     return { key, t, frame: frameOf(clock, t), source: isManual ? 'manual' : 'auto', ...(conf[key] !== undefined ? { conf: conf[key] } : {}) };
   });
 }
@@ -52,8 +53,8 @@ export function nudgeMark(c: Clock, m: PhaseMark, dir: number, lastFrame = Infin
 
 /** La marca debe mantener el orden inicio < tope < impacto: devuelve las marcas o null si el ajuste lo rompe. */
 export function validOrder(marks: readonly PhaseMark[]): boolean {
-  const f = Object.fromEntries(marks.map((m) => [m.key, m.frame])) as Record<PhaseKey, number>;
-  return f.address < f.top && f.top < f.impact;
+  const f = Object.fromEntries(marks.map((m) => [m.key, m.frame])) as Partial<Record<PhaseKey, number>>;
+  return f.address! < f.top! && f.top! < f.impact! && (f.finish === undefined || f.impact! < f.finish);
 }
 
 export const needsReview = (m: PhaseMark): boolean => m.conf !== undefined && m.conf < PHASE_CONF_REVIEW;

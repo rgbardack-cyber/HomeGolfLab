@@ -56,7 +56,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
   const [orderError, setOrderError] = useState(false);
 
   const times = r.times;
-  const marks = useMemo<PhaseMark[]>(() => (times ? phaseMarks(clock, times, manual) : []), [clock, times, manual]);
+  const marks = useMemo<PhaseMark[]>(() => (times ? phaseMarks(clock, times, manual, r.phaseConf) : []), [clock, times, manual, r.phaseConf]);
   const allowed = guidesAllowed(r.view, r.viewMismatch, 'auto');
   const useNose = useMemo(() => (track ? headUsesNose(track) : false), [track]);
 

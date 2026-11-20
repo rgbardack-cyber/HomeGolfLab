@@ -8,6 +8,7 @@ import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
 import VideoReview from '@/components/VideoReview';
 import { persistReview } from '@/lib/media/persistReview';
+import { findFinish, phaseConfidence } from '@/lib/phases';
 import { getMediaStore } from '@/lib/media/store';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
@@ -441,6 +442,23 @@ async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof 
   return { frames: fine, sampled: fineN, coarse: { frames: coarse, sampled: coarseN }, swings: win.swings };
 }
 
+/**
+ * Tramo EXTRA tras el análisis, solo para la revisión (F3.4): cuadros a 30/s desde `fromMs` hasta `toMs` para ver la pose
+ * final. No entra en `analyzeSwing` (cambiar la ventana movería los índices de `findEvents`): inicio, tope e impacto
+ * salen exactamente igual con o sin esto.
+ */
+async function sampleExtra(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number): Promise<Frame[]> {
+  let model = pose;
+  const out: Frame[] = [];
+  for (let t = fromMs; t <= toMs; t += FINE * 1000) {
+    await seek(v, t / 1000);
+    const r = await detectResilient(model, v, v.currentTime * 1000);
+    model = r.pose;
+    if (r.frame) out.push(r.frame);
+  }
+  return out;
+}
+
 /** El cuadro actual del video, sin marcas y a hasta 1024 px por lado: es lo que ve el coach con IA. */
 async function cleanFrame(v: HTMLVideoElement): Promise<string | undefined> {
   try {
@@ -660,13 +678,27 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           } catch (e) { if (dbg) dbg.clubError = String(e); /* sin fotos ni palo */ }
         }
         setResult(r);
+        // F3.4: confianza por fase y final del swing (con un tramo extra post-impacto). No cambia la nota ni los eventos.
+        let reviewFrames: Frame[] = frames;
+        if (flags.videoReview && r.times) {
+          try {
+            const lastT = frames[frames.length - 1]?.t ?? r.times.impact;
+            const extra = await sampleExtra(v, pose, lastT + FINE * 1000, Math.min(dur * 1000, r.times.impact + 2300));
+            reviewFrames = [...frames, ...extra];
+            const fin = findFinish(reviewFrames, r.times.impact);
+            const conf = phaseConfidence(frames, r.times);
+            r.times = { ...r.times, ...(fin ? { finish: fin.t } : {}) };
+            r.phaseConf = { ...conf, ...(fin ? { finish: fin.conf } : {}) };
+            if (dbg) Object.assign(dbg, { finish: fin, phaseConf: r.phaseConf, extraFrames: extra.length });
+          } catch { /* sin final ni confianza: la revisión usa las tres fases como siempre */ }
+        }
         const sess = addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
         savedRef.current = true; setAnalyzed(true);
         // F3.1: con la revisión de video encendida se guarda el video y la pista de postura (sin cambiar el análisis).
         if (flags.videoReview && fileRef.current) {
           const file = fileRef.current, hz = frames === sampled.frames ? 30 : 10, durationMs = Math.round((v.duration || 0) * 1000);
           setSaved({ sessionId: sess.id });
-          void getMediaStore().then((st) => persistReview(st, { file, frames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
+          void getMediaStore().then((st) => persistReview(st, { file, frames: reviewFrames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
             if (!out.ok) { setMediaNotice('El análisis se guardó, pero ' + out.message.charAt(0).toLowerCase() + out.message.slice(1)); return; }
             useStore.getState().attachMedia(sess.id, out.ids);
             setSaved({ sessionId: sess.id, ...out.ids });
