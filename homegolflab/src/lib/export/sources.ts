@@ -19,8 +19,8 @@ export function exportTimes(r: Pick<SwingResult, 'times'>, manual: Marks = {}): 
 }
 
 /** Una fuente del render a partir de un análisis guardado. */
-export function swingExportSource(id: string, ref: { w: number; h: number }, track: PoseTrack | null, r: SwingResult, manual: Marks = {}, lefty?: boolean): ExportSource | null {
+export function swingExportSource(id: string, ref: { w: number; h: number; durationMs?: number }, track: PoseTrack | null, r: SwingResult, manual: Marks = {}, lefty?: boolean): ExportSource | null {
   const times = exportTimes(r, manual);
   if (!times) return null;
-  return { id, w: ref.w, h: ref.h, track, times, lefty: lefty ?? r.lefty ?? false, view: r.view ?? 'frente' };
+  return { id, w: ref.w, h: ref.h, durationMs: ref.durationMs, track, times, lefty: lefty ?? r.lefty ?? false, view: r.view ?? 'frente' };
 }

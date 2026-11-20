@@ -78,7 +78,7 @@ async function buildAudio(job: ExportJob): Promise<{ buffer: AudioBuffer; cue: A
         }
       }
     }
-    const det = detectImpact(mono, sr, job.impactMs - from * 1000);
+    const det = detectImpact(mono, sr, job.impactMs - from * 1000, { rawChannels: chans });
     if (!det.ok) return { note: IMPACT_REJECTION_TEXT[det.reason] };
     const onsetSrc = from * 1000 + det.onsetMs;
     const cue = impactAudioCue(job.timeline, job.sources[0].id, onsetSrc, job.impactMs);
@@ -105,6 +105,8 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
 /** Exporta el MP4. Lanza `ExportError` (cancelado, sin codificador, sin pista de video o fallo). */
 export async function runExport(job: ExportJob, hooks: ExportHooks = {}): Promise<ExportResult> {
+  // La marca de agua no se omite en silencio (revisión F8): si se pidió y el logo no está, se falla antes de gastar tiempo.
+  if (job.options.watermark && !job.logo) throw new ExportError('failed', 'No se pudo cargar la marca de agua.');
   const caps = await exportCapabilities(job.fps);
   if (!caps.video) throw new ExportError('no_video_encoder', 'Este dispositivo no puede codificar video H.264 desde la app.');
   const inputs = job.blobs.map((b) => new Input({ source: new BlobSource(b), formats: ALL_FORMATS }));
@@ -123,6 +125,7 @@ export async function runExport(job: ExportJob, hooks: ExportHooks = {}): Promis
       if (!caps.audio) audioNote = 'Este dispositivo no puede codificar audio AAC: el video sale sin sonido.';
       else { audio = await buildAudio(job); if ('note' in audio) { audioNote = audio.note; audio = null; } }
     }
+    if (hooks.signal?.aborted) throw new ExportError('cancelled', 'Exportación cancelada.');
 
     const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(OUT_W, OUT_H) : Object.assign(document.createElement('canvas'), { width: OUT_W, height: OUT_H });
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
@@ -155,6 +158,7 @@ export async function runExport(job: ExportJob, hooks: ExportHooks = {}): Promis
       if (f % 4 === 0) hooks.onProgress?.(f / n);
       if (f % YIELD_EVERY === 0) await tick();
     }
+    if (hooks.signal?.aborted) throw new ExportError('cancelled', 'Exportación cancelada.');     // antes de cerrar el archivo
     await output.finalize();
     hooks.onProgress?.(1);
     const buf = (output.target as BufferTarget).buffer;

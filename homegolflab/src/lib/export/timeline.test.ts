@@ -101,3 +101,21 @@ describe('línea de tiempo de exportación (F8.2)', () => {
     expect(impactAudioCue(tl, 'A', 5000)).toBeNull();
   });
 });
+
+describe('acotado a la duración de la fuente (revisión F8)', () => {
+  it('el final no pasa del fin del clip y, sin cola, la plantilla termina en la pausa del impacto', () => {
+    const near = swingSegments({ address: 7000, top: 7600, impact: 8000 }, ['A'], { sourceEndMs: 8300 });
+    expect(near[near.length - 1]).toMatchObject({ kind: 'play', fromMs: 8000, toMs: 8300 });
+    const none = swingSegments({ address: 7000, top: 7600, impact: 8000 }, ['A'], { sourceEndMs: 8040 });
+    expect(none[none.length - 1]).toMatchObject({ kind: 'hold', label: 'Impacto' });
+    expect(() => swingSegments({ address: 7000, top: 7600, impact: 8000 }, ['A'], { sourceEndMs: 7900 })).toThrow(RangeError);
+    // y ninguna fase pasa del fin del clip en el tiempo exportado
+    const tl = buildTimeline(near);
+    for (const s of tl.segments) if (s.seg.kind === 'play') expect(s.seg.toMs).toBeLessThanOrEqual(8300);
+  });
+  it('el vuelo se acota al fin del clip', () => {
+    const segs = flightSegments({ source: 'A', startMs: 6800, impactMs: 8000, traceEndMs: 10000, sourceEndMs: 9000 });
+    expect(segs[1]).toMatchObject({ toMs: 9000 });
+    expect(() => flightSegments({ source: 'A', startMs: 6800, impactMs: 8000, traceEndMs: 10000, sourceEndMs: 7700 })).toThrow(RangeError);
+  });
+});

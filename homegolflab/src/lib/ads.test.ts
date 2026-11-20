@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AD_TTL_MS, RewardedAds, type AdEvent, type RewardedPlugin } from './ads';
+import { AD_SHOW_TIMEOUT_MS, AD_TTL_MS, RewardedAds, type AdEvent, type RewardedPlugin } from './ads';
 
 /** Plugin falso: guarda los oyentes y deja que el test dispare los eventos como lo haría el SDK. */
 function fake(opts: { prepareFails?: boolean; showThrows?: boolean } = {}) {
@@ -102,5 +102,22 @@ describe('controlador de anuncios con recompensa (F9.2)', () => {
     f.whenShown(() => { setTimeout(() => { f.emit('Rewarded'); f.emit('Rewarded'); f.emit('Dismissed'); }, 0); });
     const r = await new RewardedAds(f.plugin).show();
     expect(r.kind).toBe('rewarded');
+  });
+});
+
+describe('tiempo límite del anuncio (revisión F9)', () => {
+  it('si el anuncio nunca termina, show() se da por fallido y libera el bloqueo', async () => {
+    const { vi } = await import('vitest');
+    vi.useFakeTimers();
+    try {
+      const f = fake();                                           // show() no dispara ningún evento
+      const ads = new RewardedAds(f.plugin);
+      const p = ads.show();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(ads.busy).toBe(true);
+      await vi.advanceTimersByTimeAsync(AD_SHOW_TIMEOUT_MS + 10);
+      expect((await p).kind).toBe('show_failed');
+      expect(ads.busy).toBe(false);
+    } finally { vi.useRealTimers(); }
   });
 });

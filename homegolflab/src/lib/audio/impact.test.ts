@@ -75,3 +75,26 @@ describe('detección del impacto en el audio (F8.3)', () => {
     expect(() => detectImpact(track(sr, 2, [{ atMs: 5, amp: 0.5 }]), sr, 100)).not.toThrow();
   });
 });
+
+describe('revisión F8: inicio acotado y recorte por canal', () => {
+  it('con ruido sostenido a 15–20 dB bajo el pico el inicio no se arrastra hacia atrás (error ≤ 5 ms)', () => {
+    const sr = 48000;
+    // Casos medidos que antes daban −16 a −29 ms: ruido continuo de 0,04–0,08 con golpe de 0,3–0,5 (prominencia 15–17 dB).
+    for (const [floor, amp, seed] of [[0.04, 0.3, 1], [0.04, 0.3, 2], [0.05, 0.3, 1], [0.05, 0.3, 2], [0.06, 0.5, 1], [0.08, 0.5, 2]] as const) {
+      const r = detectImpact(track(sr, 4, [{ atMs: 2000, amp }], floor, seed), sr, 2050);
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(Math.abs(r.onsetMs - 2000)).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it('un solo canal saturado se detecta aunque el promedio no llegue a 0,999', () => {
+    const sr = 48000, n = sr * 4;
+    const left = track(sr, 4, [{ atMs: 1500, amp: 0.45 }]), right = new Float32Array(n);
+    for (let i = 0; i < n; i++) right[i] = Math.max(-1, Math.min(1, left[i] * 3));     // canal derecho saturado
+    for (let i = 0; i < n; i++) left[i] = left[i] * 0.2;
+    const mono = new Float32Array(n);
+    for (let i = 0; i < n; i++) mono[i] = (left[i] + right[i]) / 2;
+    expect(detectImpact(mono, sr, 1550).ok).toBe(true);                               // promediado: no se ve el recorte
+    expect(detectImpact(mono, sr, 1550, { rawChannels: [left, right] })).toMatchObject({ ok: false, reason: 'clipped' });
+  });
+});

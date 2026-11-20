@@ -25,6 +25,10 @@ export interface ImpactOptions {
   secondHitDb?: number;
   /** Semiancho de la zona donde se busca otro golpe (1000 ms). */
   rivalMs?: number;
+  /** Canales SIN mezclar, para detectar el recorte digital de cada uno (un canal saturado se pierde al promediar). */
+  rawChannels?: Float32Array[];
+  /** Cuánto antes del pico puede estar el inicio (30 ms): un golpe sube en pocos ms; más allá es ruido sostenido, no el golpe. */
+  maxAttackMs?: number;
 }
 
 const BIN_MS = 1;
@@ -92,14 +96,21 @@ export function detectImpact(pcm: Float32Array, sampleRate: number, aroundMs: nu
     const v = (db[Math.max(0, b - 1)] + db[b] + db[Math.min(db.length - 1, b + 1)]) / 3;
     if (v > peak) { peak = v; pb = b; }
   }
-  // Inicio: hacia atrás desde el pico mientras el nivel siga a ≤ 20 dB de él.
+  // Inicio: hacia atrás desde el pico mientras el nivel siga a ≤ 20 dB de él, y como mucho `maxAttackMs` (revisión F8: con ruido
+  // sostenido entre pico−15 y pico−20 el retroceso se arrastraba decenas de ms).
+  const maxBack = Math.max(1, Math.round((o.maxAttackMs ?? 30) / binMs));
+  // Umbral del inicio: a ≤ 20 dB del pico y, si el ruido de fondo es alto, a la mitad de la prominencia sobre su mediana
+  // (con ruido sostenido a 15–20 dB bajo el pico, «pico − 20» queda dentro del propio ruido y arrastra el inicio hacia atrás).
+  const bgMedian = median(db, at(pb * binMs - rival), at(pb * binMs + rival) + 1);
+  const thr = Math.max(peak - 20, bgMedian + 0.5 * (peak - bgMedian));
   let on = pb;
-  while (on > 0 && db[on - 1] > peak - 20) on--;
+  while (on > 0 && pb - on < maxBack && db[on - 1] > thr) on--;
   const onsetMs = (on + 0.5) * binMs - binMs / 2;
   const ctx0 = at(onsetMs - rival), ctx1 = at(onsetMs + rival);
   const prominence = peak - median(db, ctx0, ctx1 + 1);
   const win0 = Math.round(((onsetMs - 50) * sampleRate) / 1000), win1 = Math.round(((onsetMs + 300) * sampleRate) / 1000);
-  if (clipped(pcm, win0, win1)) return { ok: false, reason: 'clipped', onsetMs, prominenceDb: prominence };
+  const channels = o.rawChannels?.length ? o.rawChannels : [pcm];
+  if (channels.some((ch) => clipped(ch, win0, win1))) return { ok: false, reason: 'clipped', onsetMs, prominenceDb: prominence };
   if (!(prominence >= minProm)) return { ok: false, reason: prominence < 6 ? 'no_transient' : 'weak', onsetMs, prominenceDb: prominence };
   // Otro golpe: un transitorio (sube ≥ 8 dB respecto a los 10 ms previos) que llegue a pico − 10 dB, fuera de la cola del impacto.
   const skip0 = at(onsetMs - 120), skip1 = at(onsetMs + 250);

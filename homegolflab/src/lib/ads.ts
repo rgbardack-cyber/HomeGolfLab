@@ -53,6 +53,8 @@ export interface RewardedPlugin {
 
 /** Un anuncio cargado caduca a la hora (Google). */
 export const AD_TTL_MS = 60 * 60 * 1000;
+/** Si el anuncio no termina (ni Dismissed ni FailedToShow) en este tiempo, se da por fallido y se libera el bloqueo (revisión F9). */
+export const AD_SHOW_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
  * Carga y muestra anuncios con recompensa escuchando TODOS los eventos del plugin. Reglas: precarga idempotente; descarta lo
@@ -107,8 +109,12 @@ export class RewardedAds {
         await this.plugin.on('Dismissed', () => closed()),
       );
       this.loadedAt = null;                                  // un anuncio se muestra una sola vez
-      try { await this.plugin.show(); } catch { return { kind: 'show_failed' }; }
-      await dismissed;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<'timeout'>((res) => { timer = setTimeout(() => res('timeout'), AD_SHOW_TIMEOUT_MS); });
+      try { await this.plugin.show(); } catch { clearTimeout(timer); return { kind: 'show_failed' }; }
+      const ended = await Promise.race([dismissed.then(() => 'closed' as const), timeout]);
+      clearTimeout(timer);
+      if (ended === 'timeout') return rewarded ? { kind: 'rewarded', rewardEventId: id } : { kind: 'show_failed', message: 'timeout' };
       if (rewarded) return { kind: 'rewarded', rewardEventId: id };
       return failed ? { kind: 'show_failed' } : { kind: 'dismissed' };
     } finally {

@@ -59,6 +59,9 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
   const [result, setResult] = useState<(ExportResult & { url: string; name: string }) | null>(null);
   const [caps, setCaps] = useState<{ video: boolean; audio: boolean } | null>(null);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
+  const alive = useRef(true);
+  const lastUrl = useRef<string | null>(null);
   const [gateUi, setGateUi] = useState<{ kind: 'notice'; resolve: (c: NoticeChoice) => void } | { kind: 'ad'; resolve: (o: AdOutcome) => void } | null>(null);
   const [gateMsg, setGateMsg] = useState<string | null>(null);
   const [needPremium, setNeedPremium] = useState(false);
@@ -84,13 +87,17 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
     })();
     const img = new Image();
     img.onload = () => { if (!dead) setLogo(img); };
+    img.onerror = () => { if (!dead) setLogoFailed(true); };
     img.src = `${import.meta.env.BASE_URL}logo-blanco.png`;
     return () => { dead = true; if (made) URL.revokeObjectURL(made); };
   }, [mediaId, poseTrackId, r, manual]);
 
   const { segments, fps, timeline } = useMemo(() => {
     if (!source?.times) return { segments: [] as Segment[], fps: 30 as 30 | 60, timeline: null };
-    const segs = template === 'flight' ? flightSegments({ source: source.id, startMs: source.times.address, impactMs: source.times.impact, traceEndMs: source.times.impact + 2000 }) : swingSegments(source.times, [source.id]);
+    let segs: Segment[];
+    try {
+          segs = template === 'flight' ? flightSegments({ source: source.id, startMs: source.times.address, impactMs: source.times.impact, traceEndMs: source.times.impact + 2000, sourceEndMs: source.durationMs }) : swingSegments(source.times, [source.id], { sourceEndMs: source.durationMs });
+    } catch { return { segments: [] as Segment[], fps: 30 as 30 | 60, timeline: null }; }
     return { segments: segs, fps: chooseFps(60, segs), timeline: buildTimeline(segs) };
   }, [source, template]);
   const legend = useMemo(() => (template === 'flight' ? flightLegend() : []), [template]);
@@ -140,17 +147,25 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
   const start = async () => {
     if (!source || !blob || !timeline || busy) return;
     if (!fitsLimit(timeline)) { setError('La exportación pasaría de 60 segundos.'); return; }
+    if (!premium && !logo) { setError(logoFailed ? 'No se pudo cargar la marca de agua: no se puede exportar sin ella.' : 'Cargando la marca de agua…'); return; }
     setNeedPremium(false); setGateMsg(null);
-    if (beforeExport) { if (!(await beforeExport())) return; }
-    else if (flags.exportGate) {
-      // `flags.exportGate` apagada = pruebas internas sin compuerta; encender `export` en producción exige encender también `exportGate`.
-      setBusy(true);
-      const g = await obtainExportPass(analysisKey(mediaId), gateDeps());
+    setBusy(true);                                  // bloquea el doble toque desde el primer instante, también durante el aviso y el anuncio
+    try {
+      if (beforeExport) { if (!(await beforeExport())) { setBusy(false); return; } }
+      else if (flags.exportGate) {
+        // `flags.exportGate` apagada = pruebas internas sin compuerta; encender `export` en producción exige encender también `exportGate`.
+        const g = await obtainExportPass(analysisKey(mediaId), gateDeps());
+        setGateUi(null);
+        if (!alive.current) return;                  // la hoja se cerró mientras esperaba
+        if (!g.ok) { setBusy(false); setNeedPremium(!!g.wantsPremium); return; }
+      }
+    } catch {
       setGateUi(null);
-      if (!g.ok) { setBusy(false); setNeedPremium(!!g.wantsPremium); return; }
-      setBusy(false);
+      if (alive.current) { setBusy(false); setError('No se pudo preparar la descarga. Inténtalo de nuevo.'); }
+      return;
     }
-    setBusy(true); setError(null); setProgress(0); setResult(null);
+    if (!alive.current) return;
+    setError(null); setProgress(0); setResult(null);
     abort.current = new AbortController();
     try {
       const res = await runExport({
@@ -168,8 +183,9 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
     } finally { setBusy(false); }
   };
 
-  useEffect(() => () => { abort.current?.abort(); }, []);
-  useEffect(() => () => { if (result) URL.revokeObjectURL(result.url); }, [result]);
+  // Al cerrar la hoja se cancela todo, también lo que aún espera al aviso o al anuncio (revisión F8), y se libera el archivo.
+  useEffect(() => { alive.current = true; return () => { alive.current = false; abort.current?.abort(); if (lastUrl.current) URL.revokeObjectURL(lastUrl.current); }; }, []);
+  useEffect(() => { if (result) lastUrl.current = result.url; return () => { if (result) URL.revokeObjectURL(result.url); }; }, [result]);
 
   const share = async () => {
     if (!result) return;
@@ -186,6 +202,8 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
         <button aria-label="Cerrar" onClick={onClose} className="p-1"><X className="w-5 h-5" /></button>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
+      {source && !timeline && !error && <Notice tone="error">Con las fases de este swing no se puede armar el video (revisa que el impacto esté dentro del video).</Notice>}
+      {useStore.getState().adsConsent === 'declined' && gateMsg && <button className="text-xs underline" onClick={() => { useStore.getState().setAdsConsent('unknown'); setGateMsg(null); }}>Volver a aceptar anuncios</button>}
       {url && <video ref={videoRef} src={url} muted playsInline preload="auto" style={{ position: 'fixed', left: -9999, top: 0, width: 160, height: 90 }} onLoadedMetadata={() => void drawPreview(pos)} />}
 
       {timeline && (
@@ -217,7 +235,7 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
           {gateMsg && <Notice>{gateMsg}</Notice>}
           {needPremium && <Notice>Con Premium exportas sin anuncios ni marca de agua. <Link to="/perfil" className="underline font-medium">Ir a Perfil</Link></Notice>}
           <div className="flex gap-2">
-            <Button full onClick={() => void start()} disabled={busy || !caps?.video}>{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {progress === 0 && !result ? 'Un momento…' : `Exportando… ${Math.round(progress * 100)}%`}</> : 'Exportar MP4'}</Button>
+            <Button full onClick={() => void start()} disabled={busy || !caps?.video || (!premium && !logo && !logoFailed)}>{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {progress === 0 && !result ? 'Un momento…' : `Exportando… ${Math.round(progress * 100)}%`}</> : 'Exportar MP4'}</Button>
             {busy && <Button variant="outline" onClick={() => abort.current?.abort()}>Cancelar</Button>}
           </div>
         </>

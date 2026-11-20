@@ -12,7 +12,7 @@ import type { MediaMs } from '../media/clock';
 import type { PoseTrack } from '../media/poseTrack';
 import { buildDrawList, paint } from '../overlay/draw';
 import { FLIGHT_LEGEND, FLIGHT_STYLES, type OverlayModel } from '../overlay/model';
-import { makeViewport, type Rect } from '../overlay/viewport';
+import { containRect, makeViewport, type Rect } from '../overlay/viewport';
 import type { SwingView } from '../swing';
 import { buildWarp, headUsesNose, reviewModelAt, type GuideSet, type PhaseTimes } from '../swingReview';
 import { sourceAt, type Timeline } from './timeline';
@@ -28,6 +28,8 @@ export interface ExportSource {
   id: string;
   /** Tamaño del cuadro MOSTRADO (rotación aplicada) en px. */
   w: number; h: number;
+  /** Duración del video fuente en ms: las plantillas no pasan de aquí (revisión F8). */
+  durationMs?: number;
   track: PoseTrack | null;
   times?: { address: MediaMs; top: MediaMs; impact: MediaMs; finish?: MediaMs };
   lefty: boolean;
@@ -163,7 +165,13 @@ export async function renderExportFrame(
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   for (const p of fm.panels) {
     const base = await getBase(p.sourceIndex, p.srcMs);
-    if (base) ctx.drawImage(base, p.rect.x * k, p.rect.y * k, p.rect.w * k, p.rect.h * k);
+    if (base) {
+      // Mismo letterbox que el overlay (`makeViewport`): un <video> crudo de otra proporción no se estira (revisión F8).
+      const bw = (base as { videoWidth?: number }).videoWidth || (base as { width?: number }).width || sources[p.sourceIndex].w;
+      const bh = (base as { videoHeight?: number }).videoHeight || (base as { height?: number }).height || sources[p.sourceIndex].h;
+      const d = containRect(bw, bh, { x: p.rect.x * k, y: p.rect.y * k, w: p.rect.w * k, h: p.rect.h * k });
+      ctx.drawImage(base, d.x, d.y, d.w, d.h);
+    }
     paintPanelOverlay(ctx, p, sources[p.sourceIndex], k, (c, ops) => paint(c, ops));
   }
   paintChrome(ctx, W, H, { ...chrome, title: TEMPLATE_TITLE[opt.template], label: fm.held ? fm.label : undefined });

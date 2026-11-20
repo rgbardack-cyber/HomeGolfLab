@@ -99,7 +99,8 @@ export const AD_UNAVAILABLE_TEXT = 'No hay anuncios disponibles en este momento.
 
 /** Intenta la exportación gratis diaria (D5); si ya se usó, termina con aviso. */
 function freeDailyOrBlock(s: GateState, c: GateContext, why: string): GateResult {
-  if (c.freeExportDate !== c.today) {
+  // Las fechas AAAA-MM-DD se ordenan como texto: si la última gratis es de HOY o de un día posterior (reloj movido hacia atrás), ya se usó.
+  if (c.freeExportDate === null || c.freeExportDate < c.today) {
     const pass = newPass(c, s.analysisId!, 'placeholder', '', `free-${c.today}`);
     pass.via = 'free_daily';
     return ok({ ...s, status: 'exporting', passId: pass.id, message: `${why} Tienes 1 exportación gratis al día sin anuncio: se usó la de hoy.` }, { grant: pass, useFreeDaily: true });

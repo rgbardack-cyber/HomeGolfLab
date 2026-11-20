@@ -85,3 +85,24 @@ describe('render de la exportación (F8.4)', () => {
     expect(l[0].dash).toBe(false);
   });
 });
+
+describe('la base se dibuja con el mismo letterbox que el overlay (revisión F8)', () => {
+  it('un video horizontal no se estira al panel vertical', async () => {
+    const { renderExportFrame } = await import('./render');
+    const calls: number[][] = [];
+    const ctx = new Proxy({} as Record<string, unknown>, {
+      get: (_t, k) => (k === 'drawImage' ? (_img: unknown, ...a: number[]) => { if (a.length === 4) calls.push(a); }
+        : k === 'measureText' ? () => ({ width: 100 }) : () => undefined),
+      set: () => true,
+    }) as unknown as CanvasRenderingContext2D;
+    const wide = { ...src('A'), w: 1920, h: 1080, track: null };
+    const tl2 = buildTimeline(swingSegments(times, ['A']));
+    const video = { videoWidth: 1920, videoHeight: 1080 } as unknown as CanvasImageSource;
+    await renderExportFrame(ctx, OUT_W, OUT_H, tl2, [wide], opt, 100, () => video, { watermark: false, logo: null, legend: [] });
+    const [x, y, w, h] = calls[0];
+    expect(w / h).toBeCloseTo(1920 / 1080, 3);                    // conserva la proporción
+    expect(w).toBeCloseTo(OUT_W, 3);                              // ocupa el ancho del panel
+    expect(y).toBeGreaterThan(0);                                 // con bandas arriba y abajo
+    expect(x).toBeCloseTo(0, 6);
+  });
+});

@@ -94,31 +94,37 @@ export interface SwingMarks { address: MediaMs; top: MediaMs; impact: MediaMs; f
 /** Cola tras el impacto cuando no hay fase "final" (ms de fuente a 1×). */
 export const DEFAULT_TAIL_MS = 1500;
 export const HOLD_MS = 1000;
+/** Menos de esto de cola tras el impacto no se muestra como tramo. */
+export const MIN_TAIL_MS = 100;
 
 /**
  * Plantilla swing / comparación: inicio (pausa 1 s) → subida 0,5× → pausa en el tope 1 s → bajada 0,25× → pausa en el impacto 1 s → final a 1×.
  * Con `sources` de dos clips es la plantilla de comparación (el reloj maestro es el primero).
  */
-export function swingSegments(m: SwingMarks, sources: string[]): Segment[] {
+export function swingSegments(m: SwingMarks, sources: string[], opts: { sourceEndMs?: MediaMs } = {}): Segment[] {
   if (!(m.address < m.top && m.top < m.impact && (m.finish === undefined || m.impact < m.finish))) throw new RangeError('las fases deben estar en orden');
-  const end = m.finish ?? m.impact + DEFAULT_TAIL_MS;
+  if (opts.sourceEndMs !== undefined && !(m.impact <= opts.sourceEndMs)) throw new RangeError('el impacto cae fuera del video');
+  // El final nunca pasa del fin del clip (revisión F8): si no hay cola que mostrar, la plantilla termina en la pausa del impacto.
+  const end = Math.min(m.finish ?? m.impact + DEFAULT_TAIL_MS, opts.sourceEndMs ?? Infinity);
+  const tail: Segment[] = end - m.impact >= MIN_TAIL_MS ? [{ kind: 'play', sources, fromMs: m.impact, toMs: end, speed: 1 }] : [];
   return [
     { kind: 'hold', sources, atMs: m.address, durMs: HOLD_MS, label: 'Inicio' },
     { kind: 'play', sources, fromMs: m.address, toMs: m.top, speed: 0.5 },
     { kind: 'hold', sources, atMs: m.top, durMs: HOLD_MS, label: 'Tope' },
     { kind: 'play', sources, fromMs: m.top, toMs: m.impact, speed: 0.25 },
     { kind: 'hold', sources, atMs: m.impact, durMs: HOLD_MS, label: 'Impacto' },
-    { kind: 'play', sources, fromMs: m.impact, toMs: end, speed: 1 },
+    ...tail,
   ];
 }
 
 /** Plantilla vuelo: golpe a 1× → 0,5× desde 0,2 s antes del impacto hasta el fin del trazo. */
-export function flightSegments(o: { source: string; startMs: MediaMs; impactMs: MediaMs; traceEndMs: MediaMs }): Segment[] {
+export function flightSegments(o: { source: string; startMs: MediaMs; impactMs: MediaMs; traceEndMs: MediaMs; sourceEndMs?: MediaMs }): Segment[] {
   const slowFrom = o.impactMs - 200;
-  if (!(o.startMs < slowFrom && slowFrom < o.traceEndMs)) throw new RangeError('el impacto debe quedar entre el inicio y el fin del trazo');
+  const traceEnd = Math.min(o.traceEndMs, o.sourceEndMs ?? Infinity);          // nunca más allá del fin del clip
+  if (!(o.startMs < slowFrom && slowFrom < traceEnd)) throw new RangeError('el impacto debe quedar entre el inicio y el fin del trazo');
   return [
     { kind: 'play', sources: [o.source], fromMs: o.startMs, toMs: slowFrom, speed: 1 },
-    { kind: 'play', sources: [o.source], fromMs: slowFrom, toMs: o.traceEndMs, speed: 0.5 },
+    { kind: 'play', sources: [o.source], fromMs: slowFrom, toMs: traceEnd, speed: 0.5 },
   ];
 }
 

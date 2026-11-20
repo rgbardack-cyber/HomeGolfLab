@@ -231,3 +231,14 @@ describe('compuerta de exportación (F9.1)', () => {
     expect(analysisKey('a')).toBe('a');
   });
 });
+
+describe('revisión F9', () => {
+  it('la exportación gratis diaria no se reabre si el reloj se mueve hacia atrás', () => {
+    const g = sim({ freeExportDate: '2026-11-21', today: '2026-11-20' });          // la última fue "mañana": el reloj retrocedió
+    g.send({ type: 'request', analysisId: 'a1' });
+    g.send({ type: 'ad_load_failed' });
+    g.send({ type: 'ad_load_failed' });
+    expect(g.state.status).toBe('ad_unavailable');
+    expect(g.ctx.passes).toHaveLength(0);
+  });
+});
