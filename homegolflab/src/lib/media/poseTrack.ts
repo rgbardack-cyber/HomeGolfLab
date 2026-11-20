@@ -1,4 +1,5 @@
 import type { MediaMs } from './clock';
+import type { Frame } from '../swing';
 
 /**
  * Pista de postura de la pasada fina (plan 4.4): n muestras de 33 landmarks × (x, y, visibilidad, presencia).
@@ -18,6 +19,22 @@ export interface PoseTrack {
 
 export const POSE_LANDMARKS = 33;
 export const POSE_STRIDE = 4;
+
+/**
+ * Convierte los cuadros de postura de la pasada fina en una pista binaria. `Frame.t` ya es el tiempo de medio (ms) del
+ * video. Los cuadros sin los 33 puntos se omiten. La presencia no se captura en la pasada actual (el modelo de `pose.ts`
+ * solo entrega la visibilidad en JS): el canal de presencia lleva la visibilidad, así que conf = visibilidad.
+ */
+export function framesToPoseTrack(frames: readonly Frame[], sourceId: string, hz: number): PoseTrack {
+  const ok = frames.filter((f) => f.lm.length === POSE_LANDMARKS).sort((a, b) => a.t - b.t);
+  const n = ok.length;
+  const t = new Float64Array(n), lm = new Float32Array(n * POSE_LANDMARKS * POSE_STRIDE);
+  ok.forEach((f, i) => {
+    t[i] = f.t;
+    f.lm.forEach((p, k) => { const o = (i * POSE_LANDMARKS + k) * POSE_STRIDE; lm[o] = p.x; lm[o + 1] = p.y; lm[o + 2] = p.v; lm[o + 3] = p.v; });
+  });
+  return { v: 1, sourceId, fromMs: n ? t[0] : 0, toMs: n ? t[n - 1] : 0, hz, t, lm };
+}
 
 /** Formato: uint32 LE con el largo del encabezado JSON · encabezado JSON · t (Float64 LE) · lm (Float32 LE). */
 export function encodePoseTrack(tr: PoseTrack): Blob {

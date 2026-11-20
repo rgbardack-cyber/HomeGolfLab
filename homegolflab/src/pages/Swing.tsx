@@ -5,6 +5,9 @@ import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
+import { useFlags } from '@/lib/flags';
+import { persistReview } from '@/lib/media/persistReview';
+import { getMediaStore } from '@/lib/media/store';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
@@ -560,6 +563,11 @@ function ClubPicker({ value, onChange }: { value: string | null; onChange: (c: s
 
 function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, sessions, addSession, currentClub, setCurrentClub } = useStore();
+  const flags = useFlags();
+  const fileRef = useRef<File | null>(null);
+  /** Ids del video y la pista guardados para la revisión (F3.1) y aviso si no se pudo guardar. */
+  const [saved, setSaved] = useState<{ sessionId: string; mediaId?: string; poseTrackId?: string } | null>(null);
+  const [mediaNotice, setMediaNotice] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -582,7 +590,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const pick = (f?: File) => {
     if (!f) return;
     setResult(null); setError(null); setProgress(0); setShots([]); setWarn(null); setTooLong(null);
-    setAnalyzed(false); savedRef.current = false;
+    setAnalyzed(false); savedRef.current = false; setSaved(null); setMediaNotice(null);
+    fileRef.current = f;
     setUrl(URL.createObjectURL(f));
   };
 
@@ -642,8 +651,19 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           } catch (e) { if (dbg) dbg.clubError = String(e); /* sin fotos ni palo */ }
         }
         setResult(r);
-        addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
+        const sess = addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
         savedRef.current = true; setAnalyzed(true);
+        // F3.1: con la revisión de video encendida se guarda el video y la pista de postura (sin cambiar el análisis).
+        if (flags.videoReview && fileRef.current) {
+          const file = fileRef.current, hz = frames === sampled.frames ? 30 : 10, durationMs = Math.round((v.duration || 0) * 1000);
+          setSaved({ sessionId: sess.id });
+          void getMediaStore().then((st) => persistReview(st, { file, frames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
+            if (!out.ok) { setMediaNotice('El análisis se guardó, pero ' + out.message.charAt(0).toLowerCase() + out.message.slice(1)); return; }
+            useStore.getState().attachMedia(sess.id, out.ids);
+            setSaved({ sessionId: sess.id, ...out.ids });
+            if (!out.persistent) setMediaNotice('En este navegador el video no se conservará al cerrar la pestaña (por ejemplo en modo privado).');
+          }).catch(() => setMediaNotice('El análisis se guardó, pero el video no se pudo guardar.'));
+        }
       }
     } catch (e) {
       setError('No se pudo analizar el video. ' + (e instanceof Error ? e.message : ''));
@@ -698,6 +718,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {warn && <Notice>{warn}</Notice>}
+      {mediaNotice && <Notice>{mediaNotice}</Notice>}
       {result?.viewMismatch && (
         <Notice tone="error">
           Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.

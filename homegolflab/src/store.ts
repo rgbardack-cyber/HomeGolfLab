@@ -53,6 +53,8 @@ interface State {
   shiftUnlock: () => void;
   /** Quita la sesión del historial. Quien llama borra sus medios (`deleteSessionMedia`); las medallas ya ganadas se conservan. */
   removeSession: (id: string) => Session | undefined;
+  /** Enlaza a una sesión los datos pesados guardados fuera de localStorage (ids). */
+  attachMedia: (sessionId: string, ids: Pick<Session, 'mediaId' | 'poseTrackId' | 'flightTrackId'>) => void;
   /** Olvida los ids de video/pose/vuelo de todas las sesiones (tras borrar los videos guardados). */
   clearMediaRefs: () => void;
   setSpace: (s: Space, scan?: ScanInfo | null) => void;
@@ -104,6 +106,7 @@ export const useStore = create<State>()(
         if (found) set({ sessions: get().sessions.filter((x) => x.id !== id) });
         return found;
       },
+      attachMedia: (sessionId, ids) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, ...ids } : x)) }),
       clearMediaRefs: () => set({
         sessions: get().sessions.map((x) => (x.mediaId || x.poseTrackId || x.flightTrackId ? { ...x, mediaId: undefined, poseTrackId: undefined, flightTrackId: undefined } : x)),
       }),
