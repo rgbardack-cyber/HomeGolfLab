@@ -54,6 +54,8 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
   const [uiT, setUiT] = useState(0);
   const [hidden, setHidden] = useState<string[]>([]);
   const [orderError, setOrderError] = useState(false);
+  /** Mientras la sonda de fps corre (≈1 s tras cargar) los controles quedan bloqueados: así nada compite con ella. */
+  const [probing, setProbing] = useState(false);
 
   const times = r.times;
   const marks = useMemo<PhaseMark[]>(() => (times ? phaseMarks(clock, times, manual, r.phaseConf) : []), [clock, times, manual, r.phaseConf]);
@@ -151,6 +153,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
     const v = videoRef.current;
     let c = clock;
     if (v && clock.fpsSource === 'estimated' && typeof v.requestVideoFrameCallback === 'function') {
+      setProbing(true);
       samples.current = [];
       v.playbackRate = 0.5;
       try { await v.play(); await new Promise((res) => setTimeout(res, 900)); } catch { /* sin reproducción automática: se deja la estimación */ }
@@ -158,6 +161,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
       const f = estimateFps(samples.current);
       if (f) { c = makeClock({ ...clock, fpsNominal: f, fpsSource: 'estimated' }); setClock(c); }
       samples.current = [];
+      setProbing(false);
     }
     if (times) seek(seekTimeForFrame(c, frameOf(c, times.address)));
   };
@@ -194,6 +198,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
       {!allowed && <Notice>Las guías no se muestran porque la vista elegida no coincide con la del video.</Notice>}
       {hidden.length > 0 && <p className="text-xs text-muted-foreground">Guía oculta: no se ve bien ({hidden.join(', ')}).</p>}
 
+      <fieldset disabled={probing} className="contents">
       <input type="range" aria-label="Posición del video" className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / clock.fpsNominal} value={Math.min(to, Math.max(from, uiT))}
         onChange={(e) => { pause(); setActive(null); seek(seekTimeForFrame(clock, frameOf(clock, +e.target.value))); }} />
 
@@ -245,6 +250,8 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
         <span className="text-muted-foreground">Cuadros por segundo:</span>
         {[30, 60].map((f) => <button key={f} className={chip(clock.fpsNominal === f && clock.fpsSource === 'user')} onClick={() => setClock(makeClock({ fpsNominal: f, fpsSource: 'user' }))}>{f}</button>)}
       </div>
+      </fieldset>
+      {probing && <p className="text-xs text-muted-foreground">Midiendo los cuadros por segundo…</p>}
       <p className="text-[11px] text-muted-foreground">Las guías son una referencia del seguimiento de postura, no un veredicto. Dónde se ve mal, se atenúan o se ocultan.</p>
     </div>
   );

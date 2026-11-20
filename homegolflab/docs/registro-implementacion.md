@@ -108,3 +108,10 @@ Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona 
 
 ### Incidente del flujo de trabajo
 - Un commit de F3.5 salió con 298 archivos "borrados" (`swingiq/`, `video-pitch/`, `.claude/`…) porque el índice de git quedó incompleto antes de confirmar (causa no determinada; el repo vive en iCloud Drive). Los archivos nunca salieron del disco. Se deshizo con `git reset --mixed HEAD~1` (commit local, sin push) y se rehízo con rutas explícitas (380 archivos en HEAD). **Desde aquí cada commit usa rutas explícitas y se revisa `git diff --cached --stat` antes de confirmar.** Los commits anteriores se comprobaron: 378 archivos en cada uno.
+
+### Revisión adversarial de F3 (3 lentes + verificador escéptico): 6 hallazgos, 4 confirmados y corregidos, 2 refutados
+- La sonda de fps competía con lo que el usuario tocara en el primer segundo (velocidad, fps, salto de cuadro): ahora los controles quedan bloqueados mientras mide ("Midiendo los cuadros por segundo…").
+- Carreras en `Swing.tsx` (elegir swing mientras aún se guardaba el video; "Cambiar video" durante un reanálisis; guardado viejo escribiendo sobre un video nuevo): `tokenRef` descarta resultados de trabajos viejos, las acciones se bloquean durante el reanálisis y las miniaturas esperan a que termine el guardado.
+- Orden de `chooseSwing`: primero se guarda la pista (reemplazo atómico) y solo después se cambia la sesión; si falla, se conserva el análisis anterior.
+- Refutados: `play()` sin manejar el rechazo (sin consecuencia concreta) y `hz` 10 con el respaldo grueso.
+- Reverificado en Chrome con `i7_stinger_sr_03` (mismo resultado que antes de las correcciones). Las carreras se corrigieron por lectura del código: **no se reprodujeron en el navegador** (ni antes ni después).

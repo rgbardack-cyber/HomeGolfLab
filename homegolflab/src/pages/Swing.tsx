@@ -623,6 +623,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, sessions, addSession, currentClub, setCurrentClub } = useStore();
   const flags = useFlags();
   const fileRef = useRef<File | null>(null);
+  /** Se incrementa al elegir otro video, al limpiar y al analizar: los resultados de trabajos viejos (guardado, reanálisis) se descartan. */
+  const tokenRef = useRef(0);
   /** Ids del video y la pista guardados para la revisión (F3.1) y aviso si no se pudo guardar. */
   const [saved, setSaved] = useState<{ sessionId: string; mediaId?: string; poseTrackId?: string } | null>(null);
   const [mediaNotice, setMediaNotice] = useState<string | null>(null);
@@ -652,6 +654,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const pick = (f?: File) => {
     if (!f) return;
     setResult(null); setError(null); setProgress(0); setShots([]); setWarn(null); setTooLong(null);
+    tokenRef.current++;
     setAnalyzed(false); savedRef.current = false; setSaved(null); setMediaNotice(null); setChoices([]);
     fileRef.current = f;
     setUrl(URL.createObjectURL(f));
@@ -662,6 +665,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     if (!v) return;
     // Defensa extra contra dobles toques y reanálisis gratis del mismo archivo (el botón ya viene deshabilitado).
     if (!profile.premium && savedRef.current) return;
+    const token = ++tokenRef.current;
     setBusy(true); setError(null); setResult(null); setShots([]); setWarn(null);
     // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts): en producción `dbg` es null y nada de esto entra al paquete.
     const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view }) : null;
@@ -739,6 +743,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           const file = fileRef.current, hz = frames === sampled.frames ? 30 : 10, durationMs = Math.round((v.duration || 0) * 1000);
           setSaved({ sessionId: sess.id });
           void getMediaStore().then((st) => persistReview(st, { file, frames: reviewFrames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
+            if (tokenRef.current !== token) return; // el usuario ya cambió de video o volvió a analizar
             if (!out.ok) { setMediaNotice('El análisis se guardó, pero ' + out.message.charAt(0).toLowerCase() + out.message.slice(1)); return; }
             useStore.getState().attachMedia(sess.id, out.ids);
             setSaved({ sessionId: sess.id, ...out.ids });
@@ -764,6 +769,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     if (!v || !ch || choosing || idx === chosen || !saved) return;
     setChoosing(true);
     setError(null);
+    const token = tokenRef.current;
+    const stale = () => tokenRef.current !== token;
     const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view, chosen: idx }) : null;
     try {
       const pose = await loadPose();
@@ -771,29 +778,34 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
       const { frames, sampled: n } = await sampleRange(v, pose, ch.w.from, Math.min(dur * 1000, ch.w.to));
       const r2 = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: n });
+      if (stale()) return;
       if (typeof r2 === 'string') {
         setError('No pude leer ese swing: ' + SWING_ERROR_TEXT[r2] + ' Se conserva el análisis anterior.');
         if (dbg) Object.assign(dbg, { errorText: SWING_ERROR_TEXT[r2], result: r2, done: true });
         return;
       }
       const rd = await addReviewData(v, pose, frames, r2, dur * 1000);
+      let newShots: Shot[] = [];
       try {
         const key = await captureKeyFrames(v, frames, r2);
-        setShots(key.shots);
+        newShots = key.shots;
         const start = frames.find((x) => x.t === r2.times?.address);
         if (start) r2.club = readClub(r2.view ?? 'frente', key.address, key.top, targetSide(start.lm, r2.lefty ?? profile.lefty)) ?? undefined;
-      } catch { setShots([]); }
+      } catch { newShots = []; }
+      // Primero la pista (reemplazo atómico): si falla, no se cambia nada y se conserva el análisis anterior.
+      if (saved.mediaId && saved.poseTrackId) {
+        const st = await getMediaStore();
+        await st.savePoseTrack(framesToPoseTrack(rd.frames, saved.mediaId, 30), saved.poseTrackId);
+      }
+      if (stale()) return;
+      setShots(newShots);
       setResult(r2);
       setChosen(idx);
       useStore.getState().replaceSessionSwing(saved.sessionId, r2);
-      if (saved.mediaId && saved.poseTrackId) {
-        const st = await getMediaStore();
-        await st.savePoseTrack(framesToPoseTrack(rd.frames, saved.mediaId, 30), saved.poseTrackId); // reemplazo atómico
-        setSaved({ ...saved }); // la revisión recarga la pista
-      }
+      if (saved.mediaId && saved.poseTrackId) setSaved({ ...saved }); // la revisión recarga la pista
       if (dbg) Object.assign(dbg, { result: r2, finish: rd.finish, done: true });
     } catch (e) {
-      setError('No se pudo analizar ese swing. ' + (e instanceof Error ? e.message : ''));
+      if (!stale()) setError('No se pudo analizar ese swing. ' + (e instanceof Error ? e.message : ''));
       if (dbg) Object.assign(dbg, { thrown: String(e), done: true });
     } finally {
       setChoosing(false);
@@ -828,10 +840,10 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url && !busy && <ClubPicker value={currentClub} onChange={setCurrentClub} />}
         {url && (
           <div className="flex gap-2">
-            <Button full onClick={analyze} disabled={busy || !quota.canAnalyze}>
+            <Button full onClick={analyze} disabled={busy || choosing || !quota.canAnalyze}>
               {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> Ya analizado</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
+            <Button variant="outline" disabled={busy || choosing} onClick={() => { tokenRef.current++; setSaved(null); setMediaNotice(null); setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
           </div>
         )}
         {!profile.premium && <p className="text-xs text-muted-foreground text-center">Gratis: {Math.max(0, FREE.swingUploadsPerDay - used)} de {FREE.swingUploadsPerDay} análisis disponibles hoy.</p>}
@@ -856,7 +868,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           <p className="text-xs text-muted-foreground">Analicé el último. Si el que querías es otro, tócalo: no cuenta como otro análisis.</p>
           <div className="grid grid-cols-3 gap-2">
             {choices.map((c, i) => (
-              <button key={c.w.index} disabled={choosing} onClick={() => void chooseSwing(i)} aria-pressed={i === chosen}
+              <button key={c.w.index} disabled={choosing || (!saved?.mediaId && !mediaNotice)} onClick={() => void chooseSwing(i)} aria-pressed={i === chosen}
                 className={`rounded-xl overflow-hidden border-2 text-left ${i === chosen ? 'border-primary' : 'border-border'} ${choosing ? 'opacity-60' : ''}`}>
                 {c.thumb ? <img src={c.thumb} alt={`Swing ${i + 1}`} className="w-full aspect-[3/4] object-cover bg-black" /> : <div className="w-full aspect-[3/4] bg-muted" />}
                 <span className="block text-[11px] px-1.5 py-1">Swing {i + 1} · {((c.w.from + 900) / 1000).toFixed(1).replace('.', ',')} s{i === chosen ? ' ✓' : ''}</span>
