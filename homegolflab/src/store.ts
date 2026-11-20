@@ -30,6 +30,8 @@ export interface Session extends SessionLite {
   distance?: DistanceResult;
   /** Sesión en vivo con grabación (F10.4): ids de los videos recortados de cada swing (±2 s). */
   liveClips?: string[];
+  /** F10.3: por cada recorte, si se oyó un golpe con bola (solo con el micrófono permitido). Nunca afirma que fue práctica. */
+  liveSound?: ('con_bola' | 'sin_sonido_de_golpe' | 'sin_audio')[];
   /** Fases ajustadas a mano en la revisión (ms de medio del archivo fuente); mandan sobre las automáticas. */
   reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }

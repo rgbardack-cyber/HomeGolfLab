@@ -7,6 +7,7 @@ import { drainLiveSwings } from '@/lib/liveSession';
 import { LiveSwingDetector } from '@/lib/live/detector';
 import { LiveRecorder, clipWindow } from '@/lib/live/recorder';
 import { cutClip } from '@/lib/live/cutClip';
+import { BALL_SOUND_LABEL, classifyClipSound, type BallSound } from '@/lib/live/ballSound';
 import { cameraProblem, FpsMonitor, queryCameraPermission, type CameraPermission } from '@/lib/live/camera';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
@@ -919,6 +920,9 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const segsRef = useRef<Promise<{ blob: Blob | null; marks: { from: number; to: number }[]; w: number; h: number }>[]>([]);
   const dimsRef = useRef({ w: 0, h: 0 });
   const [clipIds, setClipIds] = useState<string[]>([]);
+  const [clipSound, setClipSound] = useState<BallSound[]>([]);
+  /** F10.3: el micrófono es opcional y empieza apagado. */
+  const [useMic, setUseMic] = useState(false);
   useEffect(() => { void queryCameraPermission().then(setPerm); }, []);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [status, setStatus] = useState('Colócate de cuerpo entero frente a la cámara');
@@ -968,7 +972,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       const pose = await loadPose();
       // Con respaldo a CPU y corte tras 3 fallos seguidos (#20): el detector nunca deja la cámara congelada en silencio.
       const detector = createLiveDetector(pose);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: liveFlags.liveRecording && useMic });
       streamRef.current = stream;
       const v = videoRef.current!;
       v.srcObject = stream;
@@ -1045,6 +1049,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
     const payload = drainLiveSwings(swingsRef);
     const segs = segsRef.current; segsRef.current = [];
     let liveClips: string[] = [];
+    const liveSound: BallSound[] = [];
     if (payload && segs.length) {
       // F10.4: se cortan los swings (±2 s) de cada grabación, se guardan y la grabación completa se descarta.
       try {
@@ -1057,12 +1062,13 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
             if (!clip || !win) continue;
             const ref = await store.saveMedia(clip, { kind: 'source', mime: clip.type, durationMs: win.toMs - win.fromMs, w: sg.w, h: sg.h, rotation: 0, clock: makeClock({ fpsNominal: 30, fpsSource: 'estimated' }) });
             liveClips.push(ref.id);
+            if (useMic) liveSound.push(await classifyClipSound(clip, m.to - 500 - win.fromMs));       // el impacto visual cae ≈ 0,5 s antes del último cuadro del swing
           }
         }
       } catch { liveClips = []; }
     }
-    if (payload) addSession({ ...payload, ...(liveClips.length ? { liveClips } : {}) });
-    setClipIds(liveClips);
+    if (payload) addSession({ ...payload, ...(liveClips.length ? { liveClips } : {}), ...(liveSound.length ? { liveSound } : {}) });
+    setClipIds(liveClips); setClipSound(liveSound);
   };
 
   const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n, false); };
@@ -1078,6 +1084,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
             <Camera className="w-10 h-10 opacity-80" />
             <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente o desde atrás, y entra de cuerpo entero.</p>
+            {liveFlags.liveRecording && <label className="flex items-center gap-2 text-xs opacity-80"><input type="checkbox" checked={useMic} onChange={(e) => setUseMic(e.target.checked)} /> Usar el micrófono para distinguir golpes con bola (opcional)</label>}
             <p className="text-xs opacity-60" data-camera-permission>{perm === 'denied' ? 'La cámara está bloqueada: actívala en los ajustes del teléfono o del navegador.' : 'Uso la cámara para ver tu postura. La imagen se procesa en tu teléfono y no se envía ni se guarda.'}</p>
             <Button variant="gold" onClick={() => start()} disabled={loading}>
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando…</> : <><Video className="w-5 h-5" /> Iniciar análisis en vivo</>}
@@ -1119,7 +1126,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           <Button variant="outline" onClick={flip} aria-label="Cambiar cámara"><RefreshCw className="w-5 h-5" /></Button>
         </div>
       )}
-      {clipIds.length > 0 && !on && <LiveClips ids={clipIds} />}
+      {clipIds.length > 0 && !on && <LiveClips ids={clipIds} sound={clipSound} />}
       {!on && !interrupted && swings.length > 0 && (
         <>
           <Notice tone="ok">Sesión guardada con {swings.length} swing{swings.length > 1 ? 's' : ''}. Este fue el mejor:</Notice>
@@ -1131,7 +1138,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
 }
 
 /** Videos recortados de los swings de una sesión en vivo (F10.4). */
-function LiveClips({ ids }: { ids: string[] }) {
+function LiveClips({ ids, sound }: { ids: string[]; sound: BallSound[] }) {
   const [urls, setUrls] = useState<string[]>([]);
   useEffect(() => {
     let dead = false; const made: string[] = [];
@@ -1146,7 +1153,7 @@ function LiveClips({ ids }: { ids: string[] }) {
   return (
     <div className="space-y-2" data-live-clips>
       <p className="text-sm font-medium">Videos de tus swings</p>
-      <div className="grid grid-cols-2 gap-2">{urls.map((u, i) => <video key={u} src={u} controls playsInline muted className="w-full rounded-xl bg-black" aria-label={`Swing ${i + 1}`} />)}</div>
+      <div className="grid grid-cols-2 gap-2">{urls.map((u, i) => <div key={u}><video src={u} controls playsInline muted className="w-full rounded-xl bg-black" aria-label={`Swing ${i + 1}`} />{sound[i] && <p className="text-[11px] text-muted-foreground mt-0.5">{BALL_SOUND_LABEL[sound[i]]}</p>}</div>)}</div>
     </div>
   );
 }
