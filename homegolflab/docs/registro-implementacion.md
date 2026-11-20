@@ -115,3 +115,23 @@ Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona 
 - Orden de `chooseSwing`: primero se guarda la pista (reemplazo atómico) y solo después se cambia la sesión; si falla, se conserva el análisis anterior.
 - Refutados: `play()` sin manejar el rechazo (sin consecuencia concreta) y `hz` 10 con el respaldo grueso.
 - Reverificado en Chrome con `i7_stinger_sr_03` (mismo resultado que antes de las correcciones). Las carreras se corrigieron por lectura del código: **no se reprodujeron en el navegador** (ni antes ni después).
+
+## F4. Comparación de dos clips (19 nov 2026)
+
+| # | Estado | Verificación |
+|---|---|---|
+| 4.1 | hecho | `buildWarp` en `swingReview.ts`; 7 pruebas (alineación exacta, monotonía e inverso, pendiente 1 fuera de fases, fases comunes, orden inválido → null, tramo dudoso, ajuste manual). Mutar la interpolación hizo fallar 5. |
+| 4.2 | hecho | `lib/safeCrop.ts`; 5 pruebas (margen de 1,3 × torso, varilla, proporción del panel y contención, letterbox, confianza baja). Chrome: `i5_sr_t01` + `i5_sr_t02` (atrás) y `i7_sr_f01` + `i7_sr_t01` (frente + atrás): cuerpo entero y palo visibles en el tope en los 4 paneles (capturas `compare_*_top.png`). |
+| 4.3 | hecho | `CompareView` + `/comparar`. Chrome, fases Inicio/Tope/Impacto en ambas parejas: el cuadro mostrado de A y de B coincide con `frameOf` de su propia fase (diferencia 0 cuadros y 0,0 ms en los 12 casos, relojes de 60 fps medidos). El video cubre el panel. |
+| 4.4 | **bloqueada** | Depende de F8.3 (audio). Mientras tanto la insignia no afirma "mismo golpe". |
+
+### Adaptaciones y hallazgos
+- Primera pasada en Chrome mostró una franja negra: el preflight de Tailwind pone `max-width: 100%` a `<video>` y recortaba el ancho ampliado del recorte. Se fijó `maxWidth/maxHeight: none`; después el video cubre el panel (comprobado con `getBoundingClientRect`).
+- La sonda de fps de A dejó 30 fps en la primera corrida (B salió 60): la primera pasada no juntó pares suficientes. `probeClock` reintenta una vez con 1,6 s; luego ambos relojes salieron a 60.
+- Con B moviéndose por la fase de B directamente (`goPhase`), la alineación en pausa es exacta; en reproducción B sigue la pendiente del tramo y se corrige si se aleja > 40 ms.
+- No hay ajuste manual de fases dentro de la comparación: se ajustan en la revisión de cada swing (`reviewMarks`) y la comparación las usa.
+
+### No medido
+- **Reproducción continua sincronizada** (solo se midió en pausa sobre fases): la deriva de B durante el play no está medida.
+- Diestros, otros teléfonos y dispositivos reales; los clips son del mismo golpeador zurdo. "Mismo golpe" por audio (4.4).
+- Los clips de frente y de atrás de i7 son de golpes distintos: sirvieron para el recorte, no para una comparación significativa (el aviso de vista salió).

@@ -12,6 +12,7 @@ import HomeLab from '@/pages/HomeLab';
 import Tracking from '@/pages/Tracking';
 import Logros from '@/pages/Logros';
 import Perfil from '@/pages/Perfil';
+import Comparar from '@/pages/Comparar';
 
 const NAV = [
   { to: '/swing', label: 'Swing', icon: Activity },
@@ -91,6 +92,7 @@ export default function App() {
           <Route path="/tracking" element={<Tracking />} />
           <Route path="/logros" element={<Logros />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/comparar" element={<Comparar />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

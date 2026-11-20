@@ -180,3 +180,48 @@ export function guidesAllowed(resultView: SwingView | undefined, viewMismatch: S
   if (viewMismatch) return false;
   return userView === 'auto' || !resultView || userView === resultView;
 }
+
+/* ───────────────────────── Sincronía de dos clips (F4.1) ───────────────────────── */
+
+/** Fases con tiempo de medio, en el orden del swing. */
+export type PhaseTimes = Partial<Record<'address' | 'top' | 'impact' | 'finish', MediaMs>>;
+const WARP_ORDER = ['address', 'top', 'impact', 'finish'] as const;
+
+export interface Warp {
+  /** Instante del clip B que corresponde al instante `tA` del clip A (el reloj maestro es A). */
+  toB: (tA: MediaMs) => MediaMs;
+  /** Inverso: instante de A para un instante de B. */
+  toA: (tB: MediaMs) => MediaMs;
+  /** Fases usadas (comunes a los dos clips). */
+  keys: readonly (typeof WARP_ORDER)[number][];
+  /** Velocidad relativa de B respecto a A en cada tramo entre fases (B dura `rate`× lo de A... = ΔB/ΔA). */
+  rates: number[];
+}
+
+/**
+ * Deformación del tiempo por tramos lineales que alinea EXACTAMENTE las fases comunes de A y B (plan 4.4 de F4).
+ * - Solo se usan las fases presentes en ambos; con 1 fase es un desfase puro y con 0 devuelve null.
+ * - Antes de la primera y después de la última fase la pendiente es 1 (tiempo real, sin deformar).
+ * - Si las fases de alguno no están en orden estricto creciente devuelve null (no se puede sincronizar).
+ * Es estrictamente creciente y por eso invertible (monotonía).
+ */
+export function buildWarp(a: PhaseTimes, b: PhaseTimes): Warp | null {
+  const keys = WARP_ORDER.filter((k) => a[k] !== undefined && b[k] !== undefined);
+  if (!keys.length) return null;
+  const xa = keys.map((k) => a[k] as number), xb = keys.map((k) => b[k] as number);
+  for (let i = 1; i < keys.length; i++) if (!(xa[i] > xa[i - 1]) || !(xb[i] > xb[i - 1])) return null;
+  const rates = keys.slice(1).map((_, i) => (xb[i + 1] - xb[i]) / (xa[i + 1] - xa[i]));
+  const map = (x: number, from: number[], to: number[]): number => {
+    const n = from.length;
+    if (x <= from[0]) return to[0] + (x - from[0]);
+    if (x >= from[n - 1]) return to[n - 1] + (x - from[n - 1]);
+    let i = 0;
+    while (x > from[i + 1]) i++;
+    return to[i] + ((x - from[i]) * (to[i + 1] - to[i])) / (from[i + 1] - from[i]);
+  };
+  return { toB: (t) => map(t, xa, xb), toA: (t) => map(t, xb, xa), keys, rates };
+}
+
+/** Un tramo con velocidad relativa fuera de [1/2, 2] es una sincronía dudosa (otro tempo o una fase mal marcada). */
+export const WARP_RATE_LIMITS: readonly [number, number] = [0.5, 2];
+export const warpSuspicious = (w: Warp): boolean => w.rates.some((r) => r < WARP_RATE_LIMITS[0] || r > WARP_RATE_LIMITS[1]);

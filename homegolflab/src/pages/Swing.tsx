@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench, Sparkles } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
@@ -45,6 +45,7 @@ export default function Swing() {
         {flags.videoReview && saved.mediaId && (
           <VideoReview key={saved.mediaId} r={saved.swing} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} manual={saved.reviewMarks} onManual={(m) => setReviewMarks(saved.id, m)} />
         )}
+        {flags.compare && saved.mediaId && <Link to={`/comparar?a=${saved.id}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
         {flags.videoReview && !saved.mediaId && (
           <Notice>{saved.live ? 'Los análisis en vivo todavía no guardan el video, así que no hay revisión.' : 'Este análisis es anterior y no guardó el video. Se ve el resultado, sin revisión del movimiento.'}</Notice>
         )}
@@ -881,6 +882,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       {result && flags.videoReview && saved?.mediaId && (
         <VideoReview key={`${saved.mediaId}:${chosen}`} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
       )}
+      {result && flags.compare && saved?.mediaId && <Link to={`/comparar?a=${saved.sessionId}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>
   );

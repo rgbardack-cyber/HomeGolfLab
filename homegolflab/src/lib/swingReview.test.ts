@@ -154,3 +154,63 @@ describe('cabeza, intervalos y vista', () => {
     expect(buildDrawList(m, tr.t[3] + 10, makeViewport(1080, 1920, { x: 0, y: 0, w: 540, h: 960 })).length).toBeGreaterThan(10);
   });
 });
+
+import { buildWarp, warpSuspicious } from './swingReview';
+
+describe('sincronía de dos clips (F4.1)', () => {
+  const A = { address: 1000, top: 2000, impact: 2400, finish: 3500 };
+  const B = { address: 5000, top: 6500, impact: 6900, finish: 8000 };
+
+  it('alinea exactamente cada fase común', () => {
+    const w = buildWarp(A, B)!;
+    for (const k of ['address', 'top', 'impact', 'finish'] as const) {
+      expect(w.toB(A[k])).toBeCloseTo(B[k], 9);
+      expect(w.toA(B[k])).toBeCloseTo(A[k], 9);
+    }
+  });
+
+  it('es estrictamente creciente y toA es su inverso', () => {
+    const w = buildWarp(A, B)!;
+    let prev = -Infinity;
+    for (let t = -500; t <= 6000; t += 37) {
+      const y = w.toB(t);
+      expect(y).toBeGreaterThan(prev);
+      prev = y;
+      expect(w.toA(y)).toBeCloseTo(t, 6);
+    }
+  });
+
+  it('entre fases interpola por tramos y fuera de ellas conserva el tiempo real (pendiente 1)', () => {
+    const w = buildWarp(A, B)!;
+    expect(w.toB(1500)).toBeCloseTo(5750, 9);            // mitad del primer tramo
+    expect(w.toB(500)).toBeCloseTo(4500, 9);             // antes del inicio: pendiente 1
+    expect(w.toB(4000)).toBeCloseTo(8500, 9);            // después del final
+    expect(w.rates).toEqual([1.5, 1, 1]);
+  });
+
+  it('usa solo las fases comunes; con una sola es un desfase y sin ninguna no hay sincronía', () => {
+    const w = buildWarp({ address: 1000, top: 2000, impact: 2400 }, { top: 6500, impact: 6900, finish: 8000 })!;
+    expect(w.keys).toEqual(['top', 'impact']);
+    expect(w.toB(2000)).toBeCloseTo(6500, 9);
+    expect(w.toB(2200)).toBeCloseTo(6700, 9);
+    const one = buildWarp({ impact: 2400 }, { impact: 7000 })!;
+    expect(one.toB(2500)).toBeCloseTo(7100, 9);
+    expect(buildWarp({ address: 1 }, { top: 2 })).toBeNull();
+  });
+
+  it('con fases fuera de orden en cualquiera de los clips devuelve null', () => {
+    expect(buildWarp({ ...A, top: 900 }, B)).toBeNull();
+    expect(buildWarp(A, { ...B, impact: 6500 })).toBeNull();
+  });
+
+  it('avisa si un tramo cambia el ritmo más de 2× (sincronía dudosa)', () => {
+    expect(warpSuspicious(buildWarp(A, B)!)).toBe(false);
+    expect(warpSuspicious(buildWarp(A, { ...B, impact: 8000, finish: 9000 })!)).toBe(true); // tramo tope→impacto 1500/400
+  });
+
+  it('el ajuste manual de una fase de B reemplaza la automática y sigue alineando', () => {
+    const w = buildWarp(A, { ...B, ...{ top: 6600 } })!;
+    expect(w.toB(A.top)).toBeCloseTo(6600, 9);
+    expect(w.toB(A.impact)).toBeCloseTo(B.impact, 9);
+  });
+});
