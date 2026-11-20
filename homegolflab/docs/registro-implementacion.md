@@ -186,3 +186,4 @@ Refutados: neighborOk/índices, `frame_exit` por abajo, atenuación de `normaliz
 | # | Estado | Verificación |
 |---|---|---|
 | 8.1 | hecho | `mediabunny` 1.65.2 (ver `CLAUDE.md`). `lib/media/probe.ts`. Chrome: `i5_sr_t01.mp4` H.264+AAC 60 fps 1080×1920 (0,16 s); `IMG_2097.MOV` HEVC+AAC 60 fps (498 MB, 0,12 s). El plan decía "HEVC + APAC": el archivo trae AAC. |
+| 8.2 | hecho | `lib/export/timeline.ts` (segmentos, pausas, cámara lenta, `AudioCue`, plantillas swing/comparación/vuelo, `chooseFps`, tope de 60 s) + 12 pruebas: duración total de la plantilla swing (7,0 s), el impacto exportado cae al terminar la bajada lenta y el audio arranca 150 ms antes en el instante exacto, `sourceAt` monótono, rechazo de fases desordenadas. Dos mutaciones (velocidad en `exportTimeOfSource`, posición del audio) hacen fallar pruebas. |
