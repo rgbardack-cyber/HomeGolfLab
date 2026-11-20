@@ -28,6 +28,8 @@ export interface Session extends SessionLite {
   shapeManual?: ShotShape;
   /** Distancia del tiro: solo la que anotó el usuario («Medida por ti») o una estimación interna con intervalo. En metros. */
   distance?: DistanceResult;
+  /** Sesión en vivo con grabación (F10.4): ids de los videos recortados de cada swing (±2 s). */
+  liveClips?: string[];
   /** Fases ajustadas a mano en la revisión (ms de medio del archivo fuente); mandan sobre las automáticas. */
   reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }

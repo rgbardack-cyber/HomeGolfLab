@@ -5,6 +5,8 @@ import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
 import { LiveSwingDetector } from '@/lib/live/detector';
+import { LiveRecorder, clipWindow } from '@/lib/live/recorder';
+import { cutClip } from '@/lib/live/cutClip';
 import { cameraProblem, FpsMonitor, queryCameraPermission, type CameraPermission } from '@/lib/live/camera';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
@@ -14,6 +16,7 @@ import { findFinish, phaseConfidence } from '@/lib/phases';
 import { swingWindows, type SwingWindow } from '@/lib/swingWindows';
 import { framesToPoseTrack } from '@/lib/media/poseTrack';
 import { getMediaStore } from '@/lib/media/store';
+import { makeClock } from '@/lib/media/clock';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
@@ -909,6 +912,13 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   /** F10.6: aviso de que se bajó la resolución por rendimiento. */
   const [perfNote, setPerfNote] = useState<string | null>(null);
   const [perm, setPerm] = useState<CameraPermission>('unknown');
+  const liveFlags = useFlags();
+  /** F10.4: grabación de la sesión (solo con `flags.liveRecording`): cada tramo de cámara es una grabación con las marcas de sus swings. */
+  const recRef = useRef<LiveRecorder | null>(null);
+  const marksRef = useRef<{ from: number; to: number }[]>([]);
+  const segsRef = useRef<Promise<{ blob: Blob | null; marks: { from: number; to: number }[]; w: number; h: number }>[]>([]);
+  const dimsRef = useRef({ w: 0, h: 0 });
+  const [clipIds, setClipIds] = useState<string[]>([]);
   useEffect(() => { void queryCameraPermission().then(setPerm); }, []);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [status, setStatus] = useState('Colócate de cuerpo entero frente a la cámara');
@@ -922,7 +932,18 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
     if (c.view !== g.view || c.ok !== g.ok || c.show !== g.show) { guideRef.current = g; setGuide(g); }
   };
 
+  /** Cierra la grabación del tramo actual (sin esperar): su resultado queda en `segsRef` para cortar los swings al terminar. */
+  const closeRecording = () => {
+    const rec = recRef.current;
+    if (!rec) return;
+    recRef.current = null;
+    const marks = marksRef.current; marksRef.current = [];
+    const { w, h } = dimsRef.current;
+    segsRef.current.push(rec.stop().then((blob) => { rec.discard(); return { blob, marks, w, h }; }));
+  };
+
   const stop = () => {
+    closeRecording();
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -953,6 +974,10 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       v.srcObject = stream;
       await v.play();
       setOn(true);
+      if (liveFlags.liveRecording && typeof MediaRecorder !== 'undefined') {
+        const rec = new LiveRecorder({ create: (s, m) => new MediaRecorder(s, { mimeType: m }) as never, isSupported: (t) => MediaRecorder.isTypeSupported(t), now: () => performance.now() }, (e) => setPerfNote(e === 'warn' ? 'Llevas 12 minutos grabando: a los 15 se detiene la grabación.' : 'Se llegó a los 15 minutos: la grabación se detuvo (el análisis sigue).'));
+        if (rec.start(stream)) { recRef.current = rec; marksRef.current = []; dimsRef.current = { w: v.videoWidth, h: v.videoHeight }; }
+      }
 
       // La detección de cada swing (histéresis, bajada en tiempo real, separación de 3 s, rearme y bloqueo de identidad) vive en
       // `lib/live/detector.ts`, probada con cuadros sintéticos (F10.2).
@@ -997,6 +1022,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
           const res = analyzeSwing(r.swing, { lefty: profile.lefty, view: viewRef.current, aspect });
           if (typeof res !== 'string') {
+            if (recRef.current) marksRef.current.push({ from: recRef.current.markAt(r.swing[0].t), to: recRef.current.markAt(r.swing[r.swing.length - 1].t) });
             swingsRef.current = [res, ...swingsRef.current];
             setSwings(swingsRef.current);
             setStatus(`Swing ${swingsRef.current.length}: ${res.score}/100`);
@@ -1013,11 +1039,30 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
     }
   };
 
-  const finish = () => {
+  const finish = async () => {
     stop();
     // Idempotente: vacía la lista, así un doble toque no guarda dos veces (#18).
     const payload = drainLiveSwings(swingsRef);
-    if (payload) addSession(payload);
+    const segs = segsRef.current; segsRef.current = [];
+    let liveClips: string[] = [];
+    if (payload && segs.length) {
+      // F10.4: se cortan los swings (±2 s) de cada grabación, se guardan y la grabación completa se descarta.
+      try {
+        const store = await getMediaStore();
+        for (const sg of await Promise.all(segs)) {
+          if (!sg.blob) continue;
+          for (const m of sg.marks) {
+            const win = clipWindow(m.from, m.to, Infinity);
+            const clip = win && (await cutClip(sg.blob, win.fromMs, win.toMs));
+            if (!clip || !win) continue;
+            const ref = await store.saveMedia(clip, { kind: 'source', mime: clip.type, durationMs: win.toMs - win.fromMs, w: sg.w, h: sg.h, rotation: 0, clock: makeClock({ fpsNominal: 30, fpsSource: 'estimated' }) });
+            liveClips.push(ref.id);
+          }
+        }
+      } catch { liveClips = []; }
+    }
+    if (payload) addSession({ ...payload, ...(liveClips.length ? { liveClips } : {}) });
+    setClipIds(liveClips);
   };
 
   const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n, false); };
@@ -1074,12 +1119,34 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           <Button variant="outline" onClick={flip} aria-label="Cambiar cámara"><RefreshCw className="w-5 h-5" /></Button>
         </div>
       )}
+      {clipIds.length > 0 && !on && <LiveClips ids={clipIds} />}
       {!on && !interrupted && swings.length > 0 && (
         <>
           <Notice tone="ok">Sesión guardada con {swings.length} swing{swings.length > 1 ? 's' : ''}. Este fue el mejor:</Notice>
           <SwingResultView r={swings.reduce((a, b) => (b.score > a.score ? b : a))} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Videos recortados de los swings de una sesión en vivo (F10.4). */
+function LiveClips({ ids }: { ids: string[] }) {
+  const [urls, setUrls] = useState<string[]>([]);
+  useEffect(() => {
+    let dead = false; const made: string[] = [];
+    (async () => {
+      const st = await getMediaStore();
+      for (const id of ids) { try { const { blob } = await st.getMedia(id); made.push(URL.createObjectURL(blob)); } catch { /* ya no está */ } }
+      if (!dead) setUrls([...made]);
+    })();
+    return () => { dead = true; made.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [ids]);
+  if (!urls.length) return null;
+  return (
+    <div className="space-y-2" data-live-clips>
+      <p className="text-sm font-medium">Videos de tus swings</p>
+      <div className="grid grid-cols-2 gap-2">{urls.map((u, i) => <video key={u} src={u} controls playsInline muted className="w-full rounded-xl bg-black" aria-label={`Swing ${i + 1}`} />)}</div>
     </div>
   );
 }
