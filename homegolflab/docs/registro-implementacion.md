@@ -169,3 +169,20 @@ Refutados: neighborOk/índices, `frame_exit` por abajo, atenuación de `normaliz
 ### Lo medido / lo no medido de F5
 - **No medido**: precisión del seguimiento, falsos positivos, calibración de TODOS los umbrales [PROPUESTA] de 4.6 y de la continuación estimada (5.1 bloqueada: no hay posiciones marcadas a mano). 5.8 (bodyMask y compuerta de impacto) no se tocó: el plan la condiciona a esa referencia. 5.3/5.4 están como funciones puras sin conectar.
 - **Medido**: los umbrales en tiempo real (mismo tiro a 60 fps y a media velocidad, mismos puntos), el contrato y las reglas con trayectorias sintéticas, y el flujo en Chrome.
+
+## Decisiones de Ryan D1–D10 (recibidas el 20 nov 2026)
+- **D1** Anuncio de recompensa: "1 anuncio con recompensa"; no prometer "30 segundos" en ningún texto (cambia `AdGate.tsx`, `ads.ts` y los textos del tracking; altera el límite gratis → actualizar `BRAND.md` en el mismo commit).
+- **D2** Yardas por defecto para distancias de tiro, putts y espacios; Perfil permite metros; se guarda siempre en metros.
+- **D3** Un pase = un análisis + una configuración de exportación, 24 h. Cambiar las opciones de exportación (formato, esqueleto, guías, marca de agua, línea de tiro) dentro del mismo análisis y el mismo día NO pide pase nuevo; reintentos y reenvíos incluidos. (Esto relaja la regla del plan 9.1 de que cambiar la configuración pide otro anuncio: `specHash` pasa a ser solo del análisis.)
+- **D4** Comparación gratis; videos de un solo ángulo cada uno; `detectView` identifica frente/atrás y avisa si no coincide. Tres usos: (a) subir dos videos a la vez y verlos lado a lado (**hoy `CompareView` exige ambos analizados y guardados: falta la subida conjunta**), (b) analizar uno solo, (c) analizar dos por separado y comparar en `/comparar`. Exportar el comparado sigue D3/D5.
+- **D5** Consentimiento: lo da el usuario (términos y condiciones; formulario UMP de Google en UE/Reino Unido; ATT de Apple en iOS). Si rechaza o no hay anuncio: 1 exportación gratis al día sin anuncio, registrada localmente. Verificar contra la política vigente de AdMob antes de cerrar.
+- **D6** Launch monitor fuera de alcance: el ball tracking solo dibuja la trayectoria visible; sin distancia real, velocidad ni giro (7.4 cancelada).
+- **D7** WebCodecs primero; la prueba exige dispositivos reales (si no hay: "no medido"); NO empezar código nativo (Swift/Kotlin) hasta que falle en un dispositivo real.
+- **D8** iOS: solo permiso para AGREGAR a la galería (`NSPhotoLibraryAddUsageDescription`), sin leerla; nada de videos a servidores sin que el usuario lo pida; manifiesto de privacidad al día.
+- **D9** Los clips de validación los trae Ryan la próxima semana: lo que los necesita queda bloqueado (5.1 y las validaciones de F6/F7).
+- **D10** Marca de agua: logo oficial pequeño en exportaciones gratis; se quita en Premium.
+
+## F8. Exportación (en curso)
+| # | Estado | Verificación |
+|---|---|---|
+| 8.1 | hecho | `mediabunny` 1.65.2 (ver `CLAUDE.md`). `lib/media/probe.ts`. Chrome: `i5_sr_t01.mp4` H.264+AAC 60 fps 1080×1920 (0,16 s); `IMG_2097.MOV` HEVC+AAC 60 fps (498 MB, 0,12 s). El plan decía "HEVC + APAC": el archivo trae AAC. |
