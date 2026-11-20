@@ -10,6 +10,8 @@ export interface SessionLite {
   onLineStreak?: number;   // tracking: mejor racha de putts en línea
   consistency?: number;    // tracking: 0–100
   live?: boolean;
+  /** Seguimiento de UN tiro desde video (F5.7): no es una sesión de dispersión, no cuenta para tiros, rachas ni medallas de tracking. */
+  flightOnly?: boolean;
 }
 
 export type BadgeKind = 'cumplimiento' | 'merito';
@@ -37,7 +39,7 @@ export function computeStats(sessions: SessionLite[], todayISO: string): Stats {
   const swings = sessions.filter((s) => s.type === 'swing' && s.score != null).sort((a, b) => a.date.localeCompare(b.date));
   const avg = (a: SessionLite[]) => a.reduce((s, x) => s + (x.score ?? 0), 0) / a.length;
   const improved = swings.length >= 6 && avg(swings.slice(-3)) >= avg(swings.slice(0, 3)) + 5;
-  const tracking = sessions.filter((s) => s.type === 'tracking');
+  const tracking = sessions.filter((s) => s.type === 'tracking' && !s.flightOnly);
 
   return {
     total: sessions.length,

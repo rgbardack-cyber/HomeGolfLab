@@ -9,7 +9,7 @@ const TYPE_ICON = { swing: Activity, homelab: FlaskConical, tracking: Target } a
 
 function sessionValue(s: Session) {
   if (s.type === 'swing' && s.score != null) return `${s.score}/100`;
-  if (s.type === 'tracking') return `${s.shots ?? 0} tiros`;
+  if (s.type === 'tracking') return s.flightOnly ? 'Seguimiento de un tiro (video)' : `${s.shots ?? 0} tiros`;
   if (s.type === 'homelab') return `${s.minutes ?? 0} min`;
   return '';
 }
