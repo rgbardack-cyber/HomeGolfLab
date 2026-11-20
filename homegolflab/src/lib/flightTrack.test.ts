@@ -117,6 +117,18 @@ describe('descenso en la imagen (F5.5)', () => {
     expect(d.evidence.failed).toContain('pendiente posterior sin significancia');
   });
 
+  it('una bajada monótona sin subida previa (ápice en el índice 0) no se confirma', () => {
+    const fall = Array.from({ length: 24 }, (_, i): FlightPointV2 => ({ t: (i * 1000) / 60, frame: i, x: 0.3 + 0.004 * i, y: 0.3 + 0.01 * i + 0.0005 * i * i, conf: 0.8, source: 'detected' }));
+    const d = detectDescent(fall, dopt);
+    expect(d.state).toBe('not_confirmed');
+    expect(d.evidence.failed).toContain('sin subida previa al ápice');
+  });
+
+  it('el retroceso de x se mide en unidades de alto: el mismo salto cuenta más en un cuadro apaisado', () => {
+    const jump = (aspect: number) => detectDescent(parabola(46, { xOf: (s, i) => 0.3 + 0.2 * s - (i === 35 ? 0.006 : 0) }), { ...dopt, aspect });
+    expect(jump(16 / 9).evidence.maxXReversal).toBeGreaterThan(jump(1).evidence.maxXReversal);
+  });
+
   it('un clip a media velocidad (30 nominal, timeScale 0,5) cuenta como 60 reales', () => {
     const half = makeClock({ fpsNominal: 30, timeScale: 0.5 });
     const p = parabola(46).map((q) => ({ ...q, t: q.t * 2, frame: Math.round(q.frame) }));      // medio tiempo ×2: mismo tiro real
@@ -159,6 +171,10 @@ describe('continuación estimada (F5.5)', () => {
 
   it('con puntos que el modelo no ajusta (ruido grande) se abstiene', () => {
     expect(estimateContinuation(parabola(30, { ampNoise: 60 }), copt).state).toBe('abstained');
+  });
+
+  it('con una proporción de cuadro inválida (0 o NaN) se abstiene en vez de inventar puntos', () => {
+    for (const aspect of [0, NaN]) expect(estimateContinuation(parabola(30), { ...copt, aspect })).toMatchObject({ state: 'abstained', points: [] });
   });
 
   it('se detiene al salir del cuadro', () => {

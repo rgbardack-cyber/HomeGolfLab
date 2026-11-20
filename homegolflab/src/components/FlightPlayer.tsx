@@ -103,7 +103,7 @@ const STYLE_KIND: FlightKind[] = ['observed', 'descent', 'gap', 'estimated'];
 /** Leyenda con los estilos del compositor (misma fuente que el dibujo). Solo muestra los que aparecen en este tiro. */
 function FlightLegend({ track }: { track: FlightTrack }) {
   const present = new Set(flightLayer(track).segments.map((s) => s.kind));
-  const lost = track.endReason === 'lost' || track.endReason === 'frame_exit';
+  const lost = track.observed.length > 0 && (track.endReason === 'lost' || track.endReason === 'frame_exit');
   const rows = FLIGHT_LEGEND.filter((r) => (r.kind === 'lost' ? lost : present.has(r.kind as FlightKind)));
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground px-1" aria-label="Leyenda" data-flight-legend>

@@ -131,6 +131,7 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
   }, [A.data, B.data, ready.a, ready.b]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const seekBoth = (tAms: number) => {
+    tA.current = tAms;                       // el siguiente paso parte de aquí aunque el cuadro aún no se haya presentado
     if (vA.current) vA.current.currentTime = tAms / 1000;
     if (vB.current && warp) vB.current.currentTime = seekTimeForFrame(clockB, frameOf(clockB, warp.toB(tAms))) / 1000;
   };
@@ -147,10 +148,20 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
       drawPanel(a, A.data, cropA, cA.current, wA.current, tMs);
       if (warp && !v.paused) {
         // En reproducción B sigue el ritmo de su tramo y se corrige si se aleja más de 40 ms.
-        const i = Math.max(0, Math.min(warp.rates.length - 1, warp.keys.findIndex((k) => (times[k] as number) > tMs) - 1));
-        vb.playbackRate = Math.min(16, Math.max(0.0625, v.playbackRate * (warp.rates[i] ?? 1)));
-        if (Math.abs(vb.currentTime * 1000 - warp.toB(tMs)) > 40) vb.currentTime = warp.toB(tMs) / 1000;
-        if (vb.paused) void vb.play().catch(() => undefined);
+        // Fuera del rango de fases comunes la pendiente es 1 (contrato 4.5); dentro, la del tramo.
+        const first = times[warp.keys[0]] as number, lastK = times[warp.keys[warp.keys.length - 1]] as number;
+        let rate = 1;
+        if (tMs >= first && tMs < lastK) { let i = 0; while (i < warp.keys.length - 2 && (times[warp.keys[i + 1]] as number) <= tMs) i++; rate = warp.rates[i] ?? 1; }
+        vb.playbackRate = Math.min(16, Math.max(0.0625, v.playbackRate * rate));
+        const target = warp.toB(tMs), durB = B.data!.ref.durationMs;
+        if (target < 0 || target >= durB - 40) {
+          // B no tiene video en este instante (empieza después o termina antes): se queda quieto en su borde, no se reinicia.
+          if (!vb.paused) vb.pause();
+          vb.currentTime = Math.min(Math.max(0, target), Math.max(0, durB - 40)) / 1000;
+        } else {
+          if (Math.abs(vb.currentTime * 1000 - target) > 40) vb.currentTime = target / 1000;
+          if (vb.paused) void vb.play().catch(() => undefined);
+        }
       }
       const now = performance.now();
       if (now - lastUi.current > 90) { lastUi.current = now; setUiT(tMs); }
@@ -182,6 +193,7 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
     const ma = marksA.find((m) => m.key === k), mb = marksB.find((m) => m.key === k);
     if (!ma || !mb || !vA.current || !vB.current) return;
     pause(); setActive(k);
+    tA.current = ma.t;
     vA.current.currentTime = seekTimeForFrame(clockA, ma.frame) / 1000;
     vB.current.currentTime = seekTimeForFrame(clockB, mb.frame) / 1000;   // la fase de B tal cual, no una conversión: alineación exacta
   };
@@ -209,7 +221,7 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
       <div className="space-y-1" data-compare-panel={key}>
         <p className="text-xs font-medium truncate">{side.label}</p>
         <div ref={wref} className="relative w-full rounded-xl overflow-hidden bg-black" style={{ aspectRatio: `${PANEL_ASPECT}` }}>
-          {d && <video ref={vref} src={d.url} muted playsInline preload="auto" style={style} onLoadedMetadata={() => setReady((r) => ({ ...r, [key]: true }))} />}
+          {d && <video ref={vref} src={d.url} muted playsInline preload="auto" style={style} onLoadedMetadata={() => setReady((r) => ({ ...r, [key]: true }))} onEnded={key === 'a' ? pause : undefined} />}
           <canvas ref={cref} className="absolute inset-0 w-full h-full pointer-events-none" />
         </div>
       </div>

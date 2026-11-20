@@ -149,3 +149,23 @@ Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona 
 | 5.7 | hecho | ver `git log` | `lib/media/persistFlight.ts` (video + registro JSON del `FlightTrack`, sin dejar nada a medias si falla) + botón "Guardar este tiro". La sesión es `tracking` con `flightOnly`, que `computeStats` ignora: **no suma tiros, rachas ni la medalla "En la mira"** (la mutación de quitar ese filtro hace fallar la prueba). Chrome: 1 sesión `{flightOnly, mediaId, flightTrackId}`, medallas solo `first_session`, y en Inicio se lee "Seguimiento de un tiro (video)". |
 
 - Umbrales [PROPUESTA] sin calibrar: 0,6 % del alto, 3σ, t ≥ 3, RMS 1,5 %, modelo cuadrático 2D (el racional 2D del plan no se implementó). La confianza de un punto detectado es un valor FIJO (0,8): el motor no la mide todavía.
+
+### Resultados de los 4 clips frontales con toque marcado (F5.6, Chrome, 60 fps, `flightV2`)
+| Clip | Detectados | Bola liberada | Fin | Nota |
+|---|---|---|---|---|
+| `i6_sr_f01` | 4 | sí | perdida | tramo + hueco + "Última vez vista" |
+| `i4_sr_f01` | 17 | sí | perdida | "Bajada no confirmada"; guardado como sesión `flightOnly` |
+| `pw_sr_f01` | 0 | **no** | perdida | no se confirmó que la bola saliera de donde se tocó: no se dibuja trazo |
+| `i9_sr_f01` | 0 | **no** | perdida | igual |
+
+Esto NO es una medida de acierto: los toques son auto-anotados, no hay referencia de vuelo (5.1) y no se comprobó a ojo que la línea siga la bola. Solo muestra que el flujo funciona de punta a punta y que, cuando no hay evidencia, no dibuja. Se verificaron 4 de los 11 clips que pide el plan (los otros 7 no tienen toque marcado).
+
+### Revisión adversarial de F4 y F5 (3 revisores + escéptico por hallazgo: 13 hallazgos, 7 confirmados, 6 refutados)
+Corregidos: (1) `detectDescent` medía el retroceso de x en fracción del ancho y σ en fracción del alto (ahora `aspect`); (2) un ápice en el índice 0 confirmaba una bajada monótona sin subida (ahora exige ≥ 3 puntos de subida); (3) `estimateContinuation` con `aspect` 0/NaN devolvía puntos NaN (ahora se abstiene); (4) en la comparación, B usaba la velocidad del primer tramo fuera del rango de fases (debe ser 1); (5) B se reiniciaba desde el cuadro 0 si terminaba antes que A o si su instante era negativo (ahora queda quieto en su borde); (6) al terminar A, el botón seguía en "Pausa" y B seguía solo; (7) `step()` partía de un instante viejo si se pulsaba antes de presentarse el cuadro; (8) el botón "Guardado" quedaba pegado para un tiro nuevo y un guardado cancelado dejaba video y registro huérfanos. Pruebas nuevas para (1), (2) y (3), cada una con mutación que la hace fallar; (4)–(8) son de interfaz y **no se probaron en el navegador** (se corrigieron leyendo el código).
+Refutados: neighborOk/índices, `frame_exit` por abajo, atenuación de `normalizeLocalContrast` con bordes fuertes, y la sonda de fps compitiendo con la sincronía.
+- La sesión de verificación en Chrome se hizo con un segundo servidor sin watcher/HMR (el HMR se disparaba por archivos tocados en iCloud y borraba el estado del seguimiento); ese archivo de configuración era temporal y se borró.
+- **Incidente de git (2.ª vez)**: antes del commit de 5.6/5.7 el índice apareció vacío (todo "borrado" en staged). Se restauró con `git reset --mixed HEAD` (sin tocar archivos) y se confirmó HEAD intacto antes de commitear.
+
+### Lo medido / lo no medido de F5
+- **No medido**: precisión del seguimiento, falsos positivos, calibración de TODOS los umbrales [PROPUESTA] de 4.6 y de la continuación estimada (5.1 bloqueada: no hay posiciones marcadas a mano). 5.8 (bodyMask y compuerta de impacto) no se tocó: el plan la condiciona a esa referencia. 5.3/5.4 están como funciones puras sin conectar.
+- **Medido**: los umbrales en tiempo real (mismo tiro a 60 fps y a media velocidad, mismos puntos), el contrato y las reglas con trayectorias sintéticas, y el flujo en Chrome.

@@ -92,7 +92,9 @@ export interface DescentOptions {
   clock: Clock;
   /** Alto del cuadro analizado, en píxeles de análisis (para el mínimo de σ de 1,5 px). */
   analysisH: number;
-  /** Comprobación de vecinos (t−1, t+1) hecha sobre píxeles: false = la mancha NO pasó. Sin función, no se exige. */
+  /** Ancho ÷ alto del cuadro: el retroceso de x se mide en unidades de ALTO, como σ (revisión F5). 1 si no se da. */
+  aspect?: number;
+  /** Comprobación de vecinos (t−1, t+1) hecha sobre píxeles. El índice es el de `observed` (solo puntos detectados). false = la mancha NO pasó. Sin función, no se exige. */
   neighborOk?: (i: number) => boolean;
 }
 
@@ -109,7 +111,7 @@ export function detectDescent(observed: readonly FlightPointV2[], o: DescentOpti
   if (n < 8) return { state: 'insufficient', evidence: emptyEvidence(['menos de 8 puntos']), frame: 'image' };
   const t0 = observed[0].t;
   const ts = observed.map((p) => realDeltaMs(o.clock, t0, p.t) / 1000);   // segundos REALES
-  const ys = observed.map((p) => p.y), xs = observed.map((p) => p.x);
+  const ys = observed.map((p) => p.y), xs = observed.map((p) => p.x * (o.aspect && o.aspect > 0 ? o.aspect : 1));
   const sm = ys.map((_, i) => median3(ys, i));
   let a = -1, best = Infinity;
   for (let i = 0; i < n - 1; i++) if (sm[i] < best) { best = sm[i]; a = i; }
@@ -117,6 +119,7 @@ export function detectDescent(observed: readonly FlightPointV2[], o: DescentOpti
   const realFps = o.clock.fpsNominal / o.clock.timeScale;
   const need = realFps >= 50 ? 4 : 3;
   const after = observed.slice(a + 1);
+  if (a < 3) failed.push('sin subida previa al ápice');                    // un descenso exige haber visto antes la subida
   if (after.length < need) failed.push(`menos de ${need} puntos tras el ápice`);
   if (after.some((p) => p.conf < 0.6)) failed.push('puntos con confianza < 0,6');
   for (let i = a + 1; i < n; i++) if (observed[i].frame - observed[i - 1].frame > 2) { failed.push('hueco de más de 2 cuadros'); break; }
@@ -189,6 +192,7 @@ const abstain = (reason: string): FlightTrack['continuation'] => ({ state: 'abst
  */
 export function estimateContinuation(observed: readonly FlightPointV2[], o: ContinuationOptions): FlightTrack['continuation'] {
   if (!o.allowed) return abstain('sin validación para esta vista');
+  if (!(o.aspect > 0) || !Number.isFinite(o.aspect)) return abstain('proporción del cuadro inválida');
   const n = observed.length;
   if (n < 8) return abstain('menos de 8 puntos observados');
   const first = observed[0], last = observed[n - 1];
@@ -244,7 +248,7 @@ export function buildFlightTrack(res: TrackResult, o: BuildOptions): FlightTrack
   return {
     v: 2, sourceId: o.sourceId, clock: o.clock, tap: o.tap, observed,
     gaps: findGaps(observed), lastDistinguishable: lastDistinguishable(observed),
-    descent: detectDescent(observed, { clock: o.clock, analysisH: o.analysisH, neighborOk: o.neighborOk }),
+    descent: detectDescent(observed, { clock: o.clock, analysisH: o.analysisH, aspect: o.aspect, neighborOk: o.neighborOk }),
     continuation: estimateContinuation(observed, { clock: o.clock, aspect: o.aspect, clipEndMs: o.clipEndMs, allowed: o.allowEstimate }),
     released, endReason, engine: FLIGHT_ENGINE,
   };

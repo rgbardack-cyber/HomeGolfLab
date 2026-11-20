@@ -182,7 +182,7 @@ export default function VideoFlight() {
     const v = videoRef.current;
     if (!v || !meta || !tap || busy) return;
     const run = ++runRef.current;
-    setBusy(true); setError(null); setOut(null); setProgress(0);
+    setBusy(true); setError(null); setOut(null); setProgress(0); setSaveMsg(null);
     let tracker: BallTracker | null = null;
     let aspect = 1;
     // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts).
@@ -262,7 +262,11 @@ export default function VideoFlight() {
     setSaving(true); setSaveMsg(null);
     const run = runRef.current;
     const r = await persistFlight(await getMediaStore(), { file: f, video: { durationMs: meta.dur * 1000, w: meta.w, h: meta.h }, track: out.track });
-    if (runRef.current !== run) { setSaving(false); return; }
+    if (runRef.current !== run) {
+      // El usuario cambió de video o volvió a seguir mientras se guardaba: no se registra la sesión y se deshace lo guardado.
+      if (r.ok) { const st = await getMediaStore(); await st.deleteMedia(r.ids.mediaId).catch(() => undefined); await st.deleteRecord(r.ids.flightTrackId).catch(() => undefined); }
+      setSaving(false); return;
+    }
     if (r.ok) {
       useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId });
       setSaveMsg({ ok: true, text: r.persistent ? 'Tiro guardado en este dispositivo.' : 'Tiro guardado solo mientras la app esté abierta: este navegador no deja guardar videos.' });
@@ -339,7 +343,7 @@ export default function VideoFlight() {
                 : <Button variant="outline" onClick={reset} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>}
             </div>
             {(tap || out) && !busy && (
-              <Button variant="outline" full onClick={() => { setTap(null); setOut(null); setError(null); }}>Elegir otro punto</Button>
+              <Button variant="outline" full onClick={() => { setTap(null); setOut(null); setError(null); setSaveMsg(null); }}>Elegir otro punto</Button>
             )}
           </>
         )}
