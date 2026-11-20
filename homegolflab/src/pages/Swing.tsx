@@ -9,6 +9,8 @@ import { useFlags } from '@/lib/flags';
 import VideoReview from '@/components/VideoReview';
 import { persistReview } from '@/lib/media/persistReview';
 import { findFinish, phaseConfidence } from '@/lib/phases';
+import { swingWindows, type SwingWindow } from '@/lib/swingWindows';
+import { framesToPoseTrack } from '@/lib/media/poseTrack';
 import { getMediaStore } from '@/lib/media/store';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
@@ -447,16 +449,45 @@ async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof 
  * final. No entra en `analyzeSwing` (cambiar la ventana movería los índices de `findEvents`): inicio, tope e impacto
  * salen exactamente igual con o sin esto.
  */
-async function sampleExtra(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number): Promise<Frame[]> {
+async function sampleRange(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number): Promise<{ frames: Frame[]; sampled: number }> {
   let model = pose;
   const out: Frame[] = [];
+  let n = 0;
   for (let t = fromMs; t <= toMs; t += FINE * 1000) {
     await seek(v, t / 1000);
     const r = await detectResilient(model, v, v.currentTime * 1000);
     model = r.pose;
+    n++;
     if (r.frame) out.push(r.frame);
   }
-  return out;
+  return { frames: out, sampled: n };
+}
+const sampleExtra = async (v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number) => (await sampleRange(v, pose, fromMs, toMs)).frames;
+
+/** Miniatura (JPEG pequeño) del cuadro en `ms`, para el selector de swings. */
+async function thumbAt(v: HTMLVideoElement, ms: number): Promise<string | undefined> {
+  try {
+    await seek(v, ms / 1000);
+    const k = Math.min(1, 150 / v.videoWidth), c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+    c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.7);
+  } catch { return undefined; }
+}
+
+/**
+ * Final y confianza por fase de un resultado ya calculado (F3.4): muestrea un tramo extra tras el impacto, completa
+ * `r.times.finish` y `r.phaseConf` y devuelve los cuadros para la pista de la revisión. No cambia nada del análisis.
+ */
+async function addReviewData(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, frames: Frame[], r: SwingResult, durMs: number): Promise<{ frames: Frame[]; finish: ReturnType<typeof findFinish> }> {
+  if (!r.times) return { frames, finish: null };
+  const lastT = frames[frames.length - 1]?.t ?? r.times.impact;
+  const extra = await sampleExtra(v, pose, lastT + FINE * 1000, Math.min(durMs, r.times.impact + 2300));
+  const all = [...frames, ...extra];
+  const fin = findFinish(all, r.times.impact);
+  r.times = { ...r.times, ...(fin ? { finish: fin.t } : {}) };
+  r.phaseConf = { ...phaseConfidence(frames, r.times), ...(fin ? { finish: fin.conf } : {}) };
+  return { frames: all, finish: fin };
 }
 
 /** El cuadro actual del video, sin marcas y a hasta 1024 px por lado: es lo que ve el coach con IA. */
@@ -595,6 +626,10 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   /** Ids del video y la pista guardados para la revisión (F3.1) y aviso si no se pudo guardar. */
   const [saved, setSaved] = useState<{ sessionId: string; mediaId?: string; poseTrackId?: string } | null>(null);
   const [mediaNotice, setMediaNotice] = useState<string | null>(null);
+  /** Swings detectados en el video (F3.5), cuál está analizado y si se está reanalizando otro. */
+  const [choices, setChoices] = useState<{ w: SwingWindow; thumb?: string }[]>([]);
+  const [chosen, setChosen] = useState(0);
+  const [choosing, setChoosing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -617,7 +652,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const pick = (f?: File) => {
     if (!f) return;
     setResult(null); setError(null); setProgress(0); setShots([]); setWarn(null); setTooLong(null);
-    setAnalyzed(false); savedRef.current = false; setSaved(null); setMediaNotice(null);
+    setAnalyzed(false); savedRef.current = false; setSaved(null); setMediaNotice(null); setChoices([]);
     fileRef.current = f;
     setUrl(URL.createObjectURL(f));
   };
@@ -682,15 +717,20 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         let reviewFrames: Frame[] = frames;
         if (flags.videoReview && r.times) {
           try {
-            const lastT = frames[frames.length - 1]?.t ?? r.times.impact;
-            const extra = await sampleExtra(v, pose, lastT + FINE * 1000, Math.min(dur * 1000, r.times.impact + 2300));
-            reviewFrames = [...frames, ...extra];
-            const fin = findFinish(reviewFrames, r.times.impact);
-            const conf = phaseConfidence(frames, r.times);
-            r.times = { ...r.times, ...(fin ? { finish: fin.t } : {}) };
-            r.phaseConf = { ...conf, ...(fin ? { finish: fin.conf } : {}) };
-            if (dbg) Object.assign(dbg, { finish: fin, phaseConf: r.phaseConf, extraFrames: extra.length });
+            const rd = await addReviewData(v, pose, frames, r, dur * 1000);
+            reviewFrames = rd.frames;
+            if (dbg) Object.assign(dbg, { finish: rd.finish, phaseConf: r.phaseConf });
           } catch { /* sin final ni confianza: la revisión usa las tres fases como siempre */ }
+          // F3.5: si el video trae varios swings, se ofrece escoger cuál analizar (miniaturas del inicio de cada uno).
+          try {
+            const wins = sampled.coarse ? swingWindows(sampled.coarse.frames, { aspect }) : [];
+            if (wins.length > 1) {
+              const items = await Promise.all(wins.map(async (w) => ({ w, thumb: await thumbAt(v, w.from + 900) })));
+              setChoices(items);
+              setChosen(wins.length - 1);
+              if (dbg) dbg.windows = wins;
+            } else setChoices([]);
+          } catch { setChoices([]); }
         }
         const sess = addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
         savedRef.current = true; setAnalyzed(true);
@@ -712,6 +752,51 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
     } finally {
       setBusy(false);
       if (dbg) Object.assign(dbg, { done: true, ms: Math.round(performance.now() - (dbg.t0 as number)) });
+    }
+  };
+
+  /**
+   * Analiza OTRO swing del mismo video (F3.5, #10). No consume cuota: reemplaza el análisis de la misma sesión en vez de
+   * guardar otra. Si el otro swing no se puede leer, se conserva el anterior y se avisa.
+   */
+  const chooseSwing = async (idx: number) => {
+    const v = videoRef.current, ch = choices[idx];
+    if (!v || !ch || choosing || idx === chosen || !saved) return;
+    setChoosing(true);
+    setError(null);
+    const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view, chosen: idx }) : null;
+    try {
+      const pose = await loadPose();
+      const dur = Math.min(v.duration || 0, MAX_SECONDS);
+      const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+      const { frames, sampled: n } = await sampleRange(v, pose, ch.w.from, Math.min(dur * 1000, ch.w.to));
+      const r2 = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: n });
+      if (typeof r2 === 'string') {
+        setError('No pude leer ese swing: ' + SWING_ERROR_TEXT[r2] + ' Se conserva el análisis anterior.');
+        if (dbg) Object.assign(dbg, { errorText: SWING_ERROR_TEXT[r2], result: r2, done: true });
+        return;
+      }
+      const rd = await addReviewData(v, pose, frames, r2, dur * 1000);
+      try {
+        const key = await captureKeyFrames(v, frames, r2);
+        setShots(key.shots);
+        const start = frames.find((x) => x.t === r2.times?.address);
+        if (start) r2.club = readClub(r2.view ?? 'frente', key.address, key.top, targetSide(start.lm, r2.lefty ?? profile.lefty)) ?? undefined;
+      } catch { setShots([]); }
+      setResult(r2);
+      setChosen(idx);
+      useStore.getState().replaceSessionSwing(saved.sessionId, r2);
+      if (saved.mediaId && saved.poseTrackId) {
+        const st = await getMediaStore();
+        await st.savePoseTrack(framesToPoseTrack(rd.frames, saved.mediaId, 30), saved.poseTrackId); // reemplazo atómico
+        setSaved({ ...saved }); // la revisión recarga la pista
+      }
+      if (dbg) Object.assign(dbg, { result: r2, finish: rd.finish, done: true });
+    } catch (e) {
+      setError('No se pudo analizar ese swing. ' + (e instanceof Error ? e.message : ''));
+      if (dbg) Object.assign(dbg, { thrown: String(e), done: true });
+    } finally {
+      setChoosing(false);
     }
   };
 
@@ -746,7 +831,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
             <Button full onClick={analyze} disabled={busy || !quota.canAnalyze}>
               {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> Ya analizado</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
+            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
           </div>
         )}
         {!profile.premium && <p className="text-xs text-muted-foreground text-center">Gratis: {Math.max(0, FREE.swingUploadsPerDay - used)} de {FREE.swingUploadsPerDay} análisis disponibles hoy.</p>}
@@ -765,8 +850,24 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.
         </Notice>
       )}
+      {flags.videoReview && choices.length > 1 && result && (
+        <Card className="space-y-3">
+          <p className="text-sm font-medium" data-swing-chooser>Se vieron {choices.length} swings en el video</p>
+          <p className="text-xs text-muted-foreground">Analicé el último. Si el que querías es otro, tócalo: no cuenta como otro análisis.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {choices.map((c, i) => (
+              <button key={c.w.index} disabled={choosing} onClick={() => void chooseSwing(i)} aria-pressed={i === chosen}
+                className={`rounded-xl overflow-hidden border-2 text-left ${i === chosen ? 'border-primary' : 'border-border'} ${choosing ? 'opacity-60' : ''}`}>
+                {c.thumb ? <img src={c.thumb} alt={`Swing ${i + 1}`} className="w-full aspect-[3/4] object-cover bg-black" /> : <div className="w-full aspect-[3/4] bg-muted" />}
+                <span className="block text-[11px] px-1.5 py-1">Swing {i + 1} · {((c.w.from + 900) / 1000).toFixed(1).replace('.', ',')} s{i === chosen ? ' ✓' : ''}</span>
+              </button>
+            ))}
+          </div>
+          {choosing && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando el otro swing…</p>}
+        </Card>
+      )}
       {result && flags.videoReview && saved?.mediaId && (
-        <VideoReview key={saved.mediaId} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
+        <VideoReview key={`${saved.mediaId}:${chosen}`} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
       )}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>

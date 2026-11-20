@@ -58,6 +58,8 @@ interface State {
   /** Enlaza a una sesión los datos pesados guardados fuera de localStorage (ids). */
   attachMedia: (sessionId: string, ids: Pick<Session, 'mediaId' | 'poseTrackId' | 'flightTrackId'>) => void;
   setReviewMarks: (sessionId: string, marks: NonNullable<Session['reviewMarks']>) => void;
+  /** Cambia el swing analizado de una sesión (el usuario eligió otro del mismo video): NO cuenta como otro análisis. */
+  replaceSessionSwing: (sessionId: string, swing: SwingResult) => void;
   /** Olvida los ids de video/pose/vuelo de todas las sesiones (tras borrar los videos guardados). */
   clearMediaRefs: () => void;
   setSpace: (s: Space, scan?: ScanInfo | null) => void;
@@ -109,6 +111,7 @@ export const useStore = create<State>()(
         if (found) set({ sessions: get().sessions.filter((x) => x.id !== id) });
         return found;
       },
+      replaceSessionSwing: (sessionId, swing) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, swing, score: swing.score, tempoRatio: swing.metrics.tempoRatio, reviewMarks: undefined } : x)) }),
       setReviewMarks: (sessionId, marks) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, reviewMarks: marks } : x)) }),
       attachMedia: (sessionId, ids) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, ...ids } : x)) }),
       clearMediaRefs: () => set({
