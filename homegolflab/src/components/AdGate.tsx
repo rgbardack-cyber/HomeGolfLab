@@ -54,7 +54,7 @@ export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
 }
 
 /** Espacio publicitario de prueba para el navegador: cuenta atrás que no se puede saltar. */
-function PlaceholderAd({ n, total, onDone }: { n: number; total: number; onDone: () => void }) {
+export function PlaceholderAd({ n, total, onDone }: { n: number; total: number; onDone: () => void }) {
   const [left, setLeft] = useState<number>(PLACEHOLDER_SECONDS);
   useEffect(() => {
     if (left <= 0) { onDone(); return; }

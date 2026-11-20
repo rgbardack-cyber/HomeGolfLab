@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Loader2, Share2, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Crown, Download, Loader2, Share2, X } from 'lucide-react';
+import { adsAvailable, nativeAds, rewardedAds, type AdOutcome } from '@/lib/ads';
+import { obtainExportPass, type NoticeChoice, type RunnerDeps } from '@/lib/exportGateRunner';
+import { analysisKey } from '@/lib/exportGate';
+import { todayISO, useStore } from '@/store';
+import { useFlags } from '@/lib/flags';
+import { PlaceholderAd } from '@/components/AdGate';
 import { debugExport, type DebugBag } from '@/lib/debugHook';
 import { ExportError, exportCapabilities, runExport, type ExportResult } from '@/lib/export/encode';
 import { exportFileName, flightLegend, OUT_H, OUT_W, renderExportFrame, type ExportOptions, type ExportSource, type Template } from '@/lib/export/render';
@@ -19,7 +26,7 @@ interface Props {
   /** Premium: sin marca de agua (D10). */
   premium: boolean;
   onClose: () => void;
-  /** Compuerta de descarga (F9): debe resolver true para empezar a exportar. Sin ella, se exporta directo. */
+  /** Compuerta de descarga (F9) propia; por defecto se usa la compuerta de la app (anuncio, Premium o exportación gratis del día). */
   beforeExport?: () => Promise<boolean>;
 }
 
@@ -52,6 +59,11 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
   const [result, setResult] = useState<(ExportResult & { url: string; name: string }) | null>(null);
   const [caps, setCaps] = useState<{ video: boolean; audio: boolean } | null>(null);
   const [logo, setLogo] = useState<HTMLImageElement | null>(null);
+  const [gateUi, setGateUi] = useState<{ kind: 'notice'; resolve: (c: NoticeChoice) => void } | { kind: 'ad'; resolve: (o: AdOutcome) => void } | null>(null);
+  const [gateMsg, setGateMsg] = useState<string | null>(null);
+  const [needPremium, setNeedPremium] = useState(false);
+  const flags = useFlags();
+  const freeUsedToday = useStore((s) => s.freeExportDate === todayISO());
 
   const options: ExportOptions = useMemo(() => ({ template, guides, skeleton, watermark: !premium }), [template, guides, skeleton, premium]);
 
@@ -101,10 +113,43 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
   const total = timeline?.totalMs ?? 0;
   const estBytes = ((10_000_000 + (audio === 'impact' ? 160_000 : 0)) / 8) * (total / 1000);
 
+  // Precarga del anuncio al abrir la hoja (solo gratis y en la app nativa; caduca a la hora y se vuelve a pedir).
+  useEffect(() => { if (!premium && nativeAds()) void rewardedAds().preload(); }, [premium]);
+
+  /** Dependencias de la compuerta (F9): el almacenamiento del pase, el anuncio y el aviso previo. */
+  const gateDeps = useCallback((): RunnerDeps => ({
+    getCtx: () => { const s = useStore.getState(); return { now: Date.now(), premium: s.profile.premium, consent: s.adsConsent, passes: s.exportPasses, freeExportDate: s.freeExportDate, today: todayISO() }; },
+    apply: (e) => {
+      const s = useStore.getState();
+      if (e.grant) s.grantExportPass(e.grant.rewardEventId?.startsWith('placeholder-') ? { ...e.grant, via: 'placeholder' } : e.grant, Date.now());
+      if (e.useFreeDaily) s.markFreeExport(todayISO());
+      if (e.usePassId) s.touchExportPass(e.usePassId);
+    },
+    setConsent: (c) => useStore.getState().setAdsConsent(c),
+    askNotice: () => new Promise<NoticeChoice>((resolve) => setGateUi({ kind: 'notice', resolve })),
+    playAd: async () => {
+      if (nativeAds()) return rewardedAds().show();
+      if (!adsAvailable()) return { kind: 'load_failed' } as AdOutcome;
+      return new Promise<AdOutcome>((resolve) => setGateUi({ kind: 'ad', resolve }));   // anuncio de PRUEBA con cuenta atrás (9.4)
+    },
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+    adsAvailable,
+    onState: (st) => setGateMsg(st.message ?? null),
+  }), []);
+
   const start = async () => {
     if (!source || !blob || !timeline || busy) return;
     if (!fitsLimit(timeline)) { setError('La exportación pasaría de 60 segundos.'); return; }
-    if (beforeExport && !(await beforeExport())) return;
+    setNeedPremium(false); setGateMsg(null);
+    if (beforeExport) { if (!(await beforeExport())) return; }
+    else if (flags.exportGate) {
+      // `flags.exportGate` apagada = pruebas internas sin compuerta; encender `export` en producción exige encender también `exportGate`.
+      setBusy(true);
+      const g = await obtainExportPass(analysisKey(mediaId), gateDeps());
+      setGateUi(null);
+      if (!g.ok) { setBusy(false); setNeedPremium(!!g.wantsPremium); return; }
+      setBusy(false);
+    }
     setBusy(true); setError(null); setProgress(0); setResult(null);
     abort.current = new AbortController();
     try {
@@ -155,8 +200,24 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
           <p className="text-xs text-muted-foreground">Dura {(total / 1000).toFixed(1).replace('.', ',')} s a {fps} cuadros por segundo, 1080×1920. Pesará unos {fmtMB(estBytes)} MB. {premium ? '' : 'Lleva la marca de HomeGolfLab (Premium la quita).'}</p>
           {caps && !caps.video && <Notice tone="error">Este dispositivo no puede crear el video H.264 desde la app: no se podrá exportar aquí.</Notice>}
           {caps && caps.video && !caps.audio && audio === 'impact' && <Notice>Este dispositivo no puede codificar audio AAC: el video saldrá sin sonido.</Notice>}
+          {gateUi?.kind === 'notice' && (
+            <div className="rounded-xl border border-border p-3 space-y-2 text-sm" data-export-notice>
+              <p className="font-medium">Para descargar este video, mira 1 anuncio</p>
+              <p className="text-muted-foreground">Al terminarlo, la descarga de este análisis queda desbloqueada por 24 horas: puedes cambiar las opciones y volver a descargar sin otro anuncio. Al continuar aceptas ver anuncios en la versión gratuita. Premium los quita y también quita la marca de agua.</p>
+              <Button full onClick={() => { const r = gateUi.resolve; setGateUi(null); r('watch'); }}>Ver el anuncio</Button>
+              <div className="flex gap-2">
+                <Button variant="outline" full disabled={freeUsedToday} onClick={() => { const r = gateUi.resolve; setGateUi(null); r('decline'); }}>{freeUsedToday ? 'Hoy ya usaste la gratis' : 'Prefiero no ver anuncios'}</Button>
+                <Button variant="outline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('premium'); }} aria-label="Quitar anuncios con Premium"><Crown className="w-5 h-5" /></Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Si prefieres no verlos, tienes 1 exportación gratis al día sin anuncio.</p>
+              <button className="text-xs underline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('cancel'); }}>Ahora no</button>
+            </div>
+          )}
+          {gateUi?.kind === 'ad' && <PlaceholderAd n={1} total={1} onDone={() => { const r = gateUi.resolve; setGateUi(null); r({ kind: 'rewarded', rewardEventId: `placeholder-${Date.now()}` }); }} />}
+          {gateMsg && <Notice>{gateMsg}</Notice>}
+          {needPremium && <Notice>Con Premium exportas sin anuncios ni marca de agua. <Link to="/perfil" className="underline font-medium">Ir a Perfil</Link></Notice>}
           <div className="flex gap-2">
-            <Button full onClick={() => void start()} disabled={busy || !caps?.video}>{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Exportando… {Math.round(progress * 100)}%</> : 'Exportar MP4'}</Button>
+            <Button full onClick={() => void start()} disabled={busy || !caps?.video}>{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {progress === 0 && !result ? 'Un momento…' : `Exportando… ${Math.round(progress * 100)}%`}</> : 'Exportar MP4'}</Button>
             {busy && <Button variant="outline" onClick={() => abort.current?.abort()}>Cancelar</Button>}
           </div>
         </>
