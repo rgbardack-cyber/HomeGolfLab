@@ -5,6 +5,7 @@ import { FREE, swingUploadsToday, useStore } from '@/store';
 import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
 import { LiveSwingDetector } from '@/lib/live/detector';
+import { cameraProblem, FpsMonitor, queryCameraPermission, type CameraPermission } from '@/lib/live/camera';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
 import VideoReview from '@/components/VideoReview';
@@ -903,6 +904,12 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const [on, setOn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** F10.5: la cámara se detuvo porque la app pasó a segundo plano; los swings se conservan y se reanuda a mano. */
+  const [interrupted, setInterrupted] = useState(false);
+  /** F10.6: aviso de que se bajó la resolución por rendimiento. */
+  const [perfNote, setPerfNote] = useState<string | null>(null);
+  const [perm, setPerm] = useState<CameraPermission>('unknown');
+  useEffect(() => { void queryCameraPermission().then(setPerm); }, []);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [status, setStatus] = useState('Colócate de cuerpo entero frente a la cámara');
   const [swings, setSwings] = useState<SwingResult[]>([]);
@@ -923,9 +930,18 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   };
   useEffect(() => stop, []);
 
+  // F10.5: al salir de la app (visibilitychange/pagehide) se detiene la cámara de forma segura y se conserva lo ya detectado.
+  useEffect(() => {
+    const pause = () => { if (streamRef.current) { stop(); setInterrupted(true); } };
+    const onVis = () => { if (document.hidden) pause(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', pause);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pause); };
+  }, []);
+
   // `fresh`: sesión nueva (vacía los swings de la anterior). Al cambiar de cámara en plena sesión no se vacía.
   const start = async (face = facing, fresh = true) => {
-    setError(null); setLoading(true);
+    setError(null); setLoading(true); setInterrupted(false); setPerfNote(null);
     if (fresh) { swingsRef.current = []; setSwings([]); }
     try {
       const pose = await loadPose();
@@ -943,13 +959,21 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       const det = new LiveSwingDetector({ lefty: profile.lefty, view: () => viewRef.current, aspect: () => (v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1) });
 
       let busy = false;
+      const fps = new FpsMonitor();
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop);
         if (busy || v.readyState < 2) return;
         busy = true;
         const now = performance.now();
         detector(v, now)
-          .then((f) => { if (streamRef.current) step(f, now); })
+          .then((f) => {
+            if (!streamRef.current) return;
+            step(f, now);
+            // F10.6: si se procesan menos de 12 cuadros por segundo durante 5 s, se baja la entrada a 640×480 y se avisa.
+            if (fps.record(now) === 'lower') {
+              void stream.getVideoTracks()[0]?.applyConstraints({ width: { ideal: 640 }, height: { ideal: 480 } }).then(() => setPerfNote('Bajé la resolución de la cámara para que el análisis vaya fluido.')).catch(() => setPerfNote('Tu teléfono va lento: cierra otras apps para mejorar el análisis en vivo.'));
+            }
+          })
           .catch((e) => {
             stop();
             setError(e instanceof PoseFailure
@@ -981,9 +1005,8 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       };
       loop();
     } catch (e) {
-      setError(e instanceof DOMException && e.name === 'NotAllowedError'
-        ? 'Necesito permiso para usar la cámara. Actívalo en los ajustes del navegador o del teléfono.'
-        : 'No se pudo abrir la cámara. ' + (e instanceof Error ? e.message : ''));
+      const cp = cameraProblem(e);
+      setError(`${cp.title}. ${cp.detail}`);
       stop();
     } finally {
       setLoading(false);
@@ -1010,6 +1033,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
             <Camera className="w-10 h-10 opacity-80" />
             <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente o desde atrás, y entra de cuerpo entero.</p>
+            <p className="text-xs opacity-60" data-camera-permission>{perm === 'denied' ? 'La cámara está bloqueada: actívala en los ajustes del teléfono o del navegador.' : 'Uso la cámara para ver tu postura. La imagen se procesa en tu teléfono y no se envía ni se guarda.'}</p>
             <Button variant="gold" onClick={() => start()} disabled={loading}>
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando…</> : <><Video className="w-5 h-5" /> Iniciar análisis en vivo</>}
             </Button>
@@ -1034,13 +1058,23 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
         )}
       </div>
       {error && <Notice tone="error">{error}</Notice>}
+      {perfNote && <Notice>{perfNote}</Notice>}
+      {interrupted && (
+        <Notice>Pausé la cámara porque saliste de la app. {swings.length ? `Tus ${swings.length} swing${swings.length > 1 ? 's' : ''} siguen aquí: ` : ''}toca Reanudar para seguir o Terminar para guardar.</Notice>
+      )}
+      {interrupted && (
+        <div className="flex gap-2">
+          <Button full onClick={() => void start(facing, false)}><Video className="w-4 h-4" /> Reanudar</Button>
+          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
+        </div>
+      )}
       {on && (
         <div className="flex gap-2">
           <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
           <Button variant="outline" onClick={flip} aria-label="Cambiar cámara"><RefreshCw className="w-5 h-5" /></Button>
         </div>
       )}
-      {!on && swings.length > 0 && (
+      {!on && !interrupted && swings.length > 0 && (
         <>
           <Notice tone="ok">Sesión guardada con {swings.length} swing{swings.length > 1 ? 's' : ''}. Este fue el mejor:</Notice>
           <SwingResultView r={swings.reduce((a, b) => (b.score > a.score ? b : a))} />
