@@ -25,11 +25,11 @@ export interface Session extends SessionLite {
   reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }
 
-/** Pase de exportación (plan 4.8). La máquina de estados que lo emite llega con F9. */
+/** Pase de exportación (plan 4.8, F9; D3: vale para un análisis durante 24 h). Lo emite `lib/exportGate.ts`. */
 export interface ExportPass {
   id: string; analysisId: string; specHash: string;
   grantedAt: number; expiresAt: number;
-  via: 'premium' | 'reward' | 'placeholder';
+  via: 'premium' | 'reward' | 'placeholder' | 'free_daily';
   rewardEventId?: string; uses: number; consumed: boolean;
 }
 
@@ -47,6 +47,8 @@ interface State {
   trackingUsedSec: number;          // segundos de ball tracking usados desde el último desbloqueo
   currentClub: string | null;       // palo confirmado a mano; se asigna a los swings siguientes hasta que el usuario lo cambie
   exportPasses: ExportPass[];       // pases de exportación vigentes (F9); sobreviven al cierre de la app
+  freeExportDate: string | null;    // día (AAAA-MM-DD) de la última exportación gratis diaria sin anuncio (D5)
+  adsConsent: 'granted' | 'declined' | 'unknown'; // el usuario acepta o rechaza ver anuncios (D5)
 
   setMode: (m: Mode) => void;
   setCurrentClub: (c: string | null) => void;
@@ -66,6 +68,12 @@ interface State {
   addTrackingTime: (sec: number) => void;
   unlockTracking: () => void;
   setPlan: (p: Plan | null) => void;
+  /** F9: guarda un pase nuevo (y quita los vencidos). */
+  grantExportPass: (p: ExportPass, now: number) => void;
+  /** F9: cuenta un uso de un pase existente. */
+  touchExportPass: (id: string) => void;
+  markFreeExport: (day: string) => void;
+  setAdsConsent: (c: 'granted' | 'declined' | 'unknown') => void;
   reset: () => void;
 }
 
@@ -86,6 +94,8 @@ const initial = {
   trackingUsedSec: 0,
   currentClub: null as string | null,
   exportPasses: [] as ExportPass[],
+  freeExportDate: null as string | null,
+  adsConsent: 'unknown' as 'granted' | 'declined' | 'unknown',
 };
 
 export const useStore = create<State>()(
@@ -121,6 +131,10 @@ export const useStore = create<State>()(
       addTrackingTime: (sec) => set({ trackingUsedSec: get().trackingUsedSec + sec }),
       unlockTracking: () => set({ trackingUsedSec: 0 }),
       setPlan: (plan) => set({ plan }),
+      grantExportPass: (p, now) => set({ exportPasses: [...get().exportPasses.filter((x) => now < x.expiresAt && x.id !== p.id), p] }),
+      touchExportPass: (id) => set({ exportPasses: get().exportPasses.map((x) => (x.id === id ? { ...x, uses: x.uses + 1 } : x)) }),
+      markFreeExport: (day) => set({ freeExportDate: day }),
+      setAdsConsent: (adsConsent) => set({ adsConsent }),
       reset: () => set({ ...initial }),
     }),
     // version 1 (F2.1): agrega `exportPasses` y los ids de medios. `migrate` conserva todo lo que ya había guardado.
