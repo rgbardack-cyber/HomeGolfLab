@@ -6,6 +6,7 @@ import { uploadQuota } from '@/lib/quota';
 import { drainLiveSwings } from '@/lib/liveSession';
 import { debugSwing, type DebugBag } from '@/lib/debugHook';
 import { useFlags } from '@/lib/flags';
+import VideoReview from '@/components/VideoReview';
 import { persistReview } from '@/lib/media/persistReview';
 import { getMediaStore } from '@/lib/media/store';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
@@ -28,6 +29,8 @@ export default function Swing() {
   const [params, setParams] = useSearchParams();
   const verId = params.get('ver');
   const saved = useStore((s) => (verId ? s.sessions.find((x) => x.id === verId) : undefined));
+  const flags = useFlags();
+  const setReviewMarks = useStore((s) => s.setReviewMarks);
   if (saved?.swing) {
     return (
       <div className="space-y-5">
@@ -36,6 +39,12 @@ export default function Swing() {
           title="Análisis de swing"
           subtitle={`${new Date(saved.at).toLocaleDateString('es', { day: 'numeric', month: 'long' })} · ${saved.mode === 'casa' ? 'Casa' : 'Cancha'}${saved.live ? ' · en vivo' : ''}${saved.club ? ` · palo: ${saved.club}` : ''}`}
         />
+        {flags.videoReview && saved.mediaId && (
+          <VideoReview key={saved.mediaId} r={saved.swing} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} manual={saved.reviewMarks} onManual={(m) => setReviewMarks(saved.id, m)} />
+        )}
+        {flags.videoReview && !saved.mediaId && (
+          <Notice>{saved.live ? 'Los análisis en vivo todavía no guardan el video, así que no hay revisión.' : 'Este análisis es anterior y no guardó el video. Se ve el resultado, sin revisión del movimiento.'}</Notice>
+        )}
         <SwingResultView r={saved.swing} />
         <Button full variant="outline" onClick={() => setParams({})}><ArrowLeft className="w-5 h-5" /> Analizar otro swing</Button>
       </div>
@@ -723,6 +732,9 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         <Notice tone="error">
           Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.
         </Notice>
+      )}
+      {result && flags.videoReview && saved?.mediaId && (
+        <VideoReview key={saved.mediaId} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
       )}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>

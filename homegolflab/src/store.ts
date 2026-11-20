@@ -21,6 +21,8 @@ export interface Session extends SessionLite {
   mediaId?: string;           // video fuente de la revisión
   poseTrackId?: string;       // pista de postura de la pasada fina
   flightTrackId?: string;     // seguimiento de bola v2
+  /** Fases ajustadas a mano en la revisión (ms de medio del archivo fuente); mandan sobre las automáticas. */
+  reviewMarks?: Partial<Record<'address' | 'top' | 'impact', number>>;
 }
 
 /** Pase de exportación (plan 4.8). La máquina de estados que lo emite llega con F9. */
@@ -55,6 +57,7 @@ interface State {
   removeSession: (id: string) => Session | undefined;
   /** Enlaza a una sesión los datos pesados guardados fuera de localStorage (ids). */
   attachMedia: (sessionId: string, ids: Pick<Session, 'mediaId' | 'poseTrackId' | 'flightTrackId'>) => void;
+  setReviewMarks: (sessionId: string, marks: NonNullable<Session['reviewMarks']>) => void;
   /** Olvida los ids de video/pose/vuelo de todas las sesiones (tras borrar los videos guardados). */
   clearMediaRefs: () => void;
   setSpace: (s: Space, scan?: ScanInfo | null) => void;
@@ -106,6 +109,7 @@ export const useStore = create<State>()(
         if (found) set({ sessions: get().sessions.filter((x) => x.id !== id) });
         return found;
       },
+      setReviewMarks: (sessionId, marks) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, reviewMarks: marks } : x)) }),
       attachMedia: (sessionId, ids) => set({ sessions: get().sessions.map((x) => (x.id === sessionId ? { ...x, ...ids } : x)) }),
       clearMediaRefs: () => set({
         sessions: get().sessions.map((x) => (x.mediaId || x.poseTrackId || x.flightTrackId ? { ...x, mediaId: undefined, poseTrackId: undefined, flightTrackId: undefined } : x)),
