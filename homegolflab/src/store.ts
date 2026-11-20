@@ -7,6 +7,7 @@ import type { Shot } from '@/lib/tracking';
 import type { ScanInfo } from '@/lib/scan';
 import { migrateStore, STORE_VERSION } from '@/lib/storeMigrate';
 import type { ShotShape } from '@/lib/shotShape';
+import { asUnit, DEFAULT_UNIT, type DistUnit } from '@/lib/units';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -36,7 +37,8 @@ export interface ExportPass {
   rewardEventId?: string; uses: number; consumed: boolean;
 }
 
-export interface Profile { name: string; handicap: string; lefty: boolean; premium: boolean }
+/** `unit`: unidad de distancia al MOSTRAR (D2: yardas por defecto). Lo guardado va siempre en metros. */
+export interface Profile { name: string; handicap: string; lefty: boolean; premium: boolean; unit?: DistUnit }
 
 interface State {
   mode: Mode;
@@ -89,7 +91,7 @@ export const todayISO = () => {
 
 const initial = {
   mode: 'casa' as Mode,
-  profile: { name: '', handicap: '', lefty: false, premium: false },
+  profile: { name: '', handicap: '', lefty: false, premium: false, unit: DEFAULT_UNIT } as Profile,
   sessions: [] as Session[],
   earned: {} as Record<string, string>,
   unlockQueue: [] as string[],
@@ -155,3 +157,6 @@ export function swingUploadsToday(sessions: Session[]) {
   const t = todayISO();
   return sessions.filter((s) => s.type === 'swing' && !s.live && s.date === t).length;
 }
+
+/** Unidad de distancia elegida (yardas si nunca se eligió o el dato es viejo o inválido). */
+export const useUnit = (): DistUnit => useStore((s) => asUnit(s.profile.unit));

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Camera, Clock, Crosshair, Loader2, PencilLine, Plus, Save, Square, Target, Trash2, Video } from 'lucide-react';
-import { useStore } from '@/store';
+import { useStore, useUnit } from '@/store';
+import { fmtDist, fmtLateral, inputValue, parseToMeters, toMeters, UNIT_SHORT, type DistUnit } from '@/lib/units';
 import { fmtClock, isLocked, remainingSec } from '@/lib/ads';
 import AdGate from '@/components/AdGate';
 import VideoFlight from '@/components/VideoFlight';
@@ -12,6 +13,7 @@ type Tab = 'camera' | 'manual' | 'video';
 
 export default function Tracking() {
   const mode = useStore((s) => s.mode);
+  const unit = useUnit();
   const addSession = useStore((s) => s.addSession);
   const [tab, setTab] = useState<Tab>(mode === 'cancha' ? 'manual' : 'camera');
   const [shots, setShots] = useState<Shot[]>([]);
@@ -83,14 +85,14 @@ export default function Tracking() {
               <Stat label="Consistencia" value={shots.length < 2 ? '—' : d.consistency} unit={shots.length < 2 ? '' : '%'} tone={d.consistency >= 80 ? 'good' : d.consistency >= 60 ? 'warn' : undefined} />
             </div>
           )}
-          {shots.length >= 2 && <DispersionMap shots={shots} />}
+          {shots.length >= 2 && <DispersionMap shots={shots} unit={unit} />}
           <Card className="!p-0 divide-y divide-border">
             {[...shots].reverse().map((s, i) => (
               <div key={s.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                 <span className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{shots.length - i}</span>
                 <span className="flex-1 min-w-0">
                   <span className="font-medium">{s.club}</span>
-                  <span className="text-muted-foreground"> · {s.carryM} m · {fmtLat(s.lateralM)}</span>
+                  <span className="text-muted-foreground"> · {fmtDist(s.carryM, unit)} · {fmtLateral(s.lateralM, unit)}</span>
                   {s.source === 'camera' && <span className="block text-xs text-muted-foreground">{s.directionDeg}° · {s.speedMps} m/s · {s.onLine ? 'en línea ✓' : 'fuera de línea'}</span>}
                 </span>
                 <button aria-label="Borrar tiro" onClick={() => setShots((p) => p.filter((x) => x.id !== s.id))} className="p-2 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
@@ -104,11 +106,9 @@ export default function Tracking() {
   );
 }
 
-const fmtLat = (m: number) => (Math.abs(m) < 0.005 ? 'centro' : `${Math.abs(m) < 1 ? Math.round(Math.abs(m) * 100) + ' cm' : Math.abs(m).toFixed(1) + ' m'} ${m > 0 ? 'der.' : 'izq.'}`);
-
 /* ───────────────────────── Mapa de dispersión ───────────────────────── */
 
-function DispersionMap({ shots }: { shots: Shot[] }) {
+function DispersionMap({ shots, unit }: { shots: Shot[]; unit: DistUnit }) {
   const W = 320, H = 220, pad = 24;
   const maxLat = Math.max(0.1, ...shots.map((s) => Math.abs(s.lateralM))) * 1.25;
   const maxCar = Math.max(0.5, ...shots.map((s) => s.carryM)) * 1.1;
@@ -121,8 +121,8 @@ function DispersionMap({ shots }: { shots: Shot[] }) {
         <line x1={W / 2} y1={pad / 2} x2={W / 2} y2={H - pad / 2} stroke="var(--color-primary)" strokeDasharray="4 4" strokeWidth="1" />
         <circle cx={W / 2} cy={H - pad} r="4" fill="var(--color-foreground)" />
         {shots.map((s) => <circle key={s.id} cx={x(s.lateralM)} cy={y(s.carryM)} r="6" fill={s.source === 'camera' ? 'var(--color-accent)' : 'var(--color-primary)'} stroke="#fff" strokeWidth="1.5" />)}
-        <text x={pad / 2} y={H - 6} fontSize="10" fill="var(--color-muted-foreground)">← izq. {maxLat.toFixed(1)} m</text>
-        <text x={W - pad / 2} y={H - 6} fontSize="10" textAnchor="end" fill="var(--color-muted-foreground)">der. {maxLat.toFixed(1)} m →</text>
+        <text x={pad / 2} y={H - 6} fontSize="10" fill="var(--color-muted-foreground)">← izq. {fmtDist(maxLat, unit)}</text>
+        <text x={W - pad / 2} y={H - 6} fontSize="10" textAnchor="end" fill="var(--color-muted-foreground)">der. {fmtDist(maxLat, unit)} →</text>
       </svg>
     </Card>
   );
@@ -131,11 +131,13 @@ function DispersionMap({ shots }: { shots: Shot[] }) {
 /* ───────────────────────── Registro manual ───────────────────────── */
 
 function ManualEntry({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void }) {
+  const unit = useUnit();
   const [club, setClub] = useState('Hierro 7');
   const [carry, setCarry] = useState('');
   const [lat, setLat] = useState('0');
   const [side, setSide] = useState<1 | -1>(1);
-  const c = parseFloat(carry), l = parseFloat(lat) || 0;
+  // Lo que se escribe va en la unidad elegida y se guarda en METROS (D2).
+  const c = parseFloat(carry.replace(',', '.')), l = parseFloat(lat.replace(',', '.')) || 0;
   const input = 'mt-1 w-full h-11 rounded-xl border border-border bg-card px-3';
   return (
     <Card className="space-y-4">
@@ -144,10 +146,10 @@ function ManualEntry({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void 
         <label className="block col-span-2"><span className="text-xs text-muted-foreground">Palo</span>
           <select value={club} onChange={(e) => setClub(e.target.value)} className={input}>{CLUBS.map((x) => <option key={x}>{x}</option>)}</select>
         </label>
-        <label className="block"><span className="text-xs text-muted-foreground">Distancia (m)</span>
+        <label className="block"><span className="text-xs text-muted-foreground">Distancia ({UNIT_SHORT[unit]})</span>
           <input type="number" inputMode="decimal" min="0" value={carry} onChange={(e) => setCarry(e.target.value)} placeholder="135" className={input} />
         </label>
-        <label className="block"><span className="text-xs text-muted-foreground">Desvío lateral (m)</span>
+        <label className="block"><span className="text-xs text-muted-foreground">Desvío lateral ({UNIT_SHORT[unit]})</span>
           <input type="number" inputMode="decimal" min="0" value={lat} onChange={(e) => setLat(e.target.value)} className={input} />
         </label>
       </div>
@@ -155,7 +157,7 @@ function ManualEntry({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void 
         <button onClick={() => setSide(-1)} className={`h-11 rounded-xl border text-sm font-medium ${side === -1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>← Izquierda</button>
         <button onClick={() => setSide(1)} className={`h-11 rounded-xl border text-sm font-medium ${side === 1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>Derecha →</button>
       </div>
-      <Button full disabled={!(c > 0)} onClick={() => { onShot({ source: 'manual', club, carryM: c, lateralM: Math.abs(l) * side }); setCarry(''); setLat('0'); }}>
+      <Button full disabled={!(c > 0)} onClick={() => { onShot({ source: 'manual', club, carryM: toMeters(c, unit), lateralM: toMeters(Math.abs(l), unit) * side }); setCarry(''); setLat('0'); }}>
         <Plus className="w-5 h-5" /> Agregar tiro
       </Button>
     </Card>
@@ -168,6 +170,7 @@ type Step = 'off' | 'ball' | 'target' | 'ready' | 'armed' | 'tracking';
 const PW = 240; // ancho de la imagen de análisis
 
 function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void }) {
+  const unit = useUnit();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef(0);
@@ -176,7 +179,7 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
   const [aspect, setAspect] = useState(16 / 9);
   const [ball, setBall] = useState<P2 | null>(null);
   const [target, setTarget] = useState<P2 | null>(null);
-  const [dist, setDist] = useState('2');
+  const [dist, setDist] = useState(() => inputValue(2, unit));      // distancia a la bola en la unidad elegida (por defecto el equivalente a 2 m)
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -184,7 +187,7 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
   const geo = useRef<{ ball: P2 | null; target: P2 | null; dist: number }>({ ball: null, target: null, dist: 2 });
 
   const setStep = (s: Step) => { stepRef.current = s; setStepState(s); };
-  useEffect(() => { geo.current = { ball, target, dist: parseFloat(dist) || 0 }; }, [ball, target, dist]);
+  useEffect(() => { geo.current = { ball, target, dist: parseToMeters(dist, unit) ?? 0 }; }, [ball, target, dist, unit]);   // el cálculo sigue en metros
 
   const stop = () => {
     cancelAnimationFrame(rafRef.current);
@@ -301,10 +304,10 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
           <label className="flex items-center gap-3">
             <span className="text-sm flex-1">Distancia real de la bola al objetivo</span>
             <input type="number" inputMode="decimal" step="0.1" min="0.3" value={dist} onChange={(e) => setDist(e.target.value)} className="w-20 h-10 rounded-xl border border-border px-2 text-center" />
-            <span className="text-sm text-muted-foreground">m</span>
+            <span className="text-sm text-muted-foreground">{UNIT_SHORT[unit]}</span>
           </label>
           <div className="flex gap-2">
-            <Button full variant={step === 'armed' || step === 'tracking' ? 'gold' : 'primary'} disabled={!(ball && target && parseFloat(dist) > 0) || step === 'armed' || step === 'tracking'} onClick={() => { setTrail([]); setMsg(null); setStep('armed'); }}>
+            <Button full variant={step === 'armed' || step === 'tracking' ? 'gold' : 'primary'} disabled={!(ball && target && (parseToMeters(dist, unit) ?? 0) > 0) || step === 'armed' || step === 'tracking'} onClick={() => { setTrail([]); setMsg(null); setStep('armed'); }}>
               <Crosshair className="w-5 h-5" /> {step === 'armed' ? 'Esperando el putt…' : step === 'tracking' ? 'Midiendo…' : 'Armar'}
             </Button>
             <Button variant="outline" onClick={() => { setBall(null); setTarget(null); setTrail([]); setStep('ball'); }}>Marcar de nuevo</Button>
