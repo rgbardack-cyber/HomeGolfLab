@@ -20,7 +20,7 @@ export default function Tracking() {
   const add = (s: Omit<Shot, 'id' | 'at'>) => { setSaved(false); setShots((p) => [...p, { ...s, id: crypto.randomUUID(), at: new Date().toISOString() }]); };
   const d = dispersion(shots);
 
-  // Gratis: 15 minutos de uso y luego 2 anuncios para abrir otros 15. Premium: sin límite ni anuncios.
+  // Gratis: 15 minutos de uso y luego 1 anuncio con recompensa para abrir otros 15 (D1). Premium: sin límite ni anuncios.
   const premium = useStore((s) => s.profile.premium);
   const usedSec = useStore((s) => s.trackingUsedSec);
   const addTrackingTime = useStore((s) => s.addTrackingTime);
@@ -50,7 +50,7 @@ export default function Tracking() {
       {!premium && !locked && (
         <div className="flex items-center gap-2 text-xs bg-muted rounded-xl px-3 py-2">
           <Clock className="w-4 h-4 text-primary shrink-0" />
-          <span className="flex-1">Tiempo gratis: <span className="font-bold tabular-nums">{fmtClock(remainingSec(usedSec))}</span>. Después, 2 anuncios para seguir.</span>
+          <span className="flex-1">Tiempo gratis: <span className="font-bold tabular-nums">{fmtClock(remainingSec(usedSec))}</span>. Después, 1 anuncio para seguir.</span>
           <Link to="/perfil" className="font-semibold text-primary shrink-0">Sin anuncios</Link>
         </div>
       )}

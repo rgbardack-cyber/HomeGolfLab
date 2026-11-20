@@ -80,7 +80,7 @@ Las skills `homegolflab-swing-qa-harness` (flujo real en Chrome, métricas con W
 El repo vive en iCloud Drive, y iCloud a veces renombra un archivo recién editado a `nombre 2.ext` y borra el original (pasó con `lib.test.ts` el 16 nov 2026). Si `git status` muestra un archivo borrado junto a un `… 2.…` sin seguimiento, es eso: devolverle el nombre.
 
 ## Monetización (decidido el 10 nov 2026)
-- **Ball tracking es la función para todos**: gratis por bloques de 15 minutos de uso; al agotarse, el usuario ve 2 anuncios de 30 s para abrir otros 15 (`src/lib/ads.ts`, `src/components/AdGate.tsx`). Premium: sin anuncios ni límite.
+- **Ball tracking es la función para todos**: gratis por bloques de 15 minutos de uso; al agotarse, el usuario ve 1 anuncio con recompensa para abrir otros 15 (D1, 20 nov 2026: antes eran 2 de 30 s; no se promete ninguna duración) (`src/lib/ads.ts` —`RewardedAds`, el controlador con todos los eventos del plugin, caducidad de 1 h y bloqueo de reentrada—, `src/components/AdGate.tsx`). Premium: sin anuncios ni límite.
 - En la app nativa los anuncios son de AdMob con recompensa (`@capacitor-community/admob`). Por defecto usa los identificadores de PRUEBA de Google; los reales van en `VITE_ADMOB_REWARDED_ANDROID` / `VITE_ADMOB_REWARDED_IOS`. En el navegador se muestra un espacio publicitario de prueba.
 - Falta para publicar: cuenta de AdMob y su App ID en AndroidManifest / Info.plist al añadir las plataformas; compras dentro de la app para Premium (hoy es un interruptor de prueba).
 

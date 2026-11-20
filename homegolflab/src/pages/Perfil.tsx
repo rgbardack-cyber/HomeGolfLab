@@ -9,7 +9,7 @@ import StorageCard from '@/components/StorageCard';
 import FlagsPanel from '@/components/FlagsPanel';
 
 const PREMIUM = ['Ball tracking sin anuncios ni pausas', 'Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
-const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tracking: 15 min y luego 2 anuncios para seguir', 'Medallas y niveles'];
+const FREE_LIST = ['1 análisis de video por día', 'HomeLAB completo', 'Ball tracking: 15 min y luego 1 anuncio para seguir', 'Medallas y niveles'];
 
 export default function Perfil() {
   const { profile, setProfile, reset, sessions } = useStore();

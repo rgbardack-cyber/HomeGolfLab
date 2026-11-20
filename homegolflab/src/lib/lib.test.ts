@@ -332,7 +332,8 @@ import { scanToSpace, type ScanResult } from './scan';
 
 describe('anuncios del tracking', () => {
   it('gratis: 15 minutos y luego bloqueo; premium nunca', () => {
-    expect(AD_RULES).toMatchObject({ freeSeconds: 900, adsToUnlock: 2, adSeconds: 30 });
+    expect(AD_RULES).toMatchObject({ freeSeconds: 900, adsToUnlock: 1 });
+    expect(JSON.stringify(AD_RULES)).not.toMatch(/Seconds.*30|adSeconds/);          // D1: no se promete ninguna duración de anuncio
     expect(isLocked(899, false)).toBe(false);
     expect(isLocked(900, false)).toBe(true);
     expect(isLocked(5000, true)).toBe(false);
