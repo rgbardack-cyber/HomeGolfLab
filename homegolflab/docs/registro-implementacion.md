@@ -135,3 +135,12 @@ Refutados (no son defectos hoy): guardado ilegible → `{}` (zustand lo fusiona 
 - **Reproducción continua sincronizada** (solo se midió en pausa sobre fases): la deriva de B durante el play no está medida.
 - Diestros, otros teléfonos y dispositivos reales; los clips son del mismo golpeador zurdo. "Mismo golpe" por audio (4.4).
 - Los clips de frente y de atrás de i7 son de golpes distintos: sirvieron para el recorte, no para una comparación significativa (el aviso de vista salió).
+
+## F5. Ball tracking v2 (19 nov 2026)
+
+| # | Estado | Commit | Verificación |
+|---|---|---|---|
+| 5.1 | **bloqueada** | — | Faltan las posiciones de la bola marcadas a mano: en `pruebas/ball_shots.json` los toques de `i5_sr_t02`, `i6_sr_t06`, `i4_sr_t03` e `i7_stinger_sr_01/02/03` son `null`, y no existe `pruebas/ground_truth/flight/`. Sin esa referencia, todas las métricas de F5 son **no medido**. |
+| 5.5 | hecho | ver `git log` | `lib/flightTrack.ts` (contrato `FlightTrack` v2, `findGaps`, `lastDistinguishable`, `detectDescent`, `estimateContinuation`, `buildFlightTrack`, `flightLayer`); 25 pruebas con trayectorias sintéticas: descenso claro ⇒ confirmed, ruido y subida sola ⇒ not_confirmed, < 8 puntos ⇒ insufficient y sin continuación. Mutaciones: quitar pendiente, caída mínima, x, mínimo de puntos a 60 fps, RMS o el tope de 1,0 s hacen fallar una prueba cada una. **La regla de curvatura positiva no tiene prueba que la muerda** (en datos con ápice mínimo la curvatura casi siempre es positiva); queda como salvaguarda. |
+
+- Umbrales [PROPUESTA] sin calibrar: 0,6 % del alto, 3σ, t ≥ 3, RMS 1,5 %, modelo cuadrático 2D (el racional 2D del plan no se implementó). La confianza de un punto detectado es un valor FIJO (0,8): el motor no la mide todavía.
