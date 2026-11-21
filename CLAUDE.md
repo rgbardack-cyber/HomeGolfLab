@@ -5,9 +5,9 @@ Este repositorio contiene la app y todo lo necesario para promocionarla. Dueño:
 ## Mapa
 
 - `homegolflab/` — la app vigente (React + Vite + Capacitor). Sus reglas, decisiones y comandos están en `homegolflab/CLAUDE.md`; leerlo antes de tocar código.
-- `swingiq/` — prototipo anterior y copia de la app de Base44. Solo referencia: no se edita.
+- `swingiq/` — prototipo anterior y copia de la app de Base44. Solo referencia: no se edita. **Ya no está en este repo público**: vive en el repo privado `HomeGolfLab-backup` y en el disco local.
 - `brand-kit/` — logos, capturas y guía de marca.
-- `marketing/` — perfil de marca, guía de lanzamiento, contratos de trabajo y fuentes de plataforma.
+- `marketing/` — perfil de marca, guía de lanzamiento, contratos de trabajo y fuentes de plataforma. **Ya no está en este repo público**: vive en el repo privado `HomeGolfLab-backup` y en el disco local (`.gitignore`). Los cambios a `marketing/BRAND.md` se suben a ese respaldo.
 - `.claude/skills/` — ocho skills `homegolflab-*` para promocionar la app.
 - `.claude/agents/` — ocho agentes `hgl-*` que usan esas skills.
 
