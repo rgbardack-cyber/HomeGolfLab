@@ -11,7 +11,7 @@ name: Publicar en GitHub Pages
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feat/video-review-export]
 
 permissions:
   contents: read
@@ -42,6 +42,15 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # VERSIÓN DE PRUEBA para demostraciones (20 nov 2026): panel de funciones de prueba visible y encendido lo que ya se verificó.
+          # Siguen apagadas: flightEstimate, shotShapeAuto y distanceEstimate (sin validar). Para una versión pública, quitar estas líneas.
+          VITE_INTERNAL: '1'
+          VITE_FLAG_VIDEO_REVIEW: '1'
+          VITE_FLAG_COMPARE: '1'
+          VITE_FLAG_FLIGHT_V2: '1'
+          VITE_FLAG_EXPORT: '1'
+          VITE_FLAG_EXPORT_GATE: '1'
+          VITE_FLAG_LIVE_RECORDING: '1'
       # Pages sirve 404.html en rutas desconocidas: así un enlace directo (/HomeGolfLab/swing) carga la app.
       - run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5
