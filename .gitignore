@@ -6,3 +6,7 @@ dist
 *.lnk
 homegolflab-base44-export.json
 .claude/launch.json
+# Material interno que NO va en el repo público (20 nov 2026): vive en el repo privado HomeGolfLab-backup.
+# Se conserva en el disco local; la copia completa y su historial están en el respaldo privado.
+swingiq/
+marketing/

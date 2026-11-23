@@ -11,7 +11,7 @@ name: Publicar en GitHub Pages
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, feat/video-review-export]
 
 permissions:
   contents: read
@@ -42,6 +42,8 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Versión pública (R2, 23 nov 2026): sin VITE_INTERNAL ni VITE_FLAG_*, todas las banderas quedan apagadas.
+          # Para una demostración, agregarlas de nuevo en una rama aparte, nunca en la que publica.
       # Pages sirve 404.html en rutas desconocidas: así un enlace directo (/HomeGolfLab/swing) carga la app.
       - run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5

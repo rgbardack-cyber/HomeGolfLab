@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Crosshair, Loader2, RefreshCw, Upload } from 'lucide-react';
-import { analysisSize, BallTracker, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
+import { debugBall, type DebugBag } from '@/lib/debugHook';
+import { analysisSize, BallTracker, flightStatCards, framesIdentical, summarizeFlight, toGray, type FlightSummary, type Gray, type TrackResult } from '@/lib/ballflight';
 import type { P2 } from '@/lib/tracking';
 import { seekVideo } from '@/lib/videoSeek';
+import { useFlags } from '@/lib/flags';
+import { buildFlightTrack, type FlightTrack } from '@/lib/flightTrack';
+import { makeClock } from '@/lib/media/clock';
+import FlightPlayer from '@/components/FlightPlayer';
+import { persistFlight } from '@/lib/media/persistFlight';
+import { getMediaStore } from '@/lib/media/store';
+import { useStore, useUnit } from '@/store';
+import { MANUAL_SHAPES, SHAPE_LABEL, type ShotShape } from '@/lib/shotShape';
+import { distanceView, KIND_LABEL, manualDistance, type DistanceKind, type DistanceResult } from '@/lib/distance';
+import { inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
 import { Button, Card, Notice, Segmented, Stat } from '@/components/ui';
 
 /**
@@ -22,7 +33,7 @@ const GREEN = '#6dcf8e', GOLD = '#e8c04a';
 type Fps = '30' | '60';
 
 interface Meta { w: number; h: number; dur: number }
-interface Outcome { res: TrackResult; summary: FlightSummary }
+interface Outcome { res: TrackResult; summary: FlightSummary; track?: FlightTrack; w?: number; h?: number }
 
 /** Salta a `sec` y espera 'seeked' (espera más si el equipo está cargado; falla si el video se cuelga o da error). */
 const seekTo = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS);
@@ -30,12 +41,14 @@ const seekTo = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS);
 const fmtS = (s: number) => s.toFixed(1).replace('.', ',');
 
 export default function VideoFlight() {
+  const flags = useFlags();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const baseRef = useRef<HTMLCanvasElement | null>(null);   // el cuadro de inicio, sin dibujos
   const runRef = useRef(0);                                  // invalida un análisis en curso
   const seekBusy = useRef(false);
   const pendingT = useRef<number | null>(null);
+  const fileRef = useRef<File | null>(null);
 
   const [url, setUrl] = useState<string | null>(null);
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -47,6 +60,15 @@ export default function VideoFlight() {
   const [error, setError] = useState<string | null>(null);
   const [out, setOut] = useState<Outcome | null>(null);
   const [frameTick, setFrameTick] = useState(0);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  /** F6.1: «Etiqueta tuya». La elige el usuario; nunca se presenta como detectada. */
+  const [shape, setShape] = useState<ShotShape | null>(null);
+  const savedId = useRef<string | null>(null);
+  /** F7.2: la distancia, solo la que escribe el usuario. */
+  const unit = useUnit();
+  const [distance, setDistance] = useState<DistanceResult | null>(null);
+  const [distEdit, setDistEdit] = useState<{ text: string; kind: DistanceKind } | null>(null);
 
   useEffect(() => () => { runRef.current++; }, []);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
@@ -61,6 +83,7 @@ export default function VideoFlight() {
   const pick = (f?: File) => {
     if (!f) return;
     runRef.current++;
+    fileRef.current = f; setSaveMsg(null); setShape(null); setDistance(null); setDistEdit(null); savedId.current = null;
     setUrl(URL.createObjectURL(f));
     setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
@@ -68,6 +91,7 @@ export default function VideoFlight() {
 
   const reset = () => {
     runRef.current++;
+    fileRef.current = null; setSaveMsg(null); setShape(null); setDistance(null); setDistEdit(null); savedId.current = null;
     setUrl(null); setMeta(null); setStartT(0); setTap(null); setOut(null); setError(null); setProgress(0); setBusy(false);
     baseRef.current = null;
   };
@@ -168,14 +192,18 @@ export default function VideoFlight() {
     const v = videoRef.current;
     if (!v || !meta || !tap || busy) return;
     const run = ++runRef.current;
-    setBusy(true); setError(null); setOut(null); setProgress(0);
+    setBusy(true); setError(null); setOut(null); setProgress(0); setSaveMsg(null);
     let tracker: BallTracker | null = null;
     let aspect = 1;
+    // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts).
+    let dbg: DebugBag | null = null;
+    const dbgFrames: { t: number; det: boolean; skipped: boolean }[] = [];
     try {
       // Si la vista previa del deslizador sigue saltando, se espera: dos saltos a la vez leerían un cuadro equivocado.
       pendingT.current = null;
       for (let k = 0; k < 60 && seekBusy.current; k++) await new Promise((r) => setTimeout(r, 50));
       const { w, h } = analysisSize(v.videoWidth, v.videoHeight, ANALYSIS_W);
+      const clock = makeClock({ fpsNominal: Number(fps), fpsSource: 'user' });
       aspect = w / h;
       const cv = document.createElement('canvas');
       cv.width = w; cv.height = h;
@@ -183,7 +211,8 @@ export default function VideoFlight() {
       if (!ctx) throw new Error('canvas');
 
       v.pause();
-      tracker = new BallTracker(tap, { w, h });
+      dbg = import.meta.env.DEV ? debugBall({ done: false, tap, startT, fps, w, h, aspect, frames: dbgFrames }) : null;
+      tracker = new BallTracker(tap, { w, h, clock });
       const step = 1 / Number(fps);
       const tEnd = Math.min(meta.dur - step, startT + MAX_SCAN_S);
       let prev: Gray | null = null;
@@ -201,9 +230,11 @@ export default function VideoFlight() {
         ctx.drawImage(v, 0, 0, w, h);
         const cur = toGray(ctx.getImageData(0, 0, w, h).data, w, h);
         if (prev && !framesIdentical(prev, cur)) {
+          const before = tracker.points.length;
           tracker.feed(prev, cur, tMs);
+          if (dbg) dbgFrames.push({ t: tMs, det: tracker.points.length > before, skipped: false });
           if (tracker.done) break;
-        }
+        } else if (dbg) dbgFrames.push({ t: tMs, det: false, skipped: !!prev });
         prev = cur;
 
         let p = tEnd > startT ? (want - startT) / (tEnd - startT) : 1;
@@ -214,9 +245,13 @@ export default function VideoFlight() {
       }
       if (runRef.current !== run) return;
       const res = tracker.result();
-      setOut({ res, summary: summarizeFlight(res, aspect) });
+      // F5.6: con la bandera, se arma el seguimiento v2 (huecos, bajada en la imagen) para el reproductor.
+      const track = flags.flightV2 ? buildFlightTrack(res, { sourceId: 'local', clock, tap: { x: tap.x, y: tap.y, t: startT * 1000 }, aspect, analysisH: h, clipEndMs: meta.dur * 1000, allowEstimate: flags.flightEstimate }) : undefined;
+      setOut({ res, summary: summarizeFlight(res, aspect), track, w: v.videoWidth, h: v.videoHeight });
       setProgress(100);
+      if (dbg) Object.assign(dbg, { res, summary: summarizeFlight(res, aspect), done: true });
     } catch {
+      if (dbg) Object.assign(dbg, { done: true, error: true });
       if (runRef.current === run) {
         // Si el video dejó de responder a mitad del seguimiento, no se tira lo que ya se había visto.
         const res = tracker?.result();
@@ -230,8 +265,27 @@ export default function VideoFlight() {
     }
   };
 
+  /** F5.7: guarda el tiro (video + seguimiento) en una sesión que NO cuenta como dispersión. Lo pide el usuario. */
+  const saveFlight = async () => {
+    const f = fileRef.current;
+    if (!out?.track || !f || !meta || saving) return;
+    setSaving(true); setSaveMsg(null);
+    const run = runRef.current;
+    const r = await persistFlight(await getMediaStore(), { file: f, video: { durationMs: meta.dur * 1000, w: meta.w, h: meta.h }, track: out.track });
+    if (runRef.current !== run) {
+      // El usuario cambió de video o volvió a seguir mientras se guardaba: no se registra la sesión y se deshace lo guardado.
+      if (r.ok) { const st = await getMediaStore(); await st.deleteMedia(r.ids.mediaId).catch(() => undefined); await st.deleteRecord(r.ids.flightTrackId).catch(() => undefined); }
+      setSaving(false); return;
+    }
+    if (r.ok) {
+      const sess = useStore.getState().addSession({ type: 'tracking', flightOnly: true, mediaId: r.ids.mediaId, flightTrackId: r.ids.flightTrackId, ...(shape ? { shapeManual: shape } : {}), ...(distance ? { distance } : {}) });
+      savedId.current = sess.id;
+      setSaveMsg({ ok: true, text: r.persistent ? 'Tiro guardado en este dispositivo.' : 'Tiro guardado solo mientras la app esté abierta: este navegador no deja guardar videos.' });
+    } else setSaveMsg({ ok: false, text: r.message });
+    setSaving(false);
+  };
+
   const s = out?.summary;
-  const angle = s?.launchAngleDeg ?? null;
 
   return (
     <div className="space-y-3">
@@ -255,13 +309,17 @@ export default function VideoFlight() {
             {meta ? (
               <>
                 <p className="text-sm font-medium">{out ? 'Resultado' : tap ? 'Listo: pulsa “Seguir la bola”' : 'Toca la bola donde está antes del golpe'}</p>
-                <div className="rounded-2xl bg-black overflow-hidden">
-                  <canvas
-                    ref={canvasRef} onClick={onTap} aria-label="Cuadro del video: toca la bola"
-                    className="block mx-auto cursor-crosshair"
-                    style={{ maxWidth: '100%', maxHeight: '65vh', width: 'auto', height: 'auto' }}
-                  />
-                </div>
+                {out?.track && url && out.w && out.h ? (
+                  <FlightPlayer url={url} track={out.track} w={out.w} h={out.h} startMs={Math.max(0, startT * 1000 - 300)} />
+                ) : (
+                  <div className="rounded-2xl bg-black overflow-hidden">
+                    <canvas
+                      ref={canvasRef} onClick={onTap} aria-label="Cuadro del video: toca la bola"
+                      className="block mx-auto cursor-crosshair"
+                      style={{ maxWidth: '100%', maxHeight: '65vh', width: 'auto', height: 'auto' }}
+                    />
+                  </div>
+                )}
                 {meta.dur > 1.5 && (
                   <label className="block">
                     <span className="text-xs text-muted-foreground">Empezar a buscar en el segundo {fmtS(startT)} (con la bola ya puesta)</span>
@@ -296,7 +354,7 @@ export default function VideoFlight() {
                 : <Button variant="outline" onClick={reset} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>}
             </div>
             {(tap || out) && !busy && (
-              <Button variant="outline" full onClick={() => { setTap(null); setOut(null); setError(null); }}>Elegir otro punto</Button>
+              <Button variant="outline" full onClick={() => { setTap(null); setOut(null); setError(null); setSaveMsg(null); }}>Elegir otro punto</Button>
             )}
           </>
         )}
@@ -306,16 +364,60 @@ export default function VideoFlight() {
 
       {out && s && (
         <>
-          <div className="grid grid-cols-3 gap-2">
-            <Stat label="Puntos detectados" value={s.detected} />
-            <Stat label="Bola seguida" value={s.detected > 1 ? fmtS(s.followedS) : '—'} unit={s.detected > 1 ? 's' : ''} />
-            <Stat
-              label="ángulo en la imagen, no real"
-              value={angle === null ? '—' : `${Math.abs(angle)}°`}
-              unit={angle === null || angle === 0 ? '' : angle > 0 ? 'a la derecha' : 'a la izquierda'}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            {flightStatCards(s).map((c) => <Stat key={c.label} label={c.label} value={c.value} unit={c.unit} />)}
           </div>
-          <Legend />
+          {!out.track && <Legend />}
+          <div className="space-y-1.5" data-shape-label>
+            <p className="text-xs text-muted-foreground">Etiqueta tuya (la pones tú; la app no detecta el tipo de tiro)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {MANUAL_SHAPES.map((sh) => (
+                <button key={sh} aria-pressed={shape === sh} className={`h-8 px-3 rounded-full text-xs font-semibold border ${shape === sh ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'}`}
+                  onClick={() => { const next = shape === sh ? null : sh; setShape(next); if (savedId.current) useStore.getState().setShapeManual(savedId.current, next); }}>{SHAPE_LABEL[sh]}</button>
+              ))}
+            </div>
+          </div>
+          {(() => {
+            const dv = distanceView(distance, unit);
+            return (
+              <div className="rounded-xl border border-border p-3 space-y-2 text-sm" data-distance>
+                <p className="font-medium">{dv.title}{dv.badge && <span className="ml-2 text-[11px] px-2 py-0.5 rounded-full bg-muted font-semibold">{dv.badge}</span>}</p>
+                <p className="text-xs text-muted-foreground">{dv.text}</p>
+                {distEdit ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <input type="number" inputMode="decimal" min="0" aria-label={`Distancia en ${UNIT_SHORT[unit]}`} value={distEdit.text} onChange={(e) => setDistEdit({ ...distEdit, text: e.target.value })} className="w-28 h-10 rounded-xl border border-border px-2 text-center" />
+                      <span className="text-sm text-muted-foreground">{UNIT_SHORT[unit]}</span>
+                      {(['carry', 'total'] as DistanceKind[]).map((k) => (
+                        <button key={k} aria-pressed={distEdit.kind === k} onClick={() => setDistEdit({ ...distEdit, kind: k })} className={`h-8 px-3 rounded-full text-xs font-semibold border ${distEdit.kind === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border'}`}>{KIND_LABEL[k]}</button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button full disabled={manualDistance(parseToMeters(distEdit.text, unit) ?? 0, distEdit.kind) === null} onClick={() => {
+                        const d = manualDistance(parseToMeters(distEdit.text, unit) ?? 0, distEdit.kind);
+                        if (!d) return;
+                        setDistance(d); setDistEdit(null);
+                        if (savedId.current) useStore.getState().setDistance(savedId.current, d);
+                      }}>Guardar distancia</Button>
+                      <Button variant="outline" onClick={() => setDistEdit(null)}>Cancelar</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 items-center">
+                    <button className="text-xs underline font-medium" onClick={() => setDistEdit({ text: distance?.meters ? inputValue(distance.meters, unit) : '', kind: distance?.kind ?? 'carry' })}>{distance ? 'Cambiar' : 'Registrar a mano'}</button>
+                    {distance && <button className="text-xs underline" onClick={() => { setDistance(null); if (savedId.current) useStore.getState().setDistance(savedId.current, null); }}>Quitar</button>}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          {out.track && out.track.observed.length > 0 && (
+            <div className="space-y-2">
+              <Button variant="outline" full disabled={saving || saveMsg?.ok === true} onClick={() => void saveFlight()}>{saveMsg?.ok ? 'Guardado' : saving ? 'Guardando…' : 'Guardar este tiro'}</Button>
+              {saveMsg && <Notice tone={saveMsg.ok ? 'ok' : 'error'}>{saveMsg.text}</Notice>}
+              <p className="text-[11px] text-muted-foreground">Guarda el video y la línea en este dispositivo. No entra en tus tiros de dispersión ni en tus medallas de tracking.</p>
+            </div>
+          )}
           {s.detected === 0 && !s.released && (
             <Notice tone="error">No se detectó la bola: no pude confirmar que estuviera quieta en el punto que tocaste, que saliera de ahí y que se alejara como un vuelo. Lo que se mueve antes (el palo, las manos, el cuerpo) no es su vuelo, así que no dibujo ninguna línea. Toca la bola justo antes del golpe y empieza el video unos segundos antes de pegar. Con bola blanca contra cielo claro es lo esperado.</Notice>
           )}
@@ -323,7 +425,7 @@ export default function VideoFlight() {
             <Notice tone="error">No encontré la bola. Es lo esperado con bola blanca contra cielo claro, o si el toque quedó lejos de la bola. Toca otro punto o prueba con otro tramo del video.</Notice>
           )}
           {s.detected > 0 && s.detected < 3 && (
-            <Notice>Solo {s.detected} {s.detected === 1 ? 'punto' : 'puntos'}: es muy poco para hablar de una trayectoria y no se calcula ningún ángulo.</Notice>
+            <Notice>Solo {s.detected} {s.detected === 1 ? 'punto' : 'puntos'}: es muy poco para hablar de una trayectoria.</Notice>
           )}
           {s.lostAtS !== null && (
             <Notice>Bola perdida a los {fmtS(s.lostAtS)} s de seguirla (contados desde su primer punto). No se dibuja nada más allá: no adivino por dónde fue.</Notice>

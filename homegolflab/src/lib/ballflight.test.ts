@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  analysisSize, BallTracker, detectBlobs, estimatePolarity, framesIdentical, launchAngleDeg, summarizeFlight, trackFrames, toGray,
+  analysisSize, BallTracker, detectBlobs, flightStatCards, estimatePolarity, framesIdentical, launchAngleDeg, summarizeFlight, trackFrames, toGray,
   type FlightPoint, type Gray, type TrackerOptions,
 } from './ballflight';
+import { makeClock } from './media/clock';
 
 const W = 160, H = 90, DT = 1000 / 30;
 const OPTS: TrackerOptions = { w: W, h: H, maxAreaFrac: 0.01 }; // bola de radio 3 ≈ 29 px; tope 144 px
@@ -361,5 +362,53 @@ describe('ayudas de imagen', () => {
     const g = toGray([255, 255, 255, 255, 0, 0, 0, 255], 2, 1);
     expect(g.data[0]).toBe(255);
     expect(g.data[1]).toBe(0);
+  });
+});
+
+describe('tarjetas de resumen (#4: el ángulo en la imagen no se muestra)', () => {
+  it('no hay ninguna tarjeta de ángulo ni de grados, ni con ángulo calculable', () => {
+    const r = trackFrames(flight(30, 240, 14), norm(START), OPTS);
+    const sum = summarizeFlight(r, W / H);
+    expect(sum.launchAngleDeg).not.toBeNull(); // el dato interno sigue existiendo...
+    const cards = flightStatCards(sum);
+    expect(cards.map((c) => c.label)).toEqual(['Puntos detectados', 'Bola seguida']); // ...pero no se enseña
+    for (const c of cards) expect(`${c.label} ${c.value} ${c.unit}`).not.toMatch(/ángulo|°|grados/i);
+  });
+});
+
+describe('reloj del video (F5.2): los umbrales en segundos son tiempo REAL', () => {
+  const DT60 = 1000 / 60;
+  /** Bola quieta 5 cuadros, 12 cuadros sin verse (sale), y reaparece moviéndose: 200 ms reales de silencio a 60 cuadros/s. */
+  function shot(scale: number) {
+    const frames: { gray: Gray; t: number }[] = [];
+    for (let k = 0; k < 40; k++) {
+      const discs: Disc[] = k < 5 ? [{ ...START, r: 3, v: 240 }] : k >= 17 ? [{ ...ballAt(k - 16), r: 3, v: 240 }] : [];
+      frames.push({ gray: frame(40, discs, k), t: 1000 + k * DT60 * scale });
+    }
+    return frames;
+  }
+  const norm0 = { x: START.x / W, y: START.y / H };
+  const key = (r: ReturnType<typeof trackFrames>) => r.points.map((p) => [Math.round(p.x * W), Math.round(p.y * H)]);
+
+  it('a 60 cuadros y a media velocidad (30 nominal, timeScale 0,5) salen los mismos puntos', () => {
+    const normal = trackFrames(shot(1), norm0, { ...OPTS, clock: makeClock({ fpsNominal: 60 }) });
+    const half = trackFrames(shot(2), norm0, { ...OPTS, clock: makeClock({ fpsNominal: 30, timeScale: 0.5 }) });
+    expect(normal.released).toBe(true);
+    expect(normal.points.length).toBeGreaterThan(5);
+    expect(key(half)).toEqual(key(normal));
+  });
+
+  it('sin el reloj, la media velocidad duplica el silencio (400 ms) y se pierde el vuelo: el reloj hace falta', () => {
+    const noClock = trackFrames(shot(2), norm0, OPTS);
+    expect(noClock.points.length).toBe(0);
+  });
+
+  it('maxFollowMs se mide en tiempo real: a media velocidad se sigue el mismo tiempo real', () => {
+    const long = (scale: number) => Array.from({ length: 150 }, (_, k) => ({ gray: frame(40, k < 3 ? [{ ...START, r: 3, v: 240 }] : [{ x: 10 + ((k - 3) % 20) * 7, y: 70 - ((k - 3) % 20) * 2, r: 3, v: 240 }], k), t: 1000 + k * DT60 * scale }));
+    const o = { ...OPTS, maxFollowMs: 1000 };
+    const a = trackFrames(long(1), norm0, { ...o, clock: makeClock({ fpsNominal: 60 }) });
+    const b = trackFrames(long(2), norm0, { ...o, clock: makeClock({ fpsNominal: 30, timeScale: 0.5 }) });
+    expect(b.endReason).toBe(a.endReason);
+    expect(b.points.length).toBe(a.points.length);
   });
 });

@@ -3,12 +3,16 @@ import { NavLink, Route, Routes, Link, Navigate } from 'react-router-dom';
 import { Activity, Award, FlaskConical, Home as HomeIcon, Target, User, House, Flag } from 'lucide-react';
 import { useStore, type Mode } from '@/store';
 import { BADGES } from '@/lib/badges';
+import { anyMediaFlag, getFlags } from '@/lib/flags';
+import { runCleanup } from '@/lib/media/cleanup';
+import { getMediaStore } from '@/lib/media/store';
 import Home from '@/pages/Home';
 import Swing from '@/pages/Swing';
 import HomeLab from '@/pages/HomeLab';
 import Tracking from '@/pages/Tracking';
 import Logros from '@/pages/Logros';
 import Perfil from '@/pages/Perfil';
+import Comparar from '@/pages/Comparar';
 
 const NAV = [
   { to: '/swing', label: 'Swing', icon: Activity },
@@ -57,6 +61,12 @@ function UnlockToast() {
 
 export default function App() {
   const name = useStore((s) => s.profile.name);
+  // Al arrancar: borra exportaciones y grabaciones temporales de más de 24 h y respeta el tope de espacio (F2.3).
+  // Solo si hay funciones de video encendidas: si no, la app ni abre el almacén de medios.
+  useEffect(() => {
+    if (!anyMediaFlag(getFlags())) return;
+    void getMediaStore().then((st) => runCleanup(st, useStore.getState().sessions)).catch(() => undefined);
+  }, []);
   return (
     <div className="min-h-full flex flex-col">
       <header className="sticky top-0 z-40 bg-card/95 backdrop-blur border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -82,6 +92,7 @@ export default function App() {
           <Route path="/tracking" element={<Tracking />} />
           <Route path="/logros" element={<Logros />} />
           <Route path="/perfil" element={<Perfil />} />
+          <Route path="/comparar" element={<Comparar />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

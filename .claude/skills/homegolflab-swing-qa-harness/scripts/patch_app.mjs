@@ -4,6 +4,10 @@ import { ROOT } from './_cfg.mjs'
 // Uso: node patch_app.mjs [carpeta de la copia]  (por defecto $HGL_PRUEBAS/harness/app)
 const APP = (process.argv[2] || `${ROOT}/harness/app`).replace(/\\/g, '/') + '/src'
 
+// Desde el 19 nov 2026 el repo trae el gancho oficial (src/lib/debugHook.ts, solo en desarrollo): este parche es solo
+// respaldo para copias de versiones anteriores. Si la copia ya lo trae, no hay nada que parchear.
+if (fs.existsSync(`${APP}/lib/debugHook.ts`)) { console.log('la copia ya trae el gancho oficial (lib/debugHook.ts); no se parchea'); process.exit(0) }
+
 function patch(file, pairs) {
   let s = fs.readFileSync(file, 'utf8')
   for (const [a, b] of pairs) {

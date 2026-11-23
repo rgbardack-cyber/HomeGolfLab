@@ -20,19 +20,29 @@ Mide la app **como la usa una persona**: sube el video por el `input[type=file]`
 
 Los scripts están en `scripts/` (`node scripts/<x>.mjs`). Antes de empezar: `node scripts/inventario.mjs` genera `resultados/inventario.json` (lo leen `run_swing` y `analyze_swing`).
 
-## 1. Servir una copia con el gancho `window.__hglDebug` (sin tocar `src/` del repo)
+## 1. Servir la app con el gancho `window.__hglDebug` / `window.__hglBall`
 
-El gancho no existe en el repo: `patch_app.mjs` lo inserta en `Swing.tsx` y `VideoFlight.tsx` **de una copia**. Expone `window.__hglDebug` (cuadros gruesos y finos, ventana, resultado, encuadre, fotos, palo) y `window.__hglBall` (cuadros, puntos, resumen).
+**Desde el 19 nov 2026 el gancho es oficial** (`homegolflab/src/lib/debugHook.ts`, usado por `Swing.tsx` y `VideoFlight.tsx`). Solo existe con `import.meta.env.DEV`: el servidor de desarrollo (`npm run dev`, o una copia servida con Vite) lo trae y el build de producción **no** (se comprueba con `grep -r __hgl homegolflab/dist/`, debe dar 0). Expone `window.__hglDebug` (cuadros gruesos y finos, ventana, resultado, encuadre, fotos, palo, `done`, `ms`, `thrown`) y `window.__hglBall` (cuadros, puntos, resumen, `done`; si el seguimiento falla marca `done` y `error`).
+
+Lo más simple: apuntar el harness al servidor del propio repo, sin copia ni parche.
 
 ```powershell
-node scripts/prepare_app_copy.mjs "$env:HGL_PRUEBAS/harness/app_nueva" vite-cache-nueva   # copia + enlace a node_modules + caché propia + parche
+npm --prefix "$env:HGL_REPO" run dev -- --port 5173 --strictPort     # en segundo plano
+$env:HGL_URL = 'http://127.0.0.1:5173'
+```
+
+Para comparar **antes y después** sí hace falta una copia congelada (la línea base) con su puerto y su caché de Vite propios:
+
+```powershell
+node scripts/prepare_app_copy.mjs "$env:HGL_PRUEBAS/harness/app_nueva" vite-cache-nueva   # copia + enlace a node_modules + caché propia
 node scripts/serve_app.mjs "$env:HGL_PRUEBAS/harness/app_nueva" 5211                       # en segundo plano
 $env:HGL_URL = 'http://127.0.0.1:5211'
 ```
 
 - Mantén dos copias: `app/` **intacta** (la línea base, "antes") y `app_fix/` (con el cambio, "después"). Cada una con su **puerto** y su **caché de Vite** (`cacheDir` distinto): compartir caché hace que dos servidores se pisen al reiniciar.
-- Tras cambiar `src/` del repo hay que volver a copiar (`prepare_app_copy.mjs`). Si `patch_app.mjs` dice "No encontrado en…", el código que parchea cambió: actualizar las cadenas del parche, no forzar.
-- Premium de prueba: el script escribe en `localStorage` la clave `homegolflab-v1` con `profile.premium: true` antes de cargar la página (la cuota gratis es 1 video al día).
+- Tras cambiar `src/` del repo hay que volver a copiar (`prepare_app_copy.mjs`).
+- `patch_app.mjs` queda **solo como respaldo** para copias de versiones anteriores al gancho oficial: si la copia trae `src/lib/debugHook.ts` no hace nada. Si dice "No encontrado en…", el código que parchea cambió: actualizar las cadenas, no forzar.
+- Premium de prueba: el script escribe en `localStorage` la clave `homegolflab-v1` con `profile.premium: true` antes de cargar la página (la cuota gratis es 1 video al día). La app migra ese JSON (`version: 0`) al formato vigente (`version: 1`) al cargar, así que los scripts viejos siguen valiendo.
 
 ## 2. Correr clips
 
@@ -40,6 +50,8 @@ $env:HGL_URL = 'http://127.0.0.1:5211'
 node scripts/run_swing.mjs 1 0/2 i7_sr_t01,pw_sr_f01     # corrida 1, fragmento 0 de 2, solo esos ids  (all = todos + controles)
 node scripts/run_swing.mjs 2 0/2 all                       # corrida 2 (determinismo)
 node scripts/run_ball.mjs i4_sr_f01                        # Ball tracker; HGL_STARTT=7.9 cambia el segundo de inicio
+$env:HGL_BALL_SHOTS = "$env:HGL_PRUEBAS/ball_shots.json"; $env:HGL_OUT = "$env:HGL_PRUEBAS/resultados/ball_v2"
+node scripts/run_ball.mjs i5_sr_t01                        # tiros del manifiesto (tap, startT, fps, timeScale); los de tap null se saltan
 ```
 
 `HGL_OUT` también cambia dónde guarda `run_ball` (por defecto `resultados/ball`, que es la evidencia original: usa otra carpeta para no pisarla). `run_swing` guarda por clip `<id>.run<N>.json` (resultado, `debug`, texto de pantalla, tiempos), la captura completa y las fotos clave `Inicio/Tope/Impacto.jpg` (solo corrida 1). Salta lo que ya existe (reanudable). `HGL_PRIO=id1,id2` los corre primero. `run_ball` sube el clip a la pestaña Video, fija inicio, 60 fps, toca la bola en la posición marcada a mano (`tap`) y guarda `resultados/ball/<id>.json` y capturas.
@@ -70,7 +82,7 @@ Calcula pose presente, vista, mano, eventos vs referencia manual (±100 ms), imp
 - **Controles** (esperados: **rechazo**): sin persona (debe dar `low_visibility`), persona sin swing (`no_swing`), cámara lenta 2× y 4× de un frontal y un trasero: `node scripts/make_controls.mjs <clip.mp4> 2 "$env:HGL_PRUEBAS/controles/lento2x_f01.mp4"` (ffmpeg `setpts`; no es slow-mo real de 240 fps). Cualquier `.mp4` en `controles/` entra solo en `run_swing.mjs all` con el prefijo `ctl_`.
 
 ## 5b. Ball tracker
-`run_ball.mjs` corre 4 tiros frontales con el toque marcado a mano y `HGL_STARTT` (6,8 y 7,9 s). Compara `__hglBall.res.points` (t, x, y) con el impacto (7,95–8,01 s) y mira la captura `*_resultado.png`: la línea debe salir de la bola, no subir por el cuerpo. Sin referencia de vuelo solo se miden falsos positivos (puntos antes del impacto o sobre el cuerpo); posición, continuidad y ángulo son "no medido".
+`run_ball.mjs` corre los 4 tiros frontales por defecto, o los de un **manifiesto** (`HGL_BALL_SHOTS=<json>`, p. ej. `$HGL_PRUEBAS/ball_shots.json`, fuera del repo: `id`, `file`, `tap {x,y}` marcado a mano o `null` si falta, `startT`, `fps` 30/60, `timeScale`, `impactGT`, `nota`), con el toque marcado a mano y `HGL_STARTT` (6,8 y 7,9 s). Guarda en `HGL_OUT` (usa `resultados/ball_v2` para no pisar `resultados/ball`). `timeScale` solo se guarda: el tracker aún no lo usa (F5.2). Compara `__hglBall.res.points` (t, x, y) con el impacto (7,95–8,01 s) y mira la captura `*_resultado.png`: la línea debe salir de la bola, no subir por el cuerpo. Sin referencia de vuelo solo se miden falsos positivos (puntos antes del impacto o sobre el cuerpo); posición, continuidad y ángulo son "no medido".
 
 ## 6. Reproducir en el navegador los clips que cambian
 

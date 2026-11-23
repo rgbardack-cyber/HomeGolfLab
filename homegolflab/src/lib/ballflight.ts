@@ -16,6 +16,8 @@
  * Con bola blanca contra cielo claro se espera perderla pronto: no hay contraste que seguir.
  */
 
+import { realDeltaMs, type Clock } from './media/clock';
+
 export interface P2 { x: number; y: number }
 
 /** Imagen en escala de grises, una por cuadro analizado. */
@@ -206,6 +208,12 @@ export interface TrackerOptions {
   /** Si se pierde con menos puntos que estos, se descarta y se espera otro arranque (3). */
   minPoints?: number;
   polarity?: 'auto' | 'bright' | 'dark' | 'any';
+  /**
+   * Reloj del video (F5.2). Con él, los umbrales en SEGUNDOS (la espera de 0,3 s tras salir la bola y `maxFollowMs`) se miden
+   * en tiempo REAL: un tiro grabado a 60 cuadros y reproducido a media velocidad da los mismos puntos. Sin reloj, `t` ya es
+   * tiempo real (como antes).
+   */
+  clock?: Clock;
 }
 
 export type EndReason = 'lost' | 'window' | null;
@@ -231,7 +239,8 @@ export class BallTracker {
 
   private readonly w: number;
   private readonly h: number;
-  private readonly o: Required<Omit<TrackerOptions, 'w' | 'h'>>;
+  private readonly o: Required<Omit<TrackerOptions, 'w' | 'h' | 'clock'>>;
+  private readonly clock: Clock | null;
   private readonly startPx: P2;
   private ready = false;
   private sign: 0 | 1 | -1 = 0;
@@ -257,8 +266,12 @@ export class BallTracker {
       minPoints: opts.minPoints ?? 3, polarity: opts.polarity ?? 'auto',
     };
     this.maxFollowMs = this.o.maxFollowMs;
+    this.clock = opts.clock ?? null;
     this.startPx = { x: start.x * this.w, y: start.y * this.h };
   }
+
+  /** Milisegundos REALES entre dos instantes de medio (con reloj; sin él, la diferencia tal cual). */
+  private real(a: number, b: number): number { return this.clock ? realDeltaMs(this.clock, a, b) : b - a; }
 
   /** ¿Se está esperando a que la bola salga de su sitio? (con contraste suficiente para saberlo). */
   get waiting(): boolean { return this.ready && this.refContrast !== 0 && !this.released; }
@@ -322,11 +335,11 @@ export class BallTracker {
       this.released = true; this.releasedT = t;
     }
     // La bola sale de golpe: si tras soltarse no aparece nada en 0,3 s, lo que aparezca después ya no es su vuelo.
-    if (this.releasedT !== null && this.firstT === null && t - this.releasedT > 300) {
+    if (this.releasedT !== null && this.firstT === null && this.real(this.releasedT, t) > 300) {
       this.done = true; this.endReason = 'lost'; this.lostAtMs = this.releasedT;
       return null;
     }
-    if (this.firstT !== null && t - this.firstT > this.o.maxFollowMs) {
+    if (this.firstT !== null && this.real(this.firstT, t) > this.o.maxFollowMs) {
       this.done = true; this.endReason = 'window';
       return null;
     }
@@ -442,6 +455,19 @@ export interface FlightSummary {
   endReason: EndReason;
   /** Ver TrackResult.released. Sin confirmar, no se muestra trayectoria ni ángulo. */
   released: boolean;
+}
+
+/**
+ * Tarjetas de resumen que muestra la pantalla. El ángulo de salida EN LA IMAGEN NO se muestra (#4): depende de dónde
+ * esté la cámara y, sin una referencia de vuelo, no hay forma de decir que se parece al real. `launchAngleDeg` queda
+ * como dato interno para probar y para la clasificación futura.
+ */
+export function flightStatCards(s: FlightSummary): { label: string; value: string; unit: string }[] {
+  const fmt = (n: number) => n.toFixed(1).replace('.', ',');
+  return [
+    { label: 'Puntos detectados', value: String(s.detected), unit: '' },
+    { label: 'Bola seguida', value: s.detected > 1 ? fmt(s.followedS) : '—', unit: s.detected > 1 ? 's' : '' },
+  ];
 }
 
 export function summarizeFlight(res: TrackResult, aspect: number): FlightSummary {

@@ -11,27 +11,31 @@ export const GEAR_LABEL: Record<Gear, string> = {
   matGolpeo: 'Mat de golpeo', foam: 'Bolas de foam', varillas: 'Varillas de alineación', vaso: 'Vaso u hoyo de práctica', espejo: 'Espejo',
 };
 
+import { fmtDist, type DistUnit } from './units';
+
 export interface Space { lengthM: number; widthM: number; ceilingM: number; floor: Floor; gear: Gear[] }
 
 export type ZoneType = 'putt' | 'chip' | 'swing';
 export interface Zone { type: ZoneType; label: string; ok: boolean; note: string }
 
-export function zones(s: Space): Zone[] {
+/** `unit`: unidad con la que se ESCRIBEN las medidas en los avisos (las comparaciones siguen en metros; por defecto metros para no alterar lo ya probado). */
+export function zones(s: Space, unit: DistUnit = 'm'): Zone[] {
+  const d = (m: number) => fmtDist(m, unit);
   const has = (g: Gear) => s.gear.includes(g);
   const puttSurface = s.floor !== 'duro' || has('matPutt');
   const putt: Zone = !has('putter')
     ? { type: 'putt', label: 'Putting', ok: false, note: 'Necesitas un putter.' }
     : s.lengthM < 2
-      ? { type: 'putt', label: 'Putting', ok: false, note: 'Hace falta al menos 2 m libres de largo.' }
+      ? { type: 'putt', label: 'Putting', ok: false, note: `Hace falta al menos ${d(2)} libres de largo.` }
       : !puttSurface
         ? { type: 'putt', label: 'Putting', ok: false, note: 'En piso duro la bola no rueda bien: usa un mat de putting o una alfombra.' }
-        : { type: 'putt', label: 'Putting', ok: true, note: `Carril de ${Math.min(s.lengthM, 6).toFixed(1)} m.` };
+        : { type: 'putt', label: 'Putting', ok: true, note: `Carril de ${d(Math.min(s.lengthM, 6))}.` };
 
   const chipSafe = has('foam') || has('red');
   const chip: Zone = !has('wedge')
     ? { type: 'chip', label: 'Chip', ok: false, note: 'Necesitas un wedge.' }
     : s.lengthM < 3
-      ? { type: 'chip', label: 'Chip', ok: false, note: 'Hace falta al menos 3 m de largo.' }
+      ? { type: 'chip', label: 'Chip', ok: false, note: `Hace falta al menos ${d(3)} de largo.` }
       : !chipSafe
         ? { type: 'chip', label: 'Chip', ok: false, note: 'Por seguridad, usa bolas de foam o una red.' }
         : s.floor === 'duro' && !has('matGolpeo')
@@ -42,9 +46,9 @@ export function zones(s: Space): Zone[] {
   const swing: Zone = !clubs
     ? { type: 'swing', label: 'Swing completo', ok: false, note: 'Necesitas hierros o un wedge.' }
     : s.ceilingM < 2.7
-      ? { type: 'swing', label: 'Swing completo', ok: false, note: `Techo de ${s.ceilingM} m: muy bajo para un swing completo (mínimo 2.7 m).` }
+      ? { type: 'swing', label: 'Swing completo', ok: false, note: `Techo de ${d(s.ceilingM)}: muy bajo para un swing completo (mínimo ${d(2.7)}).` }
       : s.widthM < 3 || s.lengthM < 3
-        ? { type: 'swing', label: 'Swing completo', ok: false, note: 'Hace falta un espacio libre de 3 × 3 m.' }
+        ? { type: 'swing', label: 'Swing completo', ok: false, note: `Hace falta un espacio libre de ${d(3)} × ${d(3)}.` }
         : { type: 'swing', label: 'Swing completo', ok: true, note: has('red') ? 'Con bola hacia la red.' : 'Sin bola (swings de práctica).' };
   return [putt, chip, swing];
 }
@@ -82,8 +86,8 @@ const THEMES: Record<ZoneType | 'libre', string> = { putt: 'Día de putting', ch
  * Genera la sesión del día. Es determinista para una fecha dada: el mismo día devuelve el
  * mismo plan, y cada día rota el enfoque entre las zonas disponibles.
  */
-export function buildPlan(space: Space, dateISO: string, focusKeys: string[] = []): Plan {
-  const zs = zones(space);
+export function buildPlan(space: Space, dateISO: string, focusKeys: string[] = [], unit: DistUnit = 'm'): Plan {
+  const zs = zones(space, unit);
   const okZones = zs.filter((z) => z.ok).map((z) => z.type);
   const day = Math.floor(new Date(dateISO + 'T12:00:00').getTime() / 86400000);
   const focusZone: ZoneType | 'libre' = okZones.length ? okZones[day % okZones.length] : 'libre';
@@ -108,6 +112,6 @@ export function buildPlan(space: Space, dateISO: string, focusKeys: string[] = [
   const blocked = zs.filter((z) => !z.ok);
   return {
     date: dateISO, theme: THEMES[focusZone], minutes, drills,
-    note: `Espacio de ${space.lengthM} × ${space.widthM} m` + (blocked.length ? `. No disponible hoy: ${blocked.map((b) => b.label.toLowerCase()).join(', ')}.` : '.'),
+    note: `Espacio de ${fmtDist(space.lengthM, unit)} × ${fmtDist(space.widthM, unit)}` + (blocked.length ? `. No disponible hoy: ${blocked.map((b) => b.label.toLowerCase()).join(', ')}.` : '.'),
   };
 }

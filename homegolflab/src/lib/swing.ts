@@ -94,7 +94,9 @@ interface ResultBase {
   focus: string[];
   events: { address: number; top: number; impact: number };
   /** Momento (ms del video) de cada posición clave, para volver a esos cuadros. */
-  times?: { address: number; top: number; impact: number };
+  times?: { address: number; top: number; impact: number; /** Final del swing (F3.4): solo si se vio la pose sostenida; opcional. */ finish?: number };
+  /** Confianza 0–1 de cada fase (F3.4, ver phases.ts). Debajo de 0,5 la revisión pide ajustar esa fase. No cambia la nota. */
+  phaseConf?: { address: number; top: number; impact: number; finish?: number };
   /** Mano dominante que se usó. Sale del propio swing cuando se puede; si no, del perfil. */
   lefty?: boolean;
   /** Si el jugador eligió la vista a mano y el video parece de la otra, la que parece. Solo para avisar. */
@@ -206,7 +208,7 @@ function topCandidates(frames: Frame[], wy: number[], s: number, e: number): num
 
 // Bajada (tope→impacto) posible a velocidad normal. Abajo de 0,15 s: el modelo perdió las manos. Arriba de 0,6 s: no es una bajada
 // normal (en 90 clips reales la mayor válida fue 0,43 s) sino cámara lenta o un clip mal leído; una cámara lenta 4× midió 0,8 s.
-const MIN_DOWNSWING_SEC = 0.15, MAX_DOWNSWING_SEC = 0.6;
+export const MIN_DOWNSWING_SEC = 0.15, MAX_DOWNSWING_SEC = 0.6;
 
 /** Localiza inicio (address), tope y impacto dentro de una secuencia de cuadros. */
 export function findEvents(frames: Frame[]) {

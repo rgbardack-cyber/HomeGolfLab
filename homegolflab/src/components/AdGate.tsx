@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Crown, Loader2, Megaphone, PlayCircle } from 'lucide-react';
-import { AD_RULES, nativeAds, showNativeRewarded } from '@/lib/ads';
+import { AD_RULES, adsAvailable, nativeAds, PLACEHOLDER_SECONDS, showNativeRewarded } from '@/lib/ads';
 import { Button, Card, Notice } from '@/components/ui';
 
 /**
  * Bloqueo del ball tracking para usuarios gratuitos: tras 15 minutos de uso hay que ver
- * 2 anuncios de 30 segundos para abrir otros 15 minutos. `onUnlocked` se llama solo cuando
- * se vieron todos completos.
+ * un anuncio con recompensa para abrir otros 15 minutos. `onUnlocked` se llama solo cuando
+ * se vio completo (D1: sin prometer ninguna duración).
  */
 export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
   const [seen, setSeen] = useState(0);
@@ -20,7 +20,11 @@ export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
 
   const watch = async () => {
     setError(null);
-    if (!nativeAds()) { setPlaying(true); return; }
+    if (!nativeAds()) {
+      // Web de producción: no hay red de anuncios y el anuncio de prueba NO desbloquea nada (R3).
+      if (!adsAvailable()) { setError('Los anuncios solo están disponibles en la app de las tiendas.'); return; }
+      setPlaying(true); return;
+    }
     setLoading(true);
     try {
       if (await showNativeRewarded()) setSeen((s) => s + 1);
@@ -37,14 +41,14 @@ export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
       <div className="w-14 h-14 mx-auto rounded-full bg-accent/20 flex items-center justify-center"><Megaphone className="w-7 h-7 text-accent" /></div>
       <div>
         <h2 className="font-heading text-xl font-bold">Se acabaron tus 15 minutos</h2>
-        <p className="text-sm text-muted-foreground mt-1">Mira {total} anuncios de {AD_RULES.adSeconds} segundos y sigue practicando otros 15 minutos gratis. Tus tiros de esta sesión no se pierden.</p>
+        <p className="text-sm text-muted-foreground mt-1">Mira {total === 1 ? '1 anuncio' : `${total} anuncios`} con recompensa y sigue practicando otros 15 minutos gratis. Tus tiros de esta sesión no se pierden.</p>
       </div>
       <div className="flex justify-center gap-2" aria-label={`${seen} de ${total} anuncios vistos`}>
         {Array.from({ length: total }, (_, i) => <span key={i} className={`h-2 w-12 rounded-full ${i < seen ? 'bg-primary' : 'bg-muted'}`} />)}
       </div>
       {error && <Notice tone="error">{error}</Notice>}
       <Button full onClick={watch} disabled={loading}>
-        {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Cargando anuncio…</> : <><PlayCircle className="w-5 h-5" /> Ver anuncio {seen + 1} de {total}</>}
+        {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Cargando anuncio…</> : <><PlayCircle className="w-5 h-5" /> {total === 1 ? 'Ver el anuncio' : `Ver anuncio ${seen + 1} de ${total}`}</>}
       </Button>
       <Link to="/perfil" className="flex items-center justify-center gap-2 h-12 rounded-xl bg-accent text-accent-foreground font-medium">
         <Crown className="w-5 h-5" /> Quitar anuncios con Premium
@@ -54,8 +58,8 @@ export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
 }
 
 /** Espacio publicitario de prueba para el navegador: cuenta atrás que no se puede saltar. */
-function PlaceholderAd({ n, total, onDone }: { n: number; total: number; onDone: () => void }) {
-  const [left, setLeft] = useState<number>(AD_RULES.adSeconds);
+export function PlaceholderAd({ n, total, onDone }: { n: number; total: number; onDone: () => void }) {
+  const [left, setLeft] = useState<number>(PLACEHOLDER_SECONDS);
   useEffect(() => {
     if (left <= 0) { onDone(); return; }
     const t = setTimeout(() => setLeft((l) => l - 1), 1000);
@@ -63,7 +67,7 @@ function PlaceholderAd({ n, total, onDone }: { n: number; total: number; onDone:
   }, [left, onDone]);
   return (
     <div className="fixed inset-0 z-[60] bg-dark text-white flex flex-col items-center justify-center gap-4 p-8 text-center" role="dialog" aria-label="Anuncio">
-      <p className="text-xs uppercase tracking-widest opacity-60">Anuncio {n} de {total}</p>
+      <p className="text-xs uppercase tracking-widest opacity-60">Anuncio de prueba{total > 1 ? ` ${n} de ${total}` : ''}</p>
       <div className="w-full max-w-sm aspect-video rounded-2xl border border-white/20 bg-white/5 flex flex-col items-center justify-center gap-2">
         <Megaphone className="w-10 h-10 opacity-70" />
         <p className="font-heading text-xl font-bold">Espacio publicitario</p>

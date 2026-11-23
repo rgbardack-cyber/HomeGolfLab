@@ -3,13 +3,14 @@ import { Activity, ArrowRight, FlaskConical, Flame, Target, Trophy } from 'lucid
 import { useStore, todayISO, type Session } from '@/store';
 import { computeStats, levelFor, totalXp } from '@/lib/badges';
 import { Card } from '@/components/ui';
+import { SHAPE_LABEL } from '@/lib/shotShape';
 
 const TYPE_LABEL = { swing: 'Análisis de swing', homelab: 'HomeLAB', tracking: 'Ball tracking' } as const;
 const TYPE_ICON = { swing: Activity, homelab: FlaskConical, tracking: Target } as const;
 
 function sessionValue(s: Session) {
   if (s.type === 'swing' && s.score != null) return `${s.score}/100`;
-  if (s.type === 'tracking') return `${s.shots ?? 0} tiros`;
+  if (s.type === 'tracking') return s.flightOnly ? `Seguimiento de un tiro (video)${s.shapeManual ? ` · Etiqueta tuya: ${SHAPE_LABEL[s.shapeManual]}` : ''}` : `${s.shots ?? 0} tiros`;
   if (s.type === 'homelab') return `${s.minutes ?? 0} min`;
   return '';
 }

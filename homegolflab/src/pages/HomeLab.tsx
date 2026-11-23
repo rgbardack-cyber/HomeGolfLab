@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Camera, CheckCircle2, Circle, FlaskConical, Loader2, Pause, Play, ScanLine, Settings2, ShieldAlert, Video, XCircle } from 'lucide-react';
-import { useStore, todayISO } from '@/store';
+import { useStore, todayISO, useUnit } from '@/store';
+import { fmtDist, inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
 import { buildPlan, GEAR_LABEL, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
 import { fileToImages, scanInfo, scanSpace, scanToSpace, ScanError, type ScanInfo, type ScanResult } from '@/lib/scan';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
@@ -10,6 +11,7 @@ const FLOORS: { value: Floor; label: string }[] = [{ value: 'alfombra', label: '
 
 export default function HomeLab() {
   const { mode, space, plan, scan, sessions, setSpace, setPlan, addSession, setMode } = useStore();
+  const unit = useUnit();
   const [editing, setEditing] = useState(!space);
   const today = todayISO();
 
@@ -19,7 +21,7 @@ export default function HomeLab() {
     if (!plan || plan.date !== today) {
       const lastSwing = sessions.find((s) => s.type === 'swing' && s.swing);
       const focus = lastSwing?.swing?.feedback.filter((f) => f.severity !== 'good').map((f) => f.key) ?? [];
-      setPlan(buildPlan(space, today, focus));
+      setPlan(buildPlan(space, today, focus, unit));
     }
   }, [space, plan, today, editing, sessions, setPlan]);
 
@@ -53,7 +55,7 @@ export default function HomeLab() {
     );
   }
 
-  const zs = zones(space);
+  const zs = zones(space, unit);
   const doneToday = sessions.some((s) => s.type === 'homelab' && s.date === today);
   const drills = plan?.drills ?? [];
   const completed = drills.filter((d) => d.done).length;
@@ -102,7 +104,7 @@ export default function HomeLab() {
               {scan.safety.map((s, i) => <p key={i} className="flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />{s}</p>)}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Medidas estimadas por IA a partir de tu foto ({space.lengthM} × {space.widthM} m, techo {space.ceilingM} m). Son aproximadas: comprueba el espacio antes de hacer un swing.</p>
+          <p className="text-xs text-muted-foreground">Medidas estimadas por IA a partir de tu foto ({fmtDist(space.lengthM, unit)} × {fmtDist(space.widthM, unit)}, techo {fmtDist(space.ceilingM, unit)}). Son aproximadas: comprueba el espacio antes de hacer un swing.</p>
         </Card>
       )}
 
@@ -169,10 +171,13 @@ function DrillCard({ n, d, onToggle }: { n: number; d: PlanDrill; onToggle: () =
 
 function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: Space) => void; onCancel?: () => void }) {
   const [s, setS] = useState<Space>(initial);
+  const unit = useUnit();
+  // Se escribe en la unidad elegida (D2) y se guarda en metros.
+  const [txt, setTxt] = useState<Record<string, string>>(() => ({ lengthM: inputValue(initial.lengthM, unit), widthM: inputValue(initial.widthM, unit), ceilingM: inputValue(initial.ceilingM, unit) }));
   const num = (k: 'lengthM' | 'widthM' | 'ceilingM', label: string) => (
     <label className="block">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <input type="number" inputMode="decimal" step="0.1" min="0.5" value={s[k]} onChange={(e) => setS({ ...s, [k]: parseFloat(e.target.value) || 0 })} className="mt-1 w-full h-11 rounded-xl border border-border bg-card px-3" />
+      <span className="text-xs text-muted-foreground">{label} ({UNIT_SHORT[unit]})</span>
+      <input type="number" inputMode="decimal" step="0.1" min="0.5" value={txt[k]} onChange={(e) => { setTxt({ ...txt, [k]: e.target.value }); setS({ ...s, [k]: parseToMeters(e.target.value, unit) ?? 0 }); }} className="mt-1 w-full h-11 rounded-xl border border-border bg-card px-3" />
     </label>
   );
   const toggleGear = (g: Gear) => setS({ ...s, gear: s.gear.includes(g) ? s.gear.filter((x) => x !== g) : [...s.gear, g] });
@@ -183,7 +188,7 @@ function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: 
         <h2 className="font-heading text-lg font-semibold">Tu espacio</h2>
         <p className="text-sm text-muted-foreground">Mide el área libre donde puedes practicar. Con esto se decide qué ejercicios son seguros y posibles.</p>
       </div>
-      <div className="grid grid-cols-3 gap-3">{num('lengthM', 'Largo (m)')}{num('widthM', 'Ancho (m)')}{num('ceilingM', 'Techo (m)')}</div>
+      <div className="grid grid-cols-3 gap-3">{num('lengthM', 'Largo')}{num('widthM', 'Ancho')}{num('ceilingM', 'Techo')}</div>
       <div>
         <p className="text-xs text-muted-foreground mb-1.5">Piso</p>
         <div className="grid grid-cols-3 gap-2">
@@ -213,6 +218,7 @@ function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: 
 const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja: revisa las medidas' } as const;
 
 function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave: (s: Space, info: ScanInfo | null) => void; onCancel?: () => void }) {
+  const unit = useUnit();
   const [stage, setStage] = useState<'pick' | 'busy' | 'review' | 'manual'>('pick');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<ScanError | null>(null);
@@ -267,7 +273,7 @@ function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           {[['Largo', sp.lengthM], ['Ancho', sp.widthM], ['Techo', sp.ceilingM]].map(([l, v]) => (
-            <div key={l} className="rounded-xl bg-muted p-3"><p className="text-[11px] uppercase text-muted-foreground">{l}</p><p className="text-xl font-bold">{v}<span className="text-xs font-normal text-muted-foreground"> m</span></p></div>
+            <div key={l} className="rounded-xl bg-muted p-3"><p className="text-[11px] uppercase text-muted-foreground">{l}</p><p className="text-xl font-bold">{inputValue(v as number, unit)}<span className="text-xs font-normal text-muted-foreground"> {UNIT_SHORT[unit]}</span></p></div>
           ))}
         </div>
         <p className={`text-xs ${result.confidence === 'baja' ? 'text-destructive' : 'text-muted-foreground'}`}>

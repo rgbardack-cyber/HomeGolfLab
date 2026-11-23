@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Activity, ArrowLeft, Camera, CheckCircle2, Loader2, RefreshCw, Square, Upload, Video, AlertTriangle, Wrench, Sparkles } from 'lucide-react';
 import { FREE, swingUploadsToday, useStore } from '@/store';
+import { uploadQuota } from '@/lib/quota';
+import { drainLiveSwings } from '@/lib/liveSession';
+import { LiveSwingDetector } from '@/lib/live/detector';
+import { LiveRecorder, clipWindow } from '@/lib/live/recorder';
+import { cutClip } from '@/lib/live/cutClip';
+import { BALL_SOUND_LABEL, classifyClipSound, type BallSound } from '@/lib/live/ballSound';
+import { cameraProblem, FpsMonitor, queryCameraPermission, type CameraPermission } from '@/lib/live/camera';
+import { debugSwing, type DebugBag } from '@/lib/debugHook';
+import { useFlags } from '@/lib/flags';
+import VideoReview from '@/components/VideoReview';
+import { persistReview } from '@/lib/media/persistReview';
+import { findFinish, phaseConfidence } from '@/lib/phases';
+import { swingWindows, type SwingWindow } from '@/lib/swingWindows';
+import { framesToPoseTrack } from '@/lib/media/poseTrack';
+import { getMediaStore } from '@/lib/media/store';
+import { makeClock } from '@/lib/media/clock';
 import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
-import { detect, detectResilient, drawSkeleton, loadPose } from '@/lib/pose';
+import { createLiveDetector, detectResilient, drawSkeleton, loadPose, PoseFailure } from '@/lib/pose';
 import { seekVideo } from '@/lib/videoSeek';
 import { CLUBS } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
@@ -22,6 +38,8 @@ export default function Swing() {
   const [params, setParams] = useSearchParams();
   const verId = params.get('ver');
   const saved = useStore((s) => (verId ? s.sessions.find((x) => x.id === verId) : undefined));
+  const flags = useFlags();
+  const setReviewMarks = useStore((s) => s.setReviewMarks);
   if (saved?.swing) {
     return (
       <div className="space-y-5">
@@ -30,6 +48,13 @@ export default function Swing() {
           title="Análisis de swing"
           subtitle={`${new Date(saved.at).toLocaleDateString('es', { day: 'numeric', month: 'long' })} · ${saved.mode === 'casa' ? 'Casa' : 'Cancha'}${saved.live ? ' · en vivo' : ''}${saved.club ? ` · palo: ${saved.club}` : ''}`}
         />
+        {flags.videoReview && saved.mediaId && (
+          <VideoReview key={saved.mediaId} r={saved.swing} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} manual={saved.reviewMarks} onManual={(m) => setReviewMarks(saved.id, m)} />
+        )}
+        {flags.compare && saved.mediaId && <Link to={`/comparar?a=${saved.id}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
+        {flags.videoReview && !saved.mediaId && (
+          <Notice>{saved.live ? 'Los análisis en vivo todavía no guardan el video, así que no hay revisión.' : 'Este análisis es anterior y no guardó el video. Se ve el resultado, sin revisión del movimiento.'}</Notice>
+        )}
         <SwingResultView r={saved.swing} />
         <Button full variant="outline" onClick={() => setParams({})}><ArrowLeft className="w-5 h-5" /> Analizar otro swing</Button>
       </div>
@@ -426,6 +451,52 @@ async function sampleVideo(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof 
   return { frames: fine, sampled: fineN, coarse: { frames: coarse, sampled: coarseN }, swings: win.swings };
 }
 
+/**
+ * Tramo EXTRA tras el análisis, solo para la revisión (F3.4): cuadros a 30/s desde `fromMs` hasta `toMs` para ver la pose
+ * final. No entra en `analyzeSwing` (cambiar la ventana movería los índices de `findEvents`): inicio, tope e impacto
+ * salen exactamente igual con o sin esto.
+ */
+async function sampleRange(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number): Promise<{ frames: Frame[]; sampled: number }> {
+  let model = pose;
+  const out: Frame[] = [];
+  let n = 0;
+  for (let t = fromMs; t <= toMs; t += FINE * 1000) {
+    await seek(v, t / 1000);
+    const r = await detectResilient(model, v, v.currentTime * 1000);
+    model = r.pose;
+    n++;
+    if (r.frame) out.push(r.frame);
+  }
+  return { frames: out, sampled: n };
+}
+const sampleExtra = async (v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, fromMs: number, toMs: number) => (await sampleRange(v, pose, fromMs, toMs)).frames;
+
+/** Miniatura (JPEG pequeño) del cuadro en `ms`, para el selector de swings. */
+async function thumbAt(v: HTMLVideoElement, ms: number): Promise<string | undefined> {
+  try {
+    await seek(v, ms / 1000);
+    const k = Math.min(1, 150 / v.videoWidth), c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * k); c.height = Math.round(v.videoHeight * k);
+    c.getContext('2d')!.drawImage(v, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.7);
+  } catch { return undefined; }
+}
+
+/**
+ * Final y confianza por fase de un resultado ya calculado (F3.4): muestrea un tramo extra tras el impacto, completa
+ * `r.times.finish` y `r.phaseConf` y devuelve los cuadros para la pista de la revisión. No cambia nada del análisis.
+ */
+async function addReviewData(v: HTMLVideoElement, pose: Awaited<ReturnType<typeof loadPose>>, frames: Frame[], r: SwingResult, durMs: number): Promise<{ frames: Frame[]; finish: ReturnType<typeof findFinish> }> {
+  if (!r.times) return { frames, finish: null };
+  const lastT = frames[frames.length - 1]?.t ?? r.times.impact;
+  const extra = await sampleExtra(v, pose, lastT + FINE * 1000, Math.min(durMs, r.times.impact + 2300));
+  const all = [...frames, ...extra];
+  const fin = findFinish(all, r.times.impact);
+  r.times = { ...r.times, ...(fin ? { finish: fin.t } : {}) };
+  r.phaseConf = { ...phaseConfidence(frames, r.times), ...(fin ? { finish: fin.conf } : {}) };
+  return { frames: all, finish: fin };
+}
+
 /** El cuadro actual del video, sin marcas y a hasta 1024 px por lado: es lo que ve el coach con IA. */
 async function cleanFrame(v: HTMLVideoElement): Promise<string | undefined> {
   try {
@@ -557,6 +628,17 @@ function ClubPicker({ value, onChange }: { value: string | null; onChange: (c: s
 
 function UploadAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, sessions, addSession, currentClub, setCurrentClub } = useStore();
+  const flags = useFlags();
+  const fileRef = useRef<File | null>(null);
+  /** Se incrementa al elegir otro video, al limpiar y al analizar: los resultados de trabajos viejos (guardado, reanálisis) se descartan. */
+  const tokenRef = useRef(0);
+  /** Ids del video y la pista guardados para la revisión (F3.1) y aviso si no se pudo guardar. */
+  const [saved, setSaved] = useState<{ sessionId: string; mediaId?: string; poseTrackId?: string } | null>(null);
+  const [mediaNotice, setMediaNotice] = useState<string | null>(null);
+  /** Swings detectados en el video (F3.5), cuál está analizado y si se está reanalizando otro. */
+  const [choices, setChoices] = useState<{ w: SwingWindow; thumb?: string }[]>([]);
+  const [chosen, setChosen] = useState(0);
+  const [choosing, setChoosing] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -568,21 +650,32 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
   /** Duración (s) del video cuando pasa el máximo: solo se analizan los primeros MAX_SECONDS. */
   const [tooLong, setTooLong] = useState<number | null>(null);
 
+  // Cuota por archivo analizado (no por clic): `savedRef` marca que este archivo ya guardó su sesión.
+  const [analyzed, setAnalyzed] = useState(false);
+  const savedRef = useRef(false);
   const used = swingUploadsToday(sessions);
-  const limitReached = !profile.premium && used >= FREE.swingUploadsPerDay;
+  const quota = uploadQuota({ premium: profile.premium, used, limit: FREE.swingUploadsPerDay, analyzedThisFile: analyzed });
 
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   const pick = (f?: File) => {
     if (!f) return;
     setResult(null); setError(null); setProgress(0); setShots([]); setWarn(null); setTooLong(null);
+    tokenRef.current++;
+    setAnalyzed(false); savedRef.current = false; setSaved(null); setMediaNotice(null); setChoices([]);
+    fileRef.current = f;
     setUrl(URL.createObjectURL(f));
   };
 
   const analyze = async () => {
     const v = videoRef.current;
     if (!v) return;
+    // Defensa extra contra dobles toques y reanálisis gratis del mismo archivo (el botón ya viene deshabilitado).
+    if (!profile.premium && savedRef.current) return;
+    const token = ++tokenRef.current;
     setBusy(true); setError(null); setResult(null); setShots([]); setWarn(null);
+    // Gancho de QA (solo en desarrollo, ver lib/debugHook.ts): en producción `dbg` es null y nada de esto entra al paquete.
+    const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view }) : null;
     try {
       const pose = await loadPose();
       await metadata(v);
@@ -590,40 +683,143 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       const dur = Math.min(v.duration || 0, MAX_SECONDS);
       if (!(dur > 0.5)) throw new Error(VIDEO_ERR);
       const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+      if (dbg) Object.assign(dbg, { aspect, dur, videoW: v.videoWidth, videoH: v.videoHeight });
       const sampled = await sampleVideo(v, pose, dur, aspect, setProgress);
       let frames = sampled.frames;
+      if (dbg) {
+        Object.assign(dbg, {
+          sampled: { n: sampled.sampled, got: sampled.frames.length, coarse: sampled.coarse ? { n: sampled.coarse.sampled, got: sampled.coarse.frames.length } : null },
+          frames: sampled.frames, coarseFrames: sampled.coarse?.frames ?? null,
+          window: findSwingWindow(sampled.coarse?.frames ?? sampled.frames, { aspect }),
+        });
+      }
       let r = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: sampled.sampled });
+      if (dbg) Object.assign(dbg, { fineResult: r, usedCoarse: false });
       // Si la pasada fina no da un swing (el video no era lo que parecía), se prueba con la gruesa.
       if (typeof r === 'string' && sampled.coarse) {
         const c = analyzeSwing(sampled.coarse.frames, { lefty: profile.lefty, view, aspect, sampled: sampled.coarse.sampled });
-        if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; }
+        if (dbg) dbg.coarseResult = c;
+        if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; if (dbg) dbg.usedCoarse = true; }
       }
-      if (typeof r === 'string') setError(SWING_ERROR_TEXT[r]);
+      if (dbg) Object.assign(dbg, { result: r, analysisFrames: frames });
+      if (typeof r === 'string') { setError(SWING_ERROR_TEXT[r]); if (dbg) dbg.errorText = SWING_ERROR_TEXT[r]; }
       else {
         const start = frames.find((x) => x.t === r.times?.address);
         if (start) {
           const fr = framingCheck(start.lm);
+          if (dbg) Object.assign(dbg, { framing: fr, framingFrame: start });
           // Con varios swings se analiza el último (el de la bola suele ser el último): se dice, para que no parezca un error.
           const several = sampled.swings > 1 ? `Se vieron ${sampled.swings} swings en el video; se analizó el último. ` : '';
-          if (several || !fr.ok) setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
+          if (several || !fr.ok) {
+            setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
+            if (dbg) Object.assign(dbg, { warnText: several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}.`), swings: sampled.swings });
+          }
           // El palo es un extra: si algo falla al buscarlo, el análisis del cuerpo se muestra igual.
           try {
             const key = await captureKeyFrames(v, frames, r);
             setShots(key.shots);
+            if (dbg) Object.assign(dbg, { shots: key.shots.map((x) => ({ label: x.label, url: x.url })), shaftAddress: key.address, shaftTop: key.top });
             r.club = readClub(r.view ?? 'frente', key.address, key.top, targetSide(start.lm, r.lefty ?? profile.lefty)) ?? undefined;
-          } catch { /* sin fotos ni palo */ }
+            if (dbg) dbg.club = r.club ?? null;
+          } catch (e) { if (dbg) dbg.clubError = String(e); /* sin fotos ni palo */ }
         }
         setResult(r);
-        addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
+        // F3.4: confianza por fase y final del swing (con un tramo extra post-impacto). No cambia la nota ni los eventos.
+        let reviewFrames: Frame[] = frames;
+        if (flags.videoReview && r.times) {
+          try {
+            const rd = await addReviewData(v, pose, frames, r, dur * 1000);
+            reviewFrames = rd.frames;
+            if (dbg) Object.assign(dbg, { finish: rd.finish, phaseConf: r.phaseConf });
+          } catch { /* sin final ni confianza: la revisión usa las tres fases como siempre */ }
+          // F3.5: si el video trae varios swings, se ofrece escoger cuál analizar (miniaturas del inicio de cada uno).
+          try {
+            const wins = sampled.coarse ? swingWindows(sampled.coarse.frames, { aspect }) : [];
+            if (wins.length > 1) {
+              const items = await Promise.all(wins.map(async (w) => ({ w, thumb: await thumbAt(v, w.from + 900) })));
+              setChoices(items);
+              setChosen(wins.length - 1);
+              if (dbg) dbg.windows = wins;
+            } else setChoices([]);
+          } catch { setChoices([]); }
+        }
+        const sess = addSession({ type: 'swing', score: r.score, tempoRatio: r.metrics.tempoRatio, swing: r, club: currentClub ?? undefined });
+        savedRef.current = true; setAnalyzed(true);
+        // F3.1: con la revisión de video encendida se guarda el video y la pista de postura (sin cambiar el análisis).
+        if (flags.videoReview && fileRef.current) {
+          const file = fileRef.current, hz = frames === sampled.frames ? 30 : 10, durationMs = Math.round((v.duration || 0) * 1000);
+          setSaved({ sessionId: sess.id });
+          void getMediaStore().then((st) => persistReview(st, { file, frames: reviewFrames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
+            if (tokenRef.current !== token) return; // el usuario ya cambió de video o volvió a analizar
+            if (!out.ok) { setMediaNotice('El análisis se guardó, pero ' + out.message.charAt(0).toLowerCase() + out.message.slice(1)); return; }
+            useStore.getState().attachMedia(sess.id, out.ids);
+            setSaved({ sessionId: sess.id, ...out.ids });
+            if (!out.persistent) setMediaNotice('En este navegador el video no se conservará al cerrar la pestaña (por ejemplo en modo privado).');
+          }).catch(() => setMediaNotice('El análisis se guardó, pero el video no se pudo guardar.'));
+        }
       }
     } catch (e) {
       setError('No se pudo analizar el video. ' + (e instanceof Error ? e.message : ''));
+      if (dbg) dbg.thrown = 'No se pudo analizar el video. ' + (e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      if (dbg) Object.assign(dbg, { done: true, ms: Math.round(performance.now() - (dbg.t0 as number)) });
     }
   };
 
-  if (limitReached && !result) {
+  /**
+   * Analiza OTRO swing del mismo video (F3.5, #10). No consume cuota: reemplaza el análisis de la misma sesión en vez de
+   * guardar otra. Si el otro swing no se puede leer, se conserva el anterior y se avisa.
+   */
+  const chooseSwing = async (idx: number) => {
+    const v = videoRef.current, ch = choices[idx];
+    if (!v || !ch || choosing || idx === chosen || !saved) return;
+    setChoosing(true);
+    setError(null);
+    const token = tokenRef.current;
+    const stale = () => tokenRef.current !== token;
+    const dbg: DebugBag | null = import.meta.env.DEV ? debugSwing({ done: false, t0: performance.now(), view, chosen: idx }) : null;
+    try {
+      const pose = await loadPose();
+      const dur = Math.min(v.duration || 0, MAX_SECONDS);
+      const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+      const { frames, sampled: n } = await sampleRange(v, pose, ch.w.from, Math.min(dur * 1000, ch.w.to));
+      const r2 = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: n });
+      if (stale()) return;
+      if (typeof r2 === 'string') {
+        setError('No pude leer ese swing: ' + SWING_ERROR_TEXT[r2] + ' Se conserva el análisis anterior.');
+        if (dbg) Object.assign(dbg, { errorText: SWING_ERROR_TEXT[r2], result: r2, done: true });
+        return;
+      }
+      const rd = await addReviewData(v, pose, frames, r2, dur * 1000);
+      let newShots: Shot[] = [];
+      try {
+        const key = await captureKeyFrames(v, frames, r2);
+        newShots = key.shots;
+        const start = frames.find((x) => x.t === r2.times?.address);
+        if (start) r2.club = readClub(r2.view ?? 'frente', key.address, key.top, targetSide(start.lm, r2.lefty ?? profile.lefty)) ?? undefined;
+      } catch { newShots = []; }
+      // Primero la pista (reemplazo atómico): si falla, no se cambia nada y se conserva el análisis anterior.
+      if (saved.mediaId && saved.poseTrackId) {
+        const st = await getMediaStore();
+        await st.savePoseTrack(framesToPoseTrack(rd.frames, saved.mediaId, 30), saved.poseTrackId);
+      }
+      if (stale()) return;
+      setShots(newShots);
+      setResult(r2);
+      setChosen(idx);
+      useStore.getState().replaceSessionSwing(saved.sessionId, r2);
+      if (saved.mediaId && saved.poseTrackId) setSaved({ ...saved }); // la revisión recarga la pista
+      if (dbg) Object.assign(dbg, { result: r2, finish: rd.finish, done: true });
+    } catch (e) {
+      if (!stale()) setError('No se pudo analizar ese swing. ' + (e instanceof Error ? e.message : ''));
+      if (dbg) Object.assign(dbg, { thrown: String(e), done: true });
+    } finally {
+      setChoosing(false);
+    }
+  };
+
+  if (quota.showGate && !result) {
     return (
       <PremiumGate title="Ya usaste tu análisis de hoy">
         La versión gratuita incluye {FREE.swingUploadsPerDay} análisis de video por día. Con Premium son ilimitados y además tienes el análisis en vivo.
@@ -651,10 +847,10 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url && !busy && <ClubPicker value={currentClub} onChange={setCurrentClub} />}
         {url && (
           <div className="flex gap-2">
-            <Button full onClick={analyze} disabled={busy}>
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
+            <Button full onClick={analyze} disabled={busy || choosing || !quota.canAnalyze}>
+              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> Ya analizado</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => { setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
+            <Button variant="outline" disabled={busy || choosing} onClick={() => { tokenRef.current++; setSaved(null); setMediaNotice(null); setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
           </div>
         )}
         {!profile.premium && <p className="text-xs text-muted-foreground text-center">Gratis: {Math.max(0, FREE.swingUploadsPerDay - used)} de {FREE.swingUploadsPerDay} análisis disponibles hoy.</p>}
@@ -667,19 +863,38 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       )}
       {error && <Notice tone="error">{error}</Notice>}
       {warn && <Notice>{warn}</Notice>}
+      {mediaNotice && <Notice>{mediaNotice}</Notice>}
       {result?.viewMismatch && (
         <Notice tone="error">
           Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.
         </Notice>
       )}
+      {flags.videoReview && choices.length > 1 && result && (
+        <Card className="space-y-3">
+          <p className="text-sm font-medium" data-swing-chooser>Se vieron {choices.length} swings en el video</p>
+          <p className="text-xs text-muted-foreground">Analicé el último. Si el que querías es otro, tócalo: no cuenta como otro análisis.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {choices.map((c, i) => (
+              <button key={c.w.index} disabled={choosing || (!saved?.mediaId && !mediaNotice)} onClick={() => void chooseSwing(i)} aria-pressed={i === chosen}
+                className={`rounded-xl overflow-hidden border-2 text-left ${i === chosen ? 'border-primary' : 'border-border'} ${choosing ? 'opacity-60' : ''}`}>
+                {c.thumb ? <img src={c.thumb} alt={`Swing ${i + 1}`} className="w-full aspect-[3/4] object-cover bg-black" /> : <div className="w-full aspect-[3/4] bg-muted" />}
+                <span className="block text-[11px] px-1.5 py-1">Swing {i + 1} · {((c.w.from + 900) / 1000).toFixed(1).replace('.', ',')} s{i === chosen ? ' ✓' : ''}</span>
+              </button>
+            ))}
+          </div>
+          {choosing && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando el otro swing…</p>}
+        </Card>
+      )}
+      {result && flags.videoReview && saved?.mediaId && (
+        <VideoReview key={`${saved.mediaId}:${chosen}`} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
+      )}
+      {result && flags.compare && saved?.mediaId && <Link to={`/comparar?a=${saved.sessionId}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>
   );
 }
 
 /* ───────────────────────── En vivo (Premium) ───────────────────────── */
-
-type Phase = 'ready' | 'top' | 'settle' | 'rearm';
 
 function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const { profile, addSession } = useStore();
@@ -693,6 +908,22 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const [on, setOn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** F10.5: la cámara se detuvo porque la app pasó a segundo plano; los swings se conservan y se reanuda a mano. */
+  const [interrupted, setInterrupted] = useState(false);
+  /** F10.6: aviso de que se bajó la resolución por rendimiento. */
+  const [perfNote, setPerfNote] = useState<string | null>(null);
+  const [perm, setPerm] = useState<CameraPermission>('unknown');
+  const liveFlags = useFlags();
+  /** F10.4: grabación de la sesión (solo con `flags.liveRecording`): cada tramo de cámara es una grabación con las marcas de sus swings. */
+  const recRef = useRef<LiveRecorder | null>(null);
+  const marksRef = useRef<{ from: number; to: number }[]>([]);
+  const segsRef = useRef<Promise<{ blob: Blob | null; marks: { from: number; to: number }[]; w: number; h: number }>[]>([]);
+  const dimsRef = useRef({ w: 0, h: 0 });
+  const [clipIds, setClipIds] = useState<string[]>([]);
+  const [clipSound, setClipSound] = useState<BallSound[]>([]);
+  /** F10.3: el micrófono es opcional y empieza apagado. */
+  const [useMic, setUseMic] = useState(false);
+  useEffect(() => { void queryCameraPermission().then(setPerm); }, []);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
   const [status, setStatus] = useState('Colócate de cuerpo entero frente a la cámara');
   const [swings, setSwings] = useState<SwingResult[]>([]);
@@ -705,7 +936,18 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
     if (c.view !== g.view || c.ok !== g.ok || c.show !== g.show) { guideRef.current = g; setGuide(g); }
   };
 
+  /** Cierra la grabación del tramo actual (sin esperar): su resultado queda en `segsRef` para cortar los swings al terminar. */
+  const closeRecording = () => {
+    const rec = recRef.current;
+    if (!rec) return;
+    recRef.current = null;
+    const marks = marksRef.current; marksRef.current = [];
+    const { w, h } = dimsRef.current;
+    segsRef.current.push(rec.stop().then((blob) => { rec.discard(); return { blob, marks, w, h }; }));
+  };
+
   const stop = () => {
+    closeRecording();
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -713,88 +955,123 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   };
   useEffect(() => stop, []);
 
-  const start = async (face = facing) => {
-    setError(null); setLoading(true);
+  // F10.5: al salir de la app (visibilitychange/pagehide) se detiene la cámara de forma segura y se conserva lo ya detectado.
+  useEffect(() => {
+    const pause = () => { if (streamRef.current) { stop(); setInterrupted(true); } };
+    const onVis = () => { if (document.hidden) pause(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', pause);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', pause); };
+  }, []);
+
+  // `fresh`: sesión nueva (vacía los swings de la anterior). Al cambiar de cámara en plena sesión no se vacía.
+  const start = async (face = facing, fresh = true) => {
+    setError(null); setLoading(true); setInterrupted(false); setPerfNote(null);
+    if (fresh) { swingsRef.current = []; setSwings([]); }
     try {
       const pose = await loadPose();
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: false });
+      // Con respaldo a CPU y corte tras 3 fallos seguidos (#20): el detector nunca deja la cámara congelada en silencio.
+      const detector = createLiveDetector(pose);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: face, width: { ideal: 960 }, height: { ideal: 720 }, frameRate: { ideal: 60 } }, audio: liveFlags.liveRecording && useMic });
       streamRef.current = stream;
       const v = videoRef.current!;
       v.srcObject = stream;
       await v.play();
       setOn(true);
+      if (liveFlags.liveRecording && typeof MediaRecorder !== 'undefined') {
+        const rec = new LiveRecorder({ create: (s, m) => new MediaRecorder(s, { mimeType: m }) as never, isSupported: (t) => MediaRecorder.isTypeSupported(t), now: () => performance.now() }, (e) => setPerfNote(e === 'warn' ? 'Llevas 12 minutos grabando: a los 15 se detiene la grabación.' : 'Se llegó a los 15 minutos: la grabación se detuvo (el análisis sigue).'));
+        if (rec.start(stream)) { recRef.current = rec; marksRef.current = []; dimsRef.current = { w: v.videoWidth, h: v.videoHeight }; }
+      }
 
-      const buf: Frame[] = [];
-      let phase: Phase = 'ready', tTop = 0, tImp = 0, lowSince = 0;
+      // La detección de cada swing (histéresis, bajada en tiempo real, separación de 3 s, rearme y bloqueo de identidad) vive en
+      // `lib/live/detector.ts`, probada con cuadros sintéticos (F10.2).
+      const det = new LiveSwingDetector({ lefty: profile.lefty, view: () => viewRef.current, aspect: () => (v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1) });
 
+      let busy = false;
+      const fps = new FpsMonitor();
       const loop = () => {
         rafRef.current = requestAnimationFrame(loop);
-        if (v.readyState < 2) return;
+        if (busy || v.readyState < 2) return;
+        busy = true;
         const now = performance.now();
-        const f = detect(pose, v, now);
-        const c = canvasRef.current!;
+        detector(v, now)
+          .then((f) => {
+            if (!streamRef.current) return;
+            step(f, now);
+            // F10.6: si se procesan menos de 12 cuadros por segundo durante 5 s, se baja la entrada a 640×480 y se avisa.
+            if (fps.record(now) === 'lower') {
+              void stream.getVideoTracks()[0]?.applyConstraints({ width: { ideal: 640 }, height: { ideal: 480 } }).then(() => setPerfNote('Bajé la resolución de la cámara para que el análisis vaya fluido.')).catch(() => setPerfNote('Tu teléfono va lento: cierra otras apps para mejorar el análisis en vivo.'));
+            }
+          })
+          .catch((e) => {
+            stop();
+            setError(e instanceof PoseFailure
+              ? 'El análisis de postura falló varias veces seguidas. Cierra otras apps o pestañas y vuelve a iniciar.'
+              : 'Se interrumpió el análisis en vivo. ' + (e instanceof Error ? e.message : ''));
+          })
+          .finally(() => { busy = false; });
+      };
+      const step = (f: Frame | null, now: number) => {
+        const c = canvasRef.current;
+        if (!c) return;
         if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
         const ctx = c.getContext('2d')!;
         ctx.clearRect(0, 0, c.width, c.height);
-        if (!f) { if (phase === 'ready') { setStatus('No te veo: aléjate hasta que entres de cuerpo entero'); putGuide({ ...guideRef.current, ok: false, show: true }); } return; }
+        if (!f) { const r = det.noPerson(); if (r.status) setStatus(r.status); if (r.guide) putGuide(r.guide); return; }
         drawSkeleton(ctx, f.lm, c.width, c.height);
-        buf.push(f);
-        while (buf.length && now - buf[0].t > 8000) buf.shift();
-
-        const wy = (f.lm[LM.L_WRIST].y + f.lm[LM.R_WRIST].y) / 2;
-        const shY = (f.lm[LM.L_SHOULDER].y + f.lm[LM.R_SHOULDER].y) / 2;
-        const hipY = (f.lm[LM.L_HIP].y + f.lm[LM.R_HIP].y) / 2;
-        const handsHigh = wy < shY - 0.02;
-        const handsLow = wy > hipY - 0.04;
-
-        const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
-        if (phase === 'ready') {
-          const seen = viewRef.current === 'auto' ? viewOfFrame(f, aspect) : viewRef.current;
-          const fr = framingCheck(f.lm);
-          putGuide({ view: seen, ok: fr.ok, show: true });
-          setStatus(fr.ok ? `Listo (${VIEW_LABEL[seen].toLowerCase()}). Haz tu swing cuando quieras` : fr.hint);
-          if (handsHigh) { phase = 'top'; tTop = now; putGuide({ ...guideRef.current, show: false }); }
-        } else if (phase === 'top') {
-          if (handsLow) { phase = 'settle'; tImp = now; }
-          else if (now - tTop > 2500) phase = 'rearm';
-        } else if (phase === 'settle') {
-          if (now - tImp > 600) {
-            const seg = buf.filter((b) => b.t >= tTop - 2500 && b.t <= tImp + 500);
-            const r = analyzeSwing(seg, { lefty: profile.lefty, view: viewRef.current, aspect });
-            if (typeof r !== 'string') {
-              swingsRef.current = [r, ...swingsRef.current];
-              setSwings(swingsRef.current);
-              setStatus(`Swing ${swingsRef.current.length}: ${r.score}/100`);
-            } else setStatus('No pude leer ese swing. Repítelo de cuerpo entero');
-            phase = 'rearm'; lowSince = 0;
-          }
-        } else if (phase === 'rearm') {
-          // vuelve a armar solo cuando las manos llevan medio segundo abajo (posición de inicio)
-          if (handsLow) { if (!lowSince) lowSince = now; if (now - lowSince > 500) phase = 'ready'; }
-          else lowSince = 0;
+        const r = det.step(f, now);
+        if (r.status) setStatus(r.status);
+        if (r.guide) putGuide(r.guide);
+        if (r.swing) {
+          const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
+          const res = analyzeSwing(r.swing, { lefty: profile.lefty, view: viewRef.current, aspect });
+          if (typeof res !== 'string') {
+            if (recRef.current) marksRef.current.push({ from: recRef.current.markAt(r.swing[0].t), to: recRef.current.markAt(r.swing[r.swing.length - 1].t) });
+            swingsRef.current = [res, ...swingsRef.current];
+            setSwings(swingsRef.current);
+            setStatus(`Swing ${swingsRef.current.length}: ${res.score}/100`);
+          } else setStatus('No pude leer ese swing. Repítelo de cuerpo entero');
         }
       };
       loop();
     } catch (e) {
-      setError(e instanceof DOMException && e.name === 'NotAllowedError'
-        ? 'Necesito permiso para usar la cámara. Actívalo en los ajustes del navegador o del teléfono.'
-        : 'No se pudo abrir la cámara. ' + (e instanceof Error ? e.message : ''));
+      const cp = cameraProblem(e);
+      setError(`${cp.title}. ${cp.detail}`);
       stop();
     } finally {
       setLoading(false);
     }
   };
 
-  const finish = () => {
+  const finish = async () => {
     stop();
-    const list = swingsRef.current;
-    if (list.length) {
-      const best = list.reduce((a, b) => (b.score > a.score ? b : a));
-      addSession({ type: 'swing', live: true, score: best.score, tempoRatio: best.metrics.tempoRatio, swing: best, shots: list.length });
+    // Idempotente: vacía la lista, así un doble toque no guarda dos veces (#18).
+    const payload = drainLiveSwings(swingsRef);
+    const segs = segsRef.current; segsRef.current = [];
+    let liveClips: string[] = [];
+    const liveSound: BallSound[] = [];
+    if (payload && segs.length) {
+      // F10.4: se cortan los swings (±2 s) de cada grabación, se guardan y la grabación completa se descarta.
+      try {
+        const store = await getMediaStore();
+        for (const sg of await Promise.all(segs)) {
+          if (!sg.blob) continue;
+          for (const m of sg.marks) {
+            const win = clipWindow(m.from, m.to, Infinity);
+            const clip = win && (await cutClip(sg.blob, win.fromMs, win.toMs));
+            if (!clip || !win) continue;
+            const ref = await store.saveMedia(clip, { kind: 'source', mime: clip.type, durationMs: win.toMs - win.fromMs, w: sg.w, h: sg.h, rotation: 0, clock: makeClock({ fpsNominal: 30, fpsSource: 'estimated' }) });
+            liveClips.push(ref.id);
+            if (useMic) liveSound.push(await classifyClipSound(clip, m.to - 500 - win.fromMs));       // el impacto visual cae ≈ 0,5 s antes del último cuadro del swing
+          }
+        }
+      } catch { liveClips = []; }
     }
+    if (payload) addSession({ ...payload, ...(liveClips.length ? { liveClips } : {}), ...(liveSound.length ? { liveSound } : {}) });
+    setClipIds(liveClips); setClipSound(liveSound);
   };
 
-  const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n); };
+  const flip = () => { const n = facing === 'user' ? 'environment' : 'user'; setFacing(n); stop(); start(n, false); };
   const last = swings[0];
   const topIssue = last?.feedback.find((f) => f.severity !== 'good');
 
@@ -807,6 +1084,8 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
             <Camera className="w-10 h-10 opacity-80" />
             <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente o desde atrás, y entra de cuerpo entero.</p>
+            {liveFlags.liveRecording && <label className="flex items-center gap-2 text-xs opacity-80"><input type="checkbox" checked={useMic} onChange={(e) => setUseMic(e.target.checked)} /> Usar el micrófono para distinguir golpes con bola (opcional)</label>}
+            <p className="text-xs opacity-60" data-camera-permission>{perm === 'denied' ? 'La cámara está bloqueada: actívala en los ajustes del teléfono o del navegador.' : 'Uso la cámara para ver tu postura. La imagen se procesa en tu teléfono y no se envía ni se guarda.'}</p>
             <Button variant="gold" onClick={() => start()} disabled={loading}>
               {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando…</> : <><Video className="w-5 h-5" /> Iniciar análisis en vivo</>}
             </Button>
@@ -831,18 +1110,50 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
         )}
       </div>
       {error && <Notice tone="error">{error}</Notice>}
+      {perfNote && <Notice>{perfNote}</Notice>}
+      {interrupted && (
+        <Notice>Pausé la cámara porque saliste de la app. {swings.length ? `Tus ${swings.length} swing${swings.length > 1 ? 's' : ''} siguen aquí: ` : ''}toca Reanudar para seguir o Terminar para guardar.</Notice>
+      )}
+      {interrupted && (
+        <div className="flex gap-2">
+          <Button full onClick={() => void start(facing, false)}><Video className="w-4 h-4" /> Reanudar</Button>
+          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
+        </div>
+      )}
       {on && (
         <div className="flex gap-2">
           <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
           <Button variant="outline" onClick={flip} aria-label="Cambiar cámara"><RefreshCw className="w-5 h-5" /></Button>
         </div>
       )}
-      {!on && swings.length > 0 && (
+      {clipIds.length > 0 && !on && <LiveClips ids={clipIds} sound={clipSound} />}
+      {!on && !interrupted && swings.length > 0 && (
         <>
           <Notice tone="ok">Sesión guardada con {swings.length} swing{swings.length > 1 ? 's' : ''}. Este fue el mejor:</Notice>
           <SwingResultView r={swings.reduce((a, b) => (b.score > a.score ? b : a))} />
         </>
       )}
+    </div>
+  );
+}
+
+/** Videos recortados de los swings de una sesión en vivo (F10.4). */
+function LiveClips({ ids, sound }: { ids: string[]; sound: BallSound[] }) {
+  const [urls, setUrls] = useState<string[]>([]);
+  useEffect(() => {
+    let dead = false; const made: string[] = [];
+    (async () => {
+      const st = await getMediaStore();
+      for (const id of ids) { try { const { blob } = await st.getMedia(id); made.push(URL.createObjectURL(blob)); } catch { /* ya no está */ } }
+      if (!dead) setUrls([...made]);
+    })();
+    return () => { dead = true; made.forEach((u) => URL.revokeObjectURL(u)); };
+  }, [ids]);
+  if (!urls.length) return null;
+  return (
+    <div className="space-y-2" data-live-clips>
+      <p className="text-sm font-medium">Videos de tus swings</p>
+      <div className="grid grid-cols-2 gap-2">{urls.map((u, i) => <div key={u}><video src={u} controls playsInline muted className="w-full rounded-xl bg-black" aria-label={`Swing ${i + 1}`} />{sound[i] && <p className="text-[11px] text-muted-foreground mt-0.5">{BALL_SOUND_LABEL[sound[i]]}</p>}</div>)}</div>
     </div>
   );
 }
