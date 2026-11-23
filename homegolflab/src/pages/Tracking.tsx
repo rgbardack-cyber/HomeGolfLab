@@ -5,6 +5,7 @@ import { useStore, useUnit } from '@/store';
 import { fmtDist, fmtLateral, inputValue, parseToMeters, toMeters, UNIT_SHORT, type DistUnit } from '@/lib/units';
 import { fmtClock, isLocked, remainingSec } from '@/lib/ads';
 import AdGate from '@/components/AdGate';
+import RecordingTips from '@/components/RecordingTips';
 import VideoFlight from '@/components/VideoFlight';
 import { analyzeShot, CLUBS, detectMovingBright, dispersion, type P2, type Shot, type TrackPoint } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, Segmented, Stat } from '@/components/ui';
@@ -43,6 +44,7 @@ export default function Tracking() {
 
   return (
     <div className="space-y-5">
+      <RecordingTips area="tracking" />
       <PageHeader
         icon={<Target className="w-5 h-5" />}
         title="Ball tracking"

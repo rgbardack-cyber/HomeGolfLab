@@ -25,6 +25,7 @@ import { createLiveDetector, detectResilient, drawSkeleton, loadPose, PoseFailur
 import { seekVideo } from '@/lib/videoSeek';
 import { CLUBS } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
+import RecordingTips from '@/components/RecordingTips';
 
 type Tab = 'video' | 'live';
 type ViewChoice = SwingView | 'auto';
@@ -62,6 +63,7 @@ export default function Swing() {
   }
   return (
     <div className="space-y-5">
+      <RecordingTips area="swing" />
       <PageHeader icon={<Activity className="w-5 h-5" />} title="Análisis de swing" subtitle={mode === 'casa' ? 'En casa: de frente o desde atrás, cuerpo entero' : 'En cancha: apoya el teléfono a unos 3 m, de frente o desde atrás'} />
       <Segmented<Tab>
         value={tab}
