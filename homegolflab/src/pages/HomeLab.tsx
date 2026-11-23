@@ -5,7 +5,7 @@ import { fmtDist, inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
 import { buildPlan, GEAR_LABEL, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
 import { fileToImages, scanInfo, scanSpace, scanToSpace, ScanError, type ScanInfo, type ScanResult } from '@/lib/scan';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
-import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, noticeAccepted } from '@/lib/homelabNotice';
+import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE, noticeAccepted, quickNoticeVisible } from '@/lib/homelabNotice';
 
 const DEFAULT: Space = { lengthM: 4, widthM: 3, ceilingM: 2.5, floor: 'alfombra', gear: ['putter'] };
 const FLOORS: { value: Floor; label: string }[] = [{ value: 'alfombra', label: 'Alfombra' }, { value: 'cesped', label: 'Césped' }, { value: 'duro', label: 'Piso duro' }];
@@ -15,6 +15,7 @@ export default function HomeLab() {
   const unit = useUnit();
   const [editing, setEditing] = useState(!space);
   const [showNotice, setShowNotice] = useState(false);
+  const [quickDismissed, setQuickDismissed] = useState(false); // el recordatorio corto ya se cerró en esta vuelta de «analizar un espacio»
   const accepted = noticeAccepted(homelabNotice);
   const today = todayISO();
 
@@ -33,7 +34,7 @@ export default function HomeLab() {
       icon={<FlaskConical className="w-5 h-5" />}
       title="HomeLAB"
       subtitle="Tu laboratorio de práctica en casa"
-      right={space && !editing ? <button onClick={() => setEditing(true)} aria-label="Editar espacio" className="w-10 h-10 rounded-xl hover:bg-muted flex items-center justify-center"><Settings2 className="w-5 h-5" /></button> : undefined}
+      right={space && !editing ? <button onClick={() => { setQuickDismissed(false); setEditing(true); }} aria-label="Editar espacio" className="w-10 h-10 rounded-xl hover:bg-muted flex items-center justify-center"><Settings2 className="w-5 h-5" /></button> : undefined}
     />
   );
 
@@ -54,7 +55,7 @@ export default function HomeLab() {
     return (
       <div className="space-y-5">
         {header}
-        <SafetyNotice acceptedAt={accepted ? homelabNotice!.acceptedAt : null} onAccept={() => { acceptHomelabNotice(); setShowNotice(false); }} onClose={() => setShowNotice(false)} />
+        <SafetyNotice acceptedAt={accepted ? homelabNotice!.acceptedAt : null} onAccept={() => { acceptHomelabNotice(); setQuickDismissed(true); setShowNotice(false); }} onClose={() => setShowNotice(false)} />
       </div>
     );
   }
@@ -63,7 +64,8 @@ export default function HomeLab() {
     return (
       <div className="space-y-5">
         {header}
-        <ScanFlow current={space} onSave={(s, info) => { setSpace(s, info); setEditing(false); }} onCancel={space ? () => setEditing(false) : undefined} />
+        <ScanFlow current={space} onSave={(s, info) => { setSpace(s, info); setEditing(false); setQuickDismissed(false); }} onCancel={space ? () => { setEditing(false); setQuickDismissed(false); } : undefined} />
+        {quickNoticeVisible({ analyzingSpace: true, accepted, quickDismissed, fullOpen: showNotice }) && <QuickNotice onClose={() => setQuickDismissed(true)} onFull={() => { setQuickDismissed(true); setShowNotice(true); }} />}
       </div>
     );
   }
@@ -143,6 +145,27 @@ export default function HomeLab() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function QuickNotice({ onClose, onFull }: { onClose: () => void; onFull: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-label={HOMELAB_QUICK_TITLE} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-card p-5 space-y-3 shadow-xl">
+        <div className="flex items-center gap-2">
+          <ShieldAlert className="w-5 h-5 text-destructive shrink-0" />
+          <h2 className="font-heading text-lg font-semibold">{HOMELAB_QUICK_TITLE}</h2>
+        </div>
+        <ul className="text-sm space-y-1 list-disc pl-5">{HOMELAB_QUICK_ITEMS.map((t) => <li key={t}>{t}</li>)}</ul>
+        <Button full autoFocus onClick={onClose}>Entendido</Button>
+        <button onClick={onFull} className="block mx-auto text-xs text-muted-foreground underline">Ver el aviso completo</button>
+      </div>
     </div>
   );
 }

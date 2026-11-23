@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { buildPlan, DRILLS, LIMITS, NO_HOME_DRILL, zones, type Gear, type Space } from './homelab';
-import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_VERSION, noticeAccepted } from './homelabNotice';
+import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_VERSION, HOMELAB_QUICK_ITEMS, noticeAccepted, quickNoticeVisible } from './homelabNotice';
 import { useStore } from '@/store';
 
 /** Claves de feedback que el análisis REALMENTE emite: se leen del código de swing.ts y club.ts. */
@@ -151,5 +151,24 @@ describe('HomeLAB: los mínimos se escriben sin contradecir al usuario', () => {
     const bajo: Space = { lengthM: 4, widthM: 3, ceilingM: 2.7432, floor: 'alfombra', gear: ['hierros'] }; // 3,0 yd exactas: no alcanza
     expect(zones(bajo, 'yd')[2].note).toContain('mínimo 3,1 yd');
     expect(zones(bajo, 'm')[2].note).toContain('mínimo 2,75 m');
+  });
+});
+
+describe('HomeLAB: recordatorio corto al analizar un espacio nuevo', () => {
+  const base = { analyzingSpace: true, accepted: true, quickDismissed: false, fullOpen: false };
+  it('sale cada vez que se empieza a analizar un espacio, una vez por vuelta', () => {
+    expect(quickNoticeVisible(base)).toBe(true);
+    expect(quickNoticeVisible({ ...base, quickDismissed: true })).toBe(false);           // ya lo cerró en esta vuelta
+    expect(quickNoticeVisible({ ...base, analyzingSpace: false })).toBe(false);          // viendo el plan: no molesta
+  });
+  it('no se junta con el aviso completo: ni antes de aceptarlo ni mientras está abierto', () => {
+    expect(quickNoticeVisible({ ...base, accepted: false })).toBe(false);
+    expect(quickNoticeVisible({ ...base, fullOpen: true })).toBe(false);
+  });
+  it('es corto (3 líneas) y cubre medir, despejar y foam o red', () => {
+    expect(HOMELAB_QUICK_ITEMS).toHaveLength(3);
+    const t = HOMELAB_QUICK_ITEMS.join(' ').toLowerCase();
+    expect(t).toContain('mide'); expect(t).toContain('despeja'); expect(t).toMatch(/foam|red/);
+    expect(HOMELAB_QUICK_ITEMS.join(' ').length).toBeLessThan(100);
   });
 });

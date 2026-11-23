@@ -21,3 +21,14 @@ export interface HomelabNoticeAcceptance { acceptedAt: string; version: number }
 
 /** ¿Ya aceptó la versión vigente del aviso? */
 export const noticeAccepted = (a: HomelabNoticeAcceptance | null | undefined): boolean => !!a && a.version >= HOMELAB_NOTICE_VERSION;
+
+/**
+ * Recordatorio corto: sale cada vez que el usuario va a analizar un espacio nuevo (después de haber aceptado el aviso completo).
+ * Debe leerse en 3 segundos y quitarse con un toque, con Esc o tocando fuera.
+ */
+export const HOMELAB_QUICK_TITLE = 'Antes de medir tu espacio';
+export const HOMELAB_QUICK_ITEMS = ['Mide tú mismo el espacio.', 'Despeja objetos y personas.', 'Para chipear: foam o red.'] as const;
+
+/** ¿Se muestra el recordatorio corto? Solo al empezar a analizar un espacio, con el aviso completo ya aceptado, sin haberlo cerrado en esta vuelta y sin el aviso completo abierto. */
+export const quickNoticeVisible = (o: { analyzingSpace: boolean; accepted: boolean; quickDismissed: boolean; fullOpen: boolean }): boolean =>
+  o.analyzingSpace && o.accepted && !o.quickDismissed && !o.fullOpen;
