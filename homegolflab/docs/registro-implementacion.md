@@ -247,3 +247,13 @@ Comprobado en esta máquina (Windows 11): no hay `java`, `adb`, `ANDROID_HOME` n
 - **Para encender algo al público, falta**: validar con clips (D9), probar en teléfonos (F11), verificar la política de AdMob (D5), decidir qué hacer con el anuncio de prueba del ball tracking en la web de producción, y encender `export` junto con `exportGate`.
 - **No medido en toda la tanda**: dispositivos reales, diestros, otros teléfonos, precisión de la bola y de los umbrales [PROPUESTA].
 - Incidente recurrente: el índice de git queda vacío por iCloud; se restauró con `git reset --mixed HEAD` (sin perder nada) antes de cada commit.
+
+## Semana 23–29 nov 2026, bloque A. Base del repo (23 nov 2026)
+- **Hecho**: repo clonado en `C:\Users\Ryan\dev\homegolflab` (GitHub `rgbardack-cyber/homegolflab`, rama `feat/video-review-export`). El código de la app está en la subcarpeta `homegolflab/`.
+- **Comparación con iCloud** (sin `node_modules`, `dist`, `dist-static`, `.env`; ignorando fin de línea): el código es idéntico. Solo existían en iCloud `docs/prompt-plan-nativo-xcode-android.md` (rescatado en la rama local `rescate/icloud-2026-11-23`), `HomeGolfLab-estatico.zip` (13,6 MB, artefacto de build; se queda en iCloud) y `ads 2.ts` / `pose 2.ts` (copias con nombre de iCloud, idénticas a `ads.ts` / `pose.ts` del clon). No se tocó nada en iCloud.
+- **Medido** (clon, antes de los cambios): `npm install` sin vulnerabilidades; `typecheck` correcto; **453 de 453 pruebas pasan (39 archivos)**; `build` correcto (aviso de chunk de 1,3 MB, ya existía).
+- **R2**: `.github/workflows/pages.yml` ya no define `VITE_INTERNAL` ni `VITE_FLAG_*`: Pages queda con todas las banderas apagadas y sin panel interno.
+- **R3**: en `AdGate.tsx`, en la web (no nativa) sin anuncios disponibles ya no se desbloquea el ball tracking con el anuncio de prueba; se muestra un aviso. El anuncio de prueba sigue en desarrollo y con `VITE_INTERNAL=1`.
+- **Después de los cambios**: `typecheck` correcto, 453 de 453 pruebas, `build` correcto.
+- **No medido**: el comportamiento de R3 en el navegador (no hay prueba automática del componente) y la build real de Pages.
+- **Pendiente**: aprobación de Ryan para publicar en Pages; push de las ramas `rescate/icloud-2026-11-23` y `fix/pages-publico-sin-banderas` (el push fue bloqueado por permisos); `gh` no está instalado.

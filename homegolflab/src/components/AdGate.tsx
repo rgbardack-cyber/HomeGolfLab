@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Crown, Loader2, Megaphone, PlayCircle } from 'lucide-react';
-import { AD_RULES, nativeAds, PLACEHOLDER_SECONDS, showNativeRewarded } from '@/lib/ads';
+import { AD_RULES, adsAvailable, nativeAds, PLACEHOLDER_SECONDS, showNativeRewarded } from '@/lib/ads';
 import { Button, Card, Notice } from '@/components/ui';
 
 /**
@@ -20,7 +20,11 @@ export default function AdGate({ onUnlocked }: { onUnlocked: () => void }) {
 
   const watch = async () => {
     setError(null);
-    if (!nativeAds()) { setPlaying(true); return; }
+    if (!nativeAds()) {
+      // Web de producción: no hay red de anuncios y el anuncio de prueba NO desbloquea nada (R3).
+      if (!adsAvailable()) { setError('Los anuncios solo están disponibles en la app de las tiendas.'); return; }
+      setPlaying(true); return;
+    }
     setLoading(true);
     try {
       if (await showNativeRewarded()) setSeen((s) => s + 1);
