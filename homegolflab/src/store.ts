@@ -9,6 +9,7 @@ import { migrateStore, STORE_VERSION } from '@/lib/storeMigrate';
 import type { ShotShape } from '@/lib/shotShape';
 import { asUnit, DEFAULT_UNIT, type DistUnit } from '@/lib/units';
 import type { DistanceResult } from '@/lib/distance';
+import { HOMELAB_NOTICE_VERSION, type HomelabNoticeAcceptance } from '@/lib/homelabNotice';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -61,6 +62,7 @@ interface State {
   exportPasses: ExportPass[];       // pases de exportación vigentes (F9); sobreviven al cierre de la app
   freeExportDate: string | null;    // día (AAAA-MM-DD) de la última exportación gratis diaria sin anuncio (D5)
   adsConsent: 'granted' | 'declined' | 'unknown'; // el usuario acepta o rechaza ver anuncios (D5)
+  homelabNotice: HomelabNoticeAcceptance | null;  // aviso de seguridad del HomeLAB: cuándo y qué versión aceptó (R13)
 
   setMode: (m: Mode) => void;
   setCurrentClub: (c: string | null) => void;
@@ -90,6 +92,8 @@ interface State {
   touchExportPass: (id: string) => void;
   markFreeExport: (day: string) => void;
   setAdsConsent: (c: 'granted' | 'declined' | 'unknown') => void;
+  /** Guarda que el usuario aceptó el aviso de seguridad del HomeLAB (fecha y versión del texto). */
+  acceptHomelabNotice: () => void;
   reset: () => void;
 }
 
@@ -112,6 +116,7 @@ const initial = {
   exportPasses: [] as ExportPass[],
   freeExportDate: null as string | null,
   adsConsent: 'unknown' as 'granted' | 'declined' | 'unknown',
+  homelabNotice: null as HomelabNoticeAcceptance | null,
 };
 
 export const useStore = create<State>()(
@@ -153,6 +158,7 @@ export const useStore = create<State>()(
       touchExportPass: (id) => set({ exportPasses: get().exportPasses.map((x) => (x.id === id ? { ...x, uses: x.uses + 1 } : x)) }),
       markFreeExport: (day) => set({ freeExportDate: day }),
       setAdsConsent: (adsConsent) => set({ adsConsent }),
+      acceptHomelabNotice: () => set({ homelabNotice: { acceptedAt: new Date().toISOString(), version: HOMELAB_NOTICE_VERSION } }),
       reset: () => set({ ...initial }),
     }),
     // version 1 (F2.1): agrega `exportPasses` y los ids de medios. `migrate` conserva todo lo que ya había guardado.

@@ -5,25 +5,28 @@ import { fmtDist, inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
 import { buildPlan, GEAR_LABEL, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
 import { fileToImages, scanInfo, scanSpace, scanToSpace, ScanError, type ScanInfo, type ScanResult } from '@/lib/scan';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
+import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, noticeAccepted } from '@/lib/homelabNotice';
 
 const DEFAULT: Space = { lengthM: 4, widthM: 3, ceilingM: 2.5, floor: 'alfombra', gear: ['putter'] };
 const FLOORS: { value: Floor; label: string }[] = [{ value: 'alfombra', label: 'Alfombra' }, { value: 'cesped', label: 'Césped' }, { value: 'duro', label: 'Piso duro' }];
 
 export default function HomeLab() {
-  const { mode, space, plan, scan, sessions, setSpace, setPlan, addSession, setMode } = useStore();
+  const { mode, space, plan, scan, sessions, homelabNotice, setSpace, setPlan, addSession, setMode, acceptHomelabNotice } = useStore();
   const unit = useUnit();
   const [editing, setEditing] = useState(!space);
+  const [showNotice, setShowNotice] = useState(false);
+  const accepted = noticeAccepted(homelabNotice);
   const today = todayISO();
 
   // Plan del día: se genera una vez por fecha y se conserva el avance.
   useEffect(() => {
-    if (!space || editing) return;
+    if (!space || editing || !accepted) return;
     if (!plan || plan.date !== today) {
       const lastSwing = sessions.find((s) => s.type === 'swing' && s.swing);
       const focus = lastSwing?.swing?.feedback.filter((f) => f.severity !== 'good').map((f) => f.key) ?? [];
       setPlan(buildPlan(space, today, focus, unit));
     }
-  }, [space, plan, today, editing, sessions, setPlan]);
+  }, [space, plan, today, editing, accepted, sessions, setPlan]);
 
   const header = (
     <PageHeader
@@ -42,6 +45,16 @@ export default function HomeLab() {
           <p className="text-sm text-muted-foreground">HomeLAB arma tu práctica con el espacio y el equipo que tienes en casa. Estás en modo Cancha.</p>
           <Button onClick={() => setMode('casa')}>Cambiar a Casa</Button>
         </Card>
+      </div>
+    );
+  }
+
+  // R13: sin aceptar el aviso de seguridad no hay medidas, plan ni sesión. Después queda accesible desde el plan.
+  if (!accepted || showNotice) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <SafetyNotice acceptedAt={accepted ? homelabNotice!.acceptedAt : null} onAccept={() => { acceptHomelabNotice(); setShowNotice(false); }} onClose={() => setShowNotice(false)} />
       </div>
     );
   }
@@ -122,6 +135,7 @@ export default function HomeLab() {
             {drills.map((d, i) => <DrillCard key={d.id} n={i + 1} d={d} onToggle={() => toggle(d.id)} />)}
           </div>
 
+          <button onClick={() => setShowNotice(true)} className="text-xs text-muted-foreground underline">Ver el aviso de seguridad</button>
           {doneToday ? (
             <Notice tone="ok">¡Sesión de hoy completada! Mañana tendrás un plan nuevo.</Notice>
           ) : (
@@ -130,6 +144,27 @@ export default function HomeLab() {
         </>
       )}
     </div>
+  );
+}
+
+function SafetyNotice({ acceptedAt, onAccept, onClose }: { acceptedAt: string | null; onAccept: () => void; onClose: () => void }) {
+  return (
+    <Card className="space-y-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{HOMELAB_NOTICE_DRAFT}</p>
+      <div className="flex items-center gap-2">
+        <ShieldAlert className="w-5 h-5 text-destructive" />
+        <h2 className="font-heading text-lg font-semibold">{HOMELAB_NOTICE_TITLE}</h2>
+      </div>
+      <ul className="space-y-2 text-sm list-disc pl-5">{HOMELAB_NOTICE_ITEMS.map((t) => <li key={t}>{t}</li>)}</ul>
+      {acceptedAt ? (
+        <>
+          <p className="text-xs text-muted-foreground">Lo aceptaste el {new Date(acceptedAt).toLocaleDateString('es')}.</p>
+          <Button full variant="outline" onClick={onClose}>Cerrar</Button>
+        </>
+      ) : (
+        <Button full onClick={onAccept}>Entiendo y acepto</Button>
+      )}
+    </Card>
   );
 }
 

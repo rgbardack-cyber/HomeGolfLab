@@ -880,7 +880,7 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
 
   // Transferencia hacia el objetivo
   if (m.hipShiftPct > HIP.slide) {
-    add({ key: 'shift', severity: 'improve', title: 'Las caderas se deslizan de más', detail: `En el impacto avanzaron un ${m.hipShiftPct}% del ancho de tus hombros hacia el objetivo. Tanto desplazamiento sin giro deja el cuerpo por delante de la bola y las manos atrás.`, drill: 'Swings a media velocidad con una silla o varilla junto a la cadera guía: llega a rozarla y gira, sin empujarla.' }, 4);
+    add({ key: 'slide', severity: 'improve', title: 'Las caderas se deslizan de más', detail: `En el impacto avanzaron un ${m.hipShiftPct}% del ancho de tus hombros hacia el objetivo. Tanto desplazamiento sin giro deja el cuerpo por delante de la bola y las manos atrás.`, drill: 'Swings a media velocidad con una silla o varilla junto a la cadera guía: llega a rozarla y gira, sin empujarla.' }, 4);
   } else if (m.hipShiftPct >= 8) {
     add({ key: 'shift', severity: 'good', title: 'Transfieres el peso al frente', detail: 'Tus caderas avanzan hacia el objetivo en el impacto.' });
   } else {

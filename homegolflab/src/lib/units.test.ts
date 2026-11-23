@@ -60,7 +60,7 @@ describe('avisos del espacio en la unidad elegida (F7.1)', () => {
     expect(m[0].note).toBe('Hace falta al menos 2,0 m libres de largo.');
     expect(yd[0].note).toBe('Hace falta al menos 2,2 yd libres de largo.');
     expect(m.map((z) => z.ok)).toEqual(yd.map((z) => z.ok));                       // la regla (en metros) es la misma
-    expect(yd[2].note).toBe('Techo de 2,6 yd: muy bajo para un swing completo (mínimo 3,0 yd).');
+    expect(yd[2].note).toBe('Techo de 2,6 yd: muy bajo para un swing completo (mínimo 3,1 yd).');
   });
   it('la nota del plan usa la unidad', () => {
     const full: Space = { lengthM: 6, widthM: 4, ceilingM: 3, floor: 'alfombra', gear: ['putter', 'hierros', 'wedge', 'foam'] };

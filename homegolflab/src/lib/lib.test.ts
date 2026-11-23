@@ -216,7 +216,7 @@ describe('swing', () => {
     expect(sway.score).toBeLessThan(clean.score);
     // Deslizamiento: demasiado avance hacia el objetivo en el impacto.
     const slide = front({ hipShift: 0.11 }); // ≈ 69 %
-    expect(slide.feedback.find((f) => f.key === 'shift')?.title).toBe('Las caderas se deslizan de más');
+    expect(slide.feedback.find((f) => f.key === 'slide')?.title).toBe('Las caderas se deslizan de más');
     expect(hipLine(slide)!.rows[1].tone).toBe('warn');
   });
   it('rechaza clips sin swing', () => {
