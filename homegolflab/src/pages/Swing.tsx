@@ -857,7 +857,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url && (
           <div className="flex gap-2">
             <Button full onClick={analyze} disabled={busy || choosing || !quota.canAnalyze}>
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> {t('sw.028')}</> : <><Activity className="w-5 h-5" /> {t('sw.029')}</>}
+              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('sw2.analyzing', { p: progress })}</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> {t('sw.028')}</> : <><Activity className="w-5 h-5" /> {t('sw.029')}</>}
             </Button>
             <Button variant="outline" disabled={busy || choosing} onClick={() => { tokenRef.current++; setSaved(null); setMediaNotice(null); setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label={t('sw.060')}><RefreshCw className="w-5 h-5" /></Button>
           </div>

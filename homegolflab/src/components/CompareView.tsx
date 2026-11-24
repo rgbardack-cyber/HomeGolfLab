@@ -252,7 +252,7 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
           <button className={chip(false)} onClick={togglePlay} aria-label={playing ? t('player.pause') : t('player.play')}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
           <button className={chip(false)} onClick={() => step(-1)} aria-label={t('cv.008')}><ChevronLeft className="w-4 h-4 inline" /></button>
           <button className={chip(false)} onClick={() => step(1)} aria-label={t('cv.009')}><ChevronRight className="w-4 h-4 inline" /></button>
-          <span className="text-xs text-muted-foreground tabular-nums">cuadro A {frameOf(clockA, uiT)}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">{t('cv2.frameA', { n: frameOf(clockA, uiT) })}</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {common.map((k) => <button key={k} className={chip(active === k)} onClick={() => goPhase(k)}>{phaseLabel(k)}</button>)}

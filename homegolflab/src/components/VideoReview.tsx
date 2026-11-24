@@ -10,13 +10,13 @@ import {
   estimateFps, needsReview, nudgeMark, PHASE_KEYS, phaseLabel, phaseMarks, seekTimeForFrame, seekTimeForMark, speedLabel, SPEEDS, stepFrame, validOrder,
   type FrameSample, type PhaseKey, type PhaseMark, type Speed,
 } from '@/lib/reviewPlayer';
-import { DEFAULT_GUIDES, GUIDE_LABEL, guidesAllowed, guidesAt, headUsesNose, hiddenGuides, reviewModelAt, type GuideSet } from '@/lib/swingReview';
+import { DEFAULT_GUIDES, guideLabel, guidesAllowed, guidesAt, headUsesNose, hiddenGuides, reviewModelAt, type GuideSet } from '@/lib/swingReview';
 import type { SwingResult } from '@/lib/swing';
 import { Button, Notice, Segmented } from '@/components/ui';
 import ExportSheet from '@/components/ExportSheet';
 import { useFlags } from '@/lib/flags';
 import { useStore } from '@/store';
-import { t } from '@/i18n';
+import { fmtNumber, t } from '@/i18n';
 
 interface Props {
   r: SwingResult;
@@ -98,7 +98,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
     const on: GuideSet = allowed ? guides : { head: false, torso: false, leadArm: false, hips: false };
     const model = reviewModelAt(rc, tMs, on, { skeleton: allowed && skeleton }, { useNose });
     paint(ctx, buildDrawList(model, tMs, makeViewport(ref.w, ref.h, { x: 0, y: 0, w: cw, h: ch })));
-    const h = hiddenGuides(guidesAt(rc, tMs, on, { useNose })).map((k) => GUIDE_LABEL[k]);
+    const h = hiddenGuides(guidesAt(rc, tMs, on, { useNose })).map((k) => guideLabel(k));
     setHidden((prev) => (prev.join() === h.join() ? prev : h));
   }, [ref, track, times, lefty, guides, skeleton, allowed, useNose, r.view]);
 
@@ -213,7 +213,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
         <button className={chip(false)} onClick={togglePlay} aria-label={playing ? t('player.pause') : t('player.play')}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
         <button className={chip(false)} onClick={() => step(-1)} aria-label={t('vr.012')}><ChevronLeft className="w-4 h-4 inline" /></button>
         <button className={chip(false)} onClick={() => step(1)} aria-label={t('vr.013')}><ChevronRight className="w-4 h-4 inline" /></button>
-        <span className="text-xs text-muted-foreground tabular-nums">cuadro {frameOf(clock, uiT)} · {(uiT / 1000).toFixed(2).replace('.', ',')} s</span>
+        <span className="text-xs text-muted-foreground tabular-nums">{t('vr2.frameLine', { n: frameOf(clock, uiT), s: fmtNumber(uiT / 1000, 2) })}</span>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -241,7 +241,7 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
 
       <div className="flex flex-wrap gap-2">
         {(['head', 'torso', 'leadArm', 'hips'] as const).map((k) => (
-          <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{GUIDE_LABEL[k]}</button>
+          <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{guideLabel(k)}</button>
         ))}
         <button className={chip(skeleton)} aria-pressed={skeleton} onClick={() => setSkeleton((s) => !s)}>{t('vr.003')}</button>
       </div>

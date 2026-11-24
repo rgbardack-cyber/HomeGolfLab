@@ -18,6 +18,7 @@ import { POSE_LANDMARKS, POSE_STRIDE, type PoseTrack } from './media/poseTrack';
 import { CONF, type GuideItem, type GuideKind, type OverlayModel, type SkeletonPoint, type SkeletonSample } from './overlay/model';
 import type { Pt2 } from './overlay/viewport';
 import type { SwingView } from './swing';
+import { t } from '@/i18n';
 
 export const LMI = { NOSE: 0, L_EAR: 7, R_EAR: 8, L_SHOULDER: 11, R_SHOULDER: 12, L_ELBOW: 13, R_ELBOW: 14, L_WRIST: 15, R_WRIST: 16, L_HIP: 23, R_HIP: 24 } as const;
 
@@ -75,6 +76,8 @@ export const DEFAULT_GUIDES: Record<SwingView, GuideSet> = {
   atras: { head: true, torso: false, leadArm: true, hips: false },
 };
 export const GUIDE_LABEL: Record<GuideKind, string> = { head: 'Cabeza', torso: 'Torso', leadArm: 'Brazo guía', hips: 'Caderas' };
+/** Etiqueta en el idioma actual. */
+export const guideLabel = (k: GuideKind): string => t(`guide.${k}`);
 
 export interface ReviewContext {
   track: PoseTrack;

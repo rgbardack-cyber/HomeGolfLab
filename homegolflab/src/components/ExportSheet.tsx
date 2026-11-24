@@ -12,7 +12,7 @@ import { ExportError, exportCapabilities, runExport, type ExportResult } from '@
 import { exportFileName, flightLegend, OUT_H, OUT_W, renderExportFrame, type ExportOptions, type ExportSource, type Template } from '@/lib/export/render';
 import { buildTimeline, chooseFps, fitsLimit, flightSegments, swingSegments, type Segment } from '@/lib/export/timeline';
 import { getMediaStore } from '@/lib/media/store';
-import { DEFAULT_GUIDES, GUIDE_LABEL, type GuideSet } from '@/lib/swingReview';
+import { DEFAULT_GUIDES, guideLabel, type GuideSet } from '@/lib/swingReview';
 import { swingExportSource } from '@/lib/export/sources';
 import type { SwingResult } from '@/lib/swing';
 import { seekVideo } from '@/lib/videoSeek';
@@ -212,7 +212,7 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
           <canvas ref={prevRef} width={OUT_W / 4} height={OUT_H / 4} className="mx-auto rounded-xl bg-black" style={{ maxHeight: '55vh', width: 'auto' }} aria-label={t('ex.017')} />
           <input type="range" aria-label={t('ex.018')} className="w-full accent-[hsl(var(--primary))]" min={0} max={Math.max(0, Math.floor(total) - 1)} step={33} value={Math.min(pos, total)} disabled={busy} onChange={(e) => setPos(+e.target.value)} />
           <div className="flex flex-wrap gap-2">
-            {(['head', 'torso', 'leadArm', 'hips'] as const).map((k) => <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} disabled={busy} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{GUIDE_LABEL[k]}</button>)}
+            {(['head', 'torso', 'leadArm', 'hips'] as const).map((k) => <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} disabled={busy} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{guideLabel(k)}</button>)}
             <button className={chip(skeleton)} aria-pressed={skeleton} disabled={busy} onClick={() => setSkeleton((s) => !s)}>{t('ex.005')}</button>
           </div>
           <Segmented<'impact' | 'silence'> value={audio} onChange={(a) => !busy && setAudio(a)} options={[{ value: 'impact', label: t('ex2.audioImpact') }, { value: 'silence', label: t('ex2.audioNone') }]} />

@@ -8,6 +8,7 @@
  */
 import { getLocale } from '@/i18n';
 import type { SwingResult } from './swing';
+import { t } from '@/i18n';
 
 export type Position = 'inicio' | 'tope' | 'impacto';
 export const POSITION_LABEL: Record<Position, string> = { inicio: 'Inicio', tope: 'Tope', impacto: 'Impacto' };
@@ -127,11 +128,11 @@ export async function askCoach(payload: CoachPayload): Promise<CoachResult> {
   try {
     res = await fetch(`${API}/api/swing/coach`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, language: getLocale() }) });
   } catch {
-    throw new CoachError('No hay conexión con el coach con IA. Revisa tu internet.', 'offline');
+    throw new CoachError(t('coach.offline'), 'offline');
   }
   const body = await res.json().catch(() => null);
   // Sin servidor (por ejemplo, en la versión de prueba publicada en GitHub Pages) /api responde 404 con una página, no con JSON.
-  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new CoachError('Esta versión de prueba no incluye el coach con IA.', 'not_configured');
-  if (!res.ok) throw new CoachError(body?.error ?? 'El análisis con IA falló. Inténtalo de nuevo.', body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
+  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new CoachError(t('coach.notConfigured'), 'not_configured');
+  if (!res.ok) throw new CoachError(body?.code === 'quota_exhausted' ? t('coach.quota') : (body?.error ?? t('coach.failed')), body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
   return coachInfo(body);
 }

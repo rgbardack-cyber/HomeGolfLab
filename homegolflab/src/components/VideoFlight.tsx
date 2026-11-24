@@ -348,7 +348,7 @@ export default function VideoFlight() {
 
             <div className="flex gap-2">
               <Button full onClick={follow} disabled={!meta || !tap || busy}>
-                {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Siguiendo… {progress}%</> : <><Crosshair className="w-5 h-5" /> {t('vf.005')}</>}
+                {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('vf2.following', { p: progress })}</> : <><Crosshair className="w-5 h-5" /> {t('vf.005')}</>}
               </Button>
               {busy
                 ? <Button variant="outline" onClick={() => { runRef.current++; setBusy(false); setProgress(0); }}>{t('vf.006')}</Button>
