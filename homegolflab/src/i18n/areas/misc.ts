@@ -1,6 +1,6 @@
 /**
- * Área «misc»: area misc (ver archivos de área)
- * Idiomas incluidos aquí: es, en, pt, de, fr. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
+ * Área «misc»: x
+ * Idiomas incluidos aquí: es, en, pt, de, fr, it. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
  */
 import type { Area } from './index';
 
@@ -74,5 +74,19 @@ export const misc: Area = {
     "coach.notConfigured": "Cette version de test n’inclut pas le coach IA.",
     "coach.failed": "L’analyse IA a échoué. Réessaie.",
     "coach.quota": "Tu as utilisé toutes les analyses de ce mois. Elles se réinitialisent le premier jour du mois prochain.",
+  },
+  it: {
+    "sw2.analyzing": "Analisi… {p}%",
+    "vf2.following": "Tracciamento… {p}%",
+    "cv2.frameA": "fotogramma A {n}",
+    "vr2.frameLine": "fotogramma {n} · {s} s",
+    "guide.head": "Testa",
+    "guide.torso": "Busto",
+    "guide.leadArm": "Braccio guida",
+    "guide.hips": "Fianchi",
+    "coach.offline": "Nessuna connessione con il coach IA. Controlla la tua connessione.",
+    "coach.notConfigured": "Questa versione di prova non include il coach IA.",
+    "coach.failed": "L’analisi IA non è riuscita. Riprova.",
+    "coach.quota": "Hai usato tutte le analisi di questo mese. Si azzerano il primo giorno del mese prossimo.",
   },
 };
