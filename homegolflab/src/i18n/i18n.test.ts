@@ -12,7 +12,7 @@ const OVERRIDE_ONLY = new Set<Locale>(['es-ES', 'en-GB']);
  * Áreas de texto que un idioma todavía NO tiene (caen en inglés). Prioridad de calidad (decisión de trabajo, a confirmar con Ryan): inglés y portugués primero.
  * Cada vez que se traduce un área se quita su prefijo de aquí; la prueba falla si el prefijo ya no hace falta o si falta algo fuera de la lista.
  */
-const PENDING_FILL: string[] = ['fb.', 'swing.err.', 'frame.', 'hip.', 'view.', 'sw.', 'sw2.'];
+const PENDING_FILL: string[] = ['fb.', 'swing.err.', 'frame.', 'hip.', 'view.', 'sw.', 'sw2.', 'vf.', 'vf2.', 'vr.', 'vr2.', 'cv.', 'cv2.', 'ex.', 'ex2.', 'fp.', 'fp2.', 'cc.', 'cc2.', 'player.', 'phase.', 'dist.', 'flight.', 'overlay.', 'export.', 'impact.', 'gate.', 'media.', 'cam.', 'live.', 'consent.'];
 const PENDING_AREAS: Partial<Record<Locale, string[]>> = { de: PENDING_FILL, fr: PENDING_FILL, it: PENDING_FILL, ja: PENDING_FILL, ko: PENDING_FILL, sv: PENDING_FILL, nl: PENDING_FILL };
 
 describe('elección del idioma', () => {

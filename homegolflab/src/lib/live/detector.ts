@@ -13,6 +13,8 @@
  *   que cambia el análisis de video y queda pendiente.)
  */
 import { MAX_DOWNSWING_SEC, MIN_DOWNSWING_SEC, framingCheck, LM, viewOfFrame, type Frame, type SwingView } from '../swing';
+import { t } from '@/i18n';
+import { viewLabel } from '../swing';
 
 export type LivePhase = 'ready' | 'top' | 'settle' | 'rearm' | 'paused';
 
@@ -81,7 +83,7 @@ export class LiveSwingDetector {
 
   /** Un cuadro sin persona (el seguimiento no la ve). */
   noPerson(): LiveStep {
-    if (this.phase === 'ready') return { status: 'No te veo: aléjate hasta que entres de cuerpo entero', guide: { view: 'frente', ok: false, show: true }, phase: this.phase };
+    if (this.phase === 'ready') return { status: t('live.noPerson'), guide: { view: 'frente', ok: false, show: true }, phase: this.phase };
     return { phase: this.phase };
   }
 
@@ -98,7 +100,7 @@ export class LiveSwingDetector {
         const jumped = this.lastIdent ? Math.hypot(id.cx - this.lastIdent.cx, id.cy - this.lastIdent.cy) > LIVE.jump : false;
         if (this.phase !== 'paused' && (!near || jumped)) {
           this.phase = 'paused'; this.sameCount = 0; this.highCount = 0; this.lastIdent = id;
-          return { paused: true, status: 'Otra persona entró al encuadre: pauso el análisis hasta que vuelvas tú', phase: 'paused' };
+          return { paused: true, status: t('live.otherPerson'), phase: 'paused' };
         }
         if (this.phase === 'paused') {
           this.sameCount = near && !jumped ? this.sameCount + 1 : 0;
@@ -127,7 +129,7 @@ export class LiveSwingDetector {
       const seen: SwingView = v === 'auto' ? viewOfFrame(f, aspect) : v;
       const fr = framingCheck(f.lm);
       out.guide = { view: seen, ok: fr.ok, show: true };
-      out.status = fr.ok ? `Listo (${seen === 'atras' ? 'desde atrás' : 'de frente'}). Haz tu swing cuando quieras` : fr.hint;
+      out.status = fr.ok ? t('live.ready', { view: viewLabel(seen === 'atras' ? 'atras' : 'frente').toLowerCase() }) : fr.hint;
       this.highCount = handsHigh ? this.highCount + 1 : 0;
       if (this.highCount >= LIVE.highFrames) {
         if (now - this.lastSwingAt < LIVE.minGapMs) { this.phase = 'rearm'; this.lowSince = 0; }     // pegado al anterior: no cuenta
@@ -140,7 +142,7 @@ export class LiveSwingDetector {
       if (handsLow) {
         const down = (now - this.peakT) / 1000;
         if (down >= MIN_DOWNSWING_SEC && down <= MAX_DOWNSWING_SEC) { this.phase = 'settle'; this.tImp = now; }
-        else { this.phase = 'rearm'; this.lowSince = 0; out.status = down < MIN_DOWNSWING_SEC ? 'Eso fue demasiado rápido para ser un swing: repítelo' : 'Eso fue muy lento para ser un swing: repítelo'; }
+        else { this.phase = 'rearm'; this.lowSince = 0; out.status = down < MIN_DOWNSWING_SEC ? t('live.tooFast') : t('live.tooSlow'); }
       } else if (now - this.tTop > LIVE.topTimeoutMs) { this.phase = 'rearm'; this.lowSince = 0; }
     } else if (this.phase === 'settle') {
       if (now - this.tImp > LIVE.settleMs) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDrawList, paint, pickSample, type DrawOp } from './draw';
-import { CONF, ESTIMATED_ALPHA, FLIGHT_LEGEND, FLIGHT_OUTLINE, FLIGHT_STYLES, LOST_LABEL, type FlightKind, type FlightSegment, type OverlayModel, type SkeletonSample } from './model';
+import { CONF, ESTIMATED_ALPHA, FLIGHT_LEGEND, FLIGHT_OUTLINE, FLIGHT_STYLES, lostLabel, type FlightKind, type FlightSegment, type OverlayModel, type SkeletonSample } from './model';
 import { makeViewport, screenUnit } from './viewport';
 
 const vp = makeViewport(1080, 1920, { x: 0, y: 0, w: 540, h: 960 });
@@ -138,7 +138,7 @@ describe('estilos del trazo de la bola (tabla 4.6)', () => {
     const m: OverlayModel = { flight: { segments: [], lost: { x: 0.5, y: 0.4, t: 300 } } };
     expect(buildDrawList(m, 299, vp).some((o) => o.op === 'text')).toBe(false);
     const after = buildDrawList(m, 300, vp);
-    expect(after.some((o) => o.op === 'text' && o.text === LOST_LABEL)).toBe(true);
+    expect(after.some((o) => o.op === 'text' && o.text === lostLabel())).toBe(true);
     expect(circles(after)).toHaveLength(2);
   });
 

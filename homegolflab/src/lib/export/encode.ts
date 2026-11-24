@@ -11,6 +11,7 @@ import { ALL_FORMATS, AudioBufferSink, AudioBufferSource, BlobSource, BufferTarg
 import { detectImpact, IMPACT_REJECTION_TEXT } from '../audio/impact';
 import { exportMsOfFrame, frameCount, impactAudioCue, type AudioCue, type Timeline } from './timeline';
 import { OUT_H, OUT_W, panelsFor, renderExportFrame, type ChromeInput, type ExportOptions, type ExportSource } from './render';
+import { t } from '@/i18n';
 
 export type ExportErrorCode = 'no_video_encoder' | 'cancelled' | 'no_video_track' | 'failed';
 export class ExportError extends Error {
@@ -79,10 +80,10 @@ async function buildAudio(job: ExportJob): Promise<{ buffer: AudioBuffer; cue: A
       }
     }
     const det = detectImpact(mono, sr, job.impactMs - from * 1000, { rawChannels: chans });
-    if (!det.ok) return { note: IMPACT_REJECTION_TEXT[det.reason] };
+    if (!det.ok) return { note: t(`impact.${det.reason}`) };
     const onsetSrc = from * 1000 + det.onsetMs;
     const cue = impactAudioCue(job.timeline, job.sources[0].id, onsetSrc, job.impactMs);
-    if (!cue) return { note: 'La línea de tiempo no incluye el impacto.' };
+    if (!cue) return { note: t('export.noImpact') };
     // Salida: silencio de la duración total con el corte en su sitio.
     const outLen = Math.ceil((job.timeline.totalMs / 1000) * AUDIO_RATE);
     const out = new AudioBuffer({ length: outLen, numberOfChannels: 2, sampleRate: AUDIO_RATE });
@@ -125,11 +126,11 @@ export async function runExport(job: ExportJob, hooks: ExportHooks = {}): Promis
       if (!caps.audio) audioNote = 'Este dispositivo no puede codificar audio AAC: el video sale sin sonido.';
       else { audio = await buildAudio(job); if ('note' in audio) { audioNote = audio.note; audio = null; } }
     }
-    if (hooks.signal?.aborted) throw new ExportError('cancelled', 'Exportación cancelada.');
+    if (hooks.signal?.aborted) throw new ExportError('cancelled', t('ex2.cancelled'));
 
     const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(OUT_W, OUT_H) : Object.assign(document.createElement('canvas'), { width: OUT_W, height: OUT_H });
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
-    if (!ctx) throw new ExportError('failed', 'No se pudo crear el lienzo de exportación.');
+    if (!ctx) throw new ExportError('failed', t('export.noCanvas'));
     output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
     const vsrc = new CanvasSource(canvas, { codec: 'avc', bitrate: VIDEO_BITRATE, keyFrameInterval: 2 });
     output.addVideoTrack(vsrc, { frameRate: job.fps });
@@ -151,23 +152,23 @@ export async function runExport(job: ExportJob, hooks: ExportHooks = {}): Promis
 
     const n = frameCount(job.timeline, job.fps);
     for (let f = 0; f < n; f++) {
-      if (hooks.signal?.aborted) throw new ExportError('cancelled', 'Exportación cancelada.');
+      if (hooks.signal?.aborted) throw new ExportError('cancelled', t('ex2.cancelled'));
       const ms = Math.min(exportMsOfFrame(f, job.fps), job.timeline.totalMs - 1e-6);
       await renderExportFrame(ctx, OUT_W, OUT_H, job.timeline, job.sources, job.options, ms, getBase, { watermark: job.options.watermark, logo: job.logo, legend: job.legend, footer: job.footer });
       await vsrc.add(f / job.fps, 1 / job.fps);
       if (f % 4 === 0) hooks.onProgress?.(f / n);
       if (f % YIELD_EVERY === 0) await tick();
     }
-    if (hooks.signal?.aborted) throw new ExportError('cancelled', 'Exportación cancelada.');     // antes de cerrar el archivo
+    if (hooks.signal?.aborted) throw new ExportError('cancelled', t('ex2.cancelled'));     // antes de cerrar el archivo
     await output.finalize();
     hooks.onProgress?.(1);
     const buf = (output.target as BufferTarget).buffer;
-    if (!buf) throw new ExportError('failed', 'La exportación no produjo archivo.');
+    if (!buf) throw new ExportError('failed', t('export.noFile'));
     return { blob: new Blob([buf], { type: 'video/mp4' }), durationMs: (n / job.fps) * 1000, frames: n, fps: job.fps, audio: audio && 'buffer' in audio ? 'impact' : 'silence', audioNote };
   } catch (e) {
     if (output && output.state !== 'finalized' && output.state !== 'canceled') await output.cancel().catch(() => undefined);
     if (e instanceof ExportError) throw e;
-    throw new ExportError('failed', e instanceof Error ? e.message : 'La exportación falló.');
+    throw new ExportError('failed', e instanceof Error ? e.message : t('export.failed'));
   } finally {
     inputs.forEach((i) => i.dispose());
   }

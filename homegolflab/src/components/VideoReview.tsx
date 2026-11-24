@@ -7,7 +7,7 @@ import { getMediaStore, MEDIA_ERROR_TEXT, MediaStoreError, type MediaRef } from 
 import { buildDrawList, paint } from '@/lib/overlay/draw';
 import { makeViewport } from '@/lib/overlay/viewport';
 import {
-  estimateFps, needsReview, nudgeMark, PHASE_KEYS, PHASE_LABEL, phaseMarks, seekTimeForFrame, seekTimeForMark, SPEED_LABEL, SPEEDS, stepFrame, validOrder,
+  estimateFps, needsReview, nudgeMark, PHASE_KEYS, phaseLabel, phaseMarks, seekTimeForFrame, seekTimeForMark, speedLabel, SPEEDS, stepFrame, validOrder,
   type FrameSample, type PhaseKey, type PhaseMark, type Speed,
 } from '@/lib/reviewPlayer';
 import { DEFAULT_GUIDES, GUIDE_LABEL, guidesAllowed, guidesAt, headUsesNose, hiddenGuides, reviewModelAt, type GuideSet } from '@/lib/swingReview';
@@ -16,6 +16,7 @@ import { Button, Notice, Segmented } from '@/components/ui';
 import ExportSheet from '@/components/ExportSheet';
 import { useFlags } from '@/lib/flags';
 import { useStore } from '@/store';
+import { t } from '@/i18n';
 
 interface Props {
   r: SwingResult;
@@ -201,66 +202,66 @@ export default function VideoReview({ r, mediaId, poseTrackId, manual: manualIn,
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       </div>
 
-      {!allowed && <Notice>Las guías no se muestran porque la vista elegida no coincide con la del video.</Notice>}
-      {hidden.length > 0 && <p className="text-xs text-muted-foreground">Guía oculta: no se ve bien ({hidden.join(', ')}).</p>}
+      {!allowed && <Notice>{t('vr.001')}</Notice>}
+      {hidden.length > 0 && <p className="text-xs text-muted-foreground">{t('vr2.hiddenGuide', { list: hidden.join(', ') })}</p>}
 
       <fieldset disabled={probing} className="contents">
-      <input type="range" aria-label="Posición del video" className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / clock.fpsNominal} value={Math.min(to, Math.max(from, uiT))}
+      <input type="range" aria-label={t('vr.011')} className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / clock.fpsNominal} value={Math.min(to, Math.max(from, uiT))}
         onChange={(e) => { pause(); setActive(null); seek(seekTimeForFrame(clock, frameOf(clock, +e.target.value))); }} />
 
       <div className="flex flex-wrap gap-2 items-center">
-        <button className={chip(false)} onClick={togglePlay} aria-label={playing ? 'Pausar' : 'Reproducir'}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
-        <button className={chip(false)} onClick={() => step(-1)} aria-label="Cuadro anterior"><ChevronLeft className="w-4 h-4 inline" /></button>
-        <button className={chip(false)} onClick={() => step(1)} aria-label="Cuadro siguiente"><ChevronRight className="w-4 h-4 inline" /></button>
+        <button className={chip(false)} onClick={togglePlay} aria-label={playing ? t('player.pause') : t('player.play')}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
+        <button className={chip(false)} onClick={() => step(-1)} aria-label={t('vr.012')}><ChevronLeft className="w-4 h-4 inline" /></button>
+        <button className={chip(false)} onClick={() => step(1)} aria-label={t('vr.013')}><ChevronRight className="w-4 h-4 inline" /></button>
         <span className="text-xs text-muted-foreground tabular-nums">cuadro {frameOf(clock, uiT)} · {(uiT / 1000).toFixed(2).replace('.', ',')} s</span>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {marks.map((m) => (
           <button key={m.key} className={chip(active === m.key)} onClick={() => goPhase(m.key)}>
-            {PHASE_LABEL[m.key]}{m.source === 'manual' ? ' ✎' : ''}{needsReview(m) ? ' ⚠' : ''}
+            {phaseLabel(m.key)}{m.source === 'manual' ? ' ✎' : ''}{needsReview(m) ? ' ⚠' : ''}
           </button>
         ))}
       </div>
-      {marks.some(needsReview) && <p className="text-xs text-muted-foreground">⚠ Revisa esta fase: no estoy seguro de dónde cae. Ajústala con los botones de cuadro.</p>}
+      {marks.some(needsReview) && <p className="text-xs text-muted-foreground">{t('vr2.reviewPhase')}</p>}
       {active && (() => {
         const m = marks.find((x) => x.key === active)!;
         return (
           <div className="flex items-center gap-2 text-xs">
-            <span className="font-medium">Ajustar {PHASE_LABEL[active].toLowerCase()}:</span>
-            <button className={chip(false)} onClick={() => adjust(-1)} aria-label="Un cuadro antes">−1 cuadro</button>
-            <button className={chip(false)} onClick={() => adjust(1)} aria-label="Un cuadro después">+1 cuadro</button>
-            <span className="text-muted-foreground">{m.source === 'manual' ? 'ajustado por ti' : 'automático'}</span>
+            <span className="font-medium">{t('vr2.adjust', { phase: phaseLabel(active).toLowerCase() })}</span>
+            <button className={chip(false)} onClick={() => adjust(-1)} aria-label={t('vr.014')}>{t('vr2.back1')}</button>
+            <button className={chip(false)} onClick={() => adjust(1)} aria-label={t('vr.015')}>{t('vr2.fwd1')}</button>
+            <span className="text-muted-foreground">{m.source === 'manual' ? t('vr2.manual') : t('vr2.auto')}</span>
           </div>
         );
       })()}
-      {orderError && <Notice>Ese ajuste rompería el orden inicio, tope, impacto.</Notice>}
+      {orderError && <Notice>{t('vr.002')}</Notice>}
 
-      <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => setRate(+v as Speed)} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: SPEED_LABEL[s] }))} />
+      <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => setRate(+v as Speed)} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: speedLabel(s) }))} />
 
       <div className="flex flex-wrap gap-2">
         {(['head', 'torso', 'leadArm', 'hips'] as const).map((k) => (
           <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{GUIDE_LABEL[k]}</button>
         ))}
-        <button className={chip(skeleton)} aria-pressed={skeleton} onClick={() => setSkeleton((s) => !s)}>Esqueleto</button>
+        <button className={chip(skeleton)} aria-pressed={skeleton} onClick={() => setSkeleton((s) => !s)}>{t('vr.003')}</button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>Mano guía:</span>
-        <button className={chip(!lefty)} onClick={() => setLefty(false)}>Diestro</button>
-        <button className={chip(lefty)} onClick={() => setLefty(true)}>Zurdo</button>
-        {lefty !== (r.lefty ?? false) && <span>elegido por ti</span>}
-        <span className="ml-auto">{clock.fpsNominal} fps ({clock.fpsSource === 'estimated' ? 'estimado' : clock.fpsSource === 'user' ? 'elegido por ti' : 'del archivo'})</span>
+        <span>{t('vr.004')}</span>
+        <button className={chip(!lefty)} onClick={() => setLefty(false)}>{t('vr.005')}</button>
+        <button className={chip(lefty)} onClick={() => setLefty(true)}>{t('vr.006')}</button>
+        {lefty !== (r.lefty ?? false) && <span>{t('vr2.chosenByYou')}</span>}
+        <span className="ml-auto">{t('vr2.fpsLine', { fps: clock.fpsNominal, source: clock.fpsSource === 'estimated' ? t('vr2.fpsEst') : clock.fpsSource === 'user' ? t('vr2.chosenByYou') : t('vr2.fpsFile') })}</span>
       </div>
       <div className="flex gap-2 items-center text-xs">
-        <span className="text-muted-foreground">Cuadros por segundo:</span>
+        <span className="text-muted-foreground">{t('vr.007')}</span>
         {[30, 60].map((f) => <button key={f} className={chip(clock.fpsNominal === f && clock.fpsSource === 'user')} onClick={() => setClock(makeClock({ fpsNominal: f, fpsSource: 'user' }))}>{f}</button>)}
       </div>
       </fieldset>
-      {probing && <p className="text-xs text-muted-foreground">Midiendo los cuadros por segundo…</p>}
-      {flags.export && !exporting && <Button full variant="outline" onClick={() => setExporting(true)}>Exportar video</Button>}
+      {probing && <p className="text-xs text-muted-foreground">{t('vr.008')}</p>}
+      {flags.export && !exporting && <Button full variant="outline" onClick={() => setExporting(true)}>{t('vr.009')}</Button>}
       {flags.export && exporting && <ExportSheet r={r} mediaId={mediaId} poseTrackId={poseTrackId} manual={manual} premium={premium} onClose={() => setExporting(false)} />}
-      <p className="text-[11px] text-muted-foreground">Las guías son una referencia del seguimiento de postura, no un veredicto. Dónde se ve mal, se atenúan o se ocultan.</p>
+      <p className="text-[11px] text-muted-foreground">{t('vr.010')}</p>
     </div>
   );
 }

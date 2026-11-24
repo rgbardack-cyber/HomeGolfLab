@@ -3,6 +3,7 @@
  * Las marcas guardadas son siempre `MediaMs` del archivo fuente más su número de cuadro (plan 4.1).
  */
 import { frameDurationMs, frameOf, msOfFrame, type Clock, type MediaMs } from './media/clock';
+import { decimalSep, t } from '@/i18n';
 
 export type PhaseKey = 'address' | 'top' | 'impact' | 'finish';
 export const PHASE_KEYS: readonly PhaseKey[] = ['address', 'top', 'impact', 'finish'];
@@ -10,6 +11,10 @@ export const PHASE_LABEL: Record<PhaseKey, string> = { address: 'Inicio', top: '
 export const SPEEDS = [1, 0.5, 0.25] as const;
 export type Speed = (typeof SPEEDS)[number];
 export const SPEED_LABEL: Record<Speed, string> = { 1: '1×', 0.5: '0,5×', 0.25: '0,25×' };
+
+/** Etiquetas en el idioma actual (las constantes de arriba son el español base). */
+export const phaseLabel = (k: PhaseKey): string => t(`phase.${k}`);
+export const speedLabel = (s: Speed): string => `${s.toString().replace('.', decimalSep())}×`;
 
 /** Por debajo de esta confianza una fase lleva el aviso "Revisa esta fase" (plan 4.3). */
 export const PHASE_CONF_REVIEW = 0.5;

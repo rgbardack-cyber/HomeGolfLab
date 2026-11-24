@@ -17,6 +17,7 @@
  */
 
 import { realDeltaMs, type Clock } from './media/clock';
+import { fmtNumber, t } from '@/i18n';
 
 export interface P2 { x: number; y: number }
 
@@ -463,10 +464,10 @@ export interface FlightSummary {
  * como dato interno para probar y para la clasificación futura.
  */
 export function flightStatCards(s: FlightSummary): { label: string; value: string; unit: string }[] {
-  const fmt = (n: number) => n.toFixed(1).replace('.', ',');
+  const fmt = (n: number) => fmtNumber(n, 1);
   return [
-    { label: 'Puntos detectados', value: String(s.detected), unit: '' },
-    { label: 'Bola seguida', value: s.detected > 1 ? fmt(s.followedS) : '—', unit: s.detected > 1 ? 's' : '' },
+    { label: t('flight.points'), value: String(s.detected), unit: '' },
+    { label: t('flight.followed'), value: s.detected > 1 ? fmt(s.followedS) : '—', unit: s.detected > 1 ? 's' : '' },
   ];
 }
 

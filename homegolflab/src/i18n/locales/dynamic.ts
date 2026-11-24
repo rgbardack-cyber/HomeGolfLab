@@ -2,6 +2,7 @@ import { RECORDING_TIPS } from '@/lib/recordingTips';
 import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE } from '@/lib/homelabNotice';
 import { BADGES, LEVELS } from '@/lib/badges';
 import { DRILLS, GEAR_LABEL } from '@/lib/homelab';
+import { CONSENT_CHECKBOX_TEXT, CONSENT_DRAFT, CONSENT_NOTE, CONSENT_TITLE } from '@/lib/consent';
 
 /** Claves de medallas y niveles: el texto en español sigue viviendo en `lib/badges.ts` (una sola fuente) y aquí solo se indexa. */
 export const badgeKey = (id: string, part: 'label' | 'desc') => `badge.${id}.${part}`;
@@ -40,4 +41,9 @@ export function homelabDictEs(): Record<string, string> {
     out[`drill.${d.id}.target`] = d.target; out[`drill.${d.id}.cue`] = d.cue;
   }
   return out;
+}
+
+/** Consentimiento de datos (R9): el español sigue en lib/consent.ts. Es la traducción de un BORRADOR pendiente del abogado. */
+export function consentDictEs(): Record<string, string> {
+  return { 'consent.draft': CONSENT_DRAFT, 'consent.title': CONSENT_TITLE, 'consent.checkbox': CONSENT_CHECKBOX_TEXT, 'consent.note': CONSENT_NOTE };
 }

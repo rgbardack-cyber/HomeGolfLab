@@ -17,6 +17,7 @@ import { swingExportSource } from '@/lib/export/sources';
 import type { SwingResult } from '@/lib/swing';
 import { seekVideo } from '@/lib/videoSeek';
 import { Button, Card, Notice, Segmented } from '@/components/ui';
+import { fmtNumber, t } from '@/i18n';
 
 interface Props {
   r: SwingResult;
@@ -79,11 +80,11 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
         const { ref, blob: b } = await st.getMedia(mediaId);
         const track = poseTrackId ? await st.loadPoseTrack(poseTrackId) : null;
         const src = swingExportSource(mediaId, ref, track, r, manual);
-        if (!src) { if (!dead) setError('Faltan fases del swing (inicio, tope e impacto en orden) para exportar.'); return; }
+        if (!src) { if (!dead) setError(t('ex2.missingPhases')); return; }
         if (dead) return;
         made = URL.createObjectURL(b);
         setBlob(b); setUrl(made); setSource(src);
-      } catch { if (!dead) setError('No se pudo leer el video guardado.'); }
+      } catch { if (!dead) setError(t('ex2.readFail')); }
     })();
     const img = new Image();
     img.onload = () => { if (!dead) setLogo(img); };
@@ -146,8 +147,8 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
 
   const start = async () => {
     if (!source || !blob || !timeline || busy) return;
-    if (!fitsLimit(timeline)) { setError('La exportación pasaría de 60 segundos.'); return; }
-    if (!premium && !logo) { setError(logoFailed ? 'No se pudo cargar la marca de agua: no se puede exportar sin ella.' : 'Cargando la marca de agua…'); return; }
+    if (!fitsLimit(timeline)) { setError(t('ex2.tooLong')); return; }
+    if (!premium && !logo) { setError(logoFailed ? t('ex2.logoFail') : t('ex2.logoLoading')); return; }
     setNeedPremium(false); setGateMsg(null);
     setBusy(true);                                  // bloquea el doble toque desde el primer instante, también durante el aviso y el anuncio
     try {
@@ -161,7 +162,7 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
       }
     } catch {
       setGateUi(null);
-      if (alive.current) { setBusy(false); setError('No se pudo preparar la descarga. Inténtalo de nuevo.'); }
+      if (alive.current) { setBusy(false); setError(t('ex2.prepFail')); }
       return;
     }
     if (!alive.current) return;
@@ -177,8 +178,8 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
       setResult({ ...res, url: u, name });
       if (import.meta.env.DEV) dbg.current = debugExport({ done: true, name, bytes: res.blob.size, durationMs: res.durationMs, frames: res.frames, fps: res.fps, audio: res.audio, audioNote: res.audioNote, url: u, segments, totalMs: timeline.totalMs });
     } catch (e) {
-      if (e instanceof ExportError && e.code === 'cancelled') setError('Exportación cancelada.');
-      else setError(e instanceof ExportError && e.code === 'no_video_encoder' ? 'Este dispositivo no puede crear el video desde la app todavía.' : 'No se pudo exportar el video. Prueba de nuevo.');
+      if (e instanceof ExportError && e.code === 'cancelled') setError(t('ex2.cancelled'));
+      else setError(e instanceof ExportError && e.code === 'no_video_encoder' ? t('ex2.noEncoder') : t('ex2.exportFail'));
       if (import.meta.env.DEV) debugExport({ done: true, error: String(e) });
     } finally { setBusy(false); }
   };
@@ -198,45 +199,45 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
     <div data-export-sheet>
     <Card className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="font-semibold">Exportar video</p>
-        <button aria-label="Cerrar" onClick={onClose} className="p-1"><X className="w-5 h-5" /></button>
+        <p className="font-semibold">{t('ex.002')}</p>
+        <button aria-label={t('ex.016')} onClick={onClose} className="p-1"><X className="w-5 h-5" /></button>
       </div>
       {error && <Notice tone="error">{error}</Notice>}
-      {source && !timeline && !error && <Notice tone="error">Con las fases de este swing no se puede armar el video (revisa que el impacto esté dentro del video).</Notice>}
-      {useStore.getState().adsConsent === 'declined' && gateMsg && <button className="text-xs underline" onClick={() => { useStore.getState().setAdsConsent('unknown'); setGateMsg(null); }}>Volver a aceptar anuncios</button>}
+      {source && !timeline && !error && <Notice tone="error">{t('ex.003')}</Notice>}
+      {useStore.getState().adsConsent === 'declined' && gateMsg && <button className="text-xs underline" onClick={() => { useStore.getState().setAdsConsent('unknown'); setGateMsg(null); }}>{t('ex.004')}</button>}
       {url && <video ref={videoRef} src={url} muted playsInline preload="auto" style={{ position: 'fixed', left: -9999, top: 0, width: 160, height: 90 }} onLoadedMetadata={() => void drawPreview(pos)} />}
 
       {timeline && (
         <>
-          <canvas ref={prevRef} width={OUT_W / 4} height={OUT_H / 4} className="mx-auto rounded-xl bg-black" style={{ maxHeight: '55vh', width: 'auto' }} aria-label="Vista previa de la exportación" />
-          <input type="range" aria-label="Instante de la vista previa" className="w-full accent-[hsl(var(--primary))]" min={0} max={Math.max(0, Math.floor(total) - 1)} step={33} value={Math.min(pos, total)} disabled={busy} onChange={(e) => setPos(+e.target.value)} />
+          <canvas ref={prevRef} width={OUT_W / 4} height={OUT_H / 4} className="mx-auto rounded-xl bg-black" style={{ maxHeight: '55vh', width: 'auto' }} aria-label={t('ex.017')} />
+          <input type="range" aria-label={t('ex.018')} className="w-full accent-[hsl(var(--primary))]" min={0} max={Math.max(0, Math.floor(total) - 1)} step={33} value={Math.min(pos, total)} disabled={busy} onChange={(e) => setPos(+e.target.value)} />
           <div className="flex flex-wrap gap-2">
             {(['head', 'torso', 'leadArm', 'hips'] as const).map((k) => <button key={k} className={chip(guides[k])} aria-pressed={guides[k]} disabled={busy} onClick={() => setGuides((g) => ({ ...g, [k]: !g[k] }))}>{GUIDE_LABEL[k]}</button>)}
-            <button className={chip(skeleton)} aria-pressed={skeleton} disabled={busy} onClick={() => setSkeleton((s) => !s)}>Esqueleto</button>
+            <button className={chip(skeleton)} aria-pressed={skeleton} disabled={busy} onClick={() => setSkeleton((s) => !s)}>{t('ex.005')}</button>
           </div>
-          <Segmented<'impact' | 'silence'> value={audio} onChange={(a) => !busy && setAudio(a)} options={[{ value: 'impact', label: 'Sonido del golpe' }, { value: 'silence', label: 'Sin sonido' }]} />
-          <p className="text-xs text-muted-foreground">Dura {(total / 1000).toFixed(1).replace('.', ',')} s a {fps} cuadros por segundo, 1080×1920. Pesará unos {fmtMB(estBytes)} MB. {premium ? '' : 'Lleva la marca de HomeGolfLab (Premium la quita).'}</p>
-          {caps && !caps.video && <Notice tone="error">Este dispositivo no puede crear el video H.264 desde la app: no se podrá exportar aquí.</Notice>}
-          {caps && caps.video && !caps.audio && audio === 'impact' && <Notice>Este dispositivo no puede codificar audio AAC: el video saldrá sin sonido.</Notice>}
+          <Segmented<'impact' | 'silence'> value={audio} onChange={(a) => !busy && setAudio(a)} options={[{ value: 'impact', label: t('ex2.audioImpact') }, { value: 'silence', label: t('ex2.audioNone') }]} />
+          <p className="text-xs text-muted-foreground">{t('ex2.info', { s: fmtNumber(total / 1000, 1), fps, mb: fmtMB(estBytes) })} {premium ? '' : t('ex2.watermark')}</p>
+          {caps && !caps.video && <Notice tone="error">{t('ex2.noH264')}</Notice>}
+          {caps && caps.video && !caps.audio && audio === 'impact' && <Notice>{t('ex.006')}</Notice>}
           {gateUi?.kind === 'notice' && (
             <div className="rounded-xl border border-border p-3 space-y-2 text-sm" data-export-notice>
-              <p className="font-medium">Para descargar este video, mira 1 anuncio</p>
-              <p className="text-muted-foreground">Al terminarlo, la descarga de este análisis queda desbloqueada por 24 horas: puedes cambiar las opciones y volver a descargar sin otro anuncio. Al continuar aceptas ver anuncios en la versión gratuita. Premium los quita y también quita la marca de agua.</p>
-              <Button full onClick={() => { const r = gateUi.resolve; setGateUi(null); r('watch'); }}>Ver el anuncio</Button>
+              <p className="font-medium">{t('ex.007')}</p>
+              <p className="text-muted-foreground">{t('ex.008')}</p>
+              <Button full onClick={() => { const r = gateUi.resolve; setGateUi(null); r('watch'); }}>{t('ex.009')}</Button>
               <div className="flex gap-2">
-                <Button variant="outline" full disabled={freeUsedToday} onClick={() => { const r = gateUi.resolve; setGateUi(null); r('decline'); }}>{freeUsedToday ? 'Hoy ya usaste la gratis' : 'Prefiero no ver anuncios'}</Button>
-                <Button variant="outline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('premium'); }} aria-label="Quitar anuncios con Premium"><Crown className="w-5 h-5" /></Button>
+                <Button variant="outline" full disabled={freeUsedToday} onClick={() => { const r = gateUi.resolve; setGateUi(null); r('decline'); }}>{freeUsedToday ? t('ex2.freeUsed') : t('ex2.noAds')}</Button>
+                <Button variant="outline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('premium'); }} aria-label={t('ex.019')}><Crown className="w-5 h-5" /></Button>
               </div>
-              <p className="text-[11px] text-muted-foreground">Si prefieres no verlos, tienes 1 exportación gratis al día sin anuncio.</p>
-              <button className="text-xs underline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('cancel'); }}>Ahora no</button>
+              <p className="text-[11px] text-muted-foreground">{t('ex.010')}</p>
+              <button className="text-xs underline" onClick={() => { const r = gateUi.resolve; setGateUi(null); r('cancel'); }}>{t('ex.011')}</button>
             </div>
           )}
           {gateUi?.kind === 'ad' && <PlaceholderAd n={1} total={1} onDone={() => { const r = gateUi.resolve; setGateUi(null); r({ kind: 'rewarded', rewardEventId: `placeholder-${Date.now()}` }); }} />}
           {gateMsg && <Notice>{gateMsg}</Notice>}
-          {needPremium && <Notice>Con Premium exportas sin anuncios ni marca de agua. <Link to="/perfil" className="underline font-medium">Ir a Perfil</Link></Notice>}
+          {needPremium && <Notice>{t('ex.012')} <Link to="/perfil" className="underline font-medium">{t('ex.013')}</Link></Notice>}
           <div className="flex gap-2">
             <Button full onClick={() => void start()} disabled={busy || !caps?.video || (!premium && !logo && !logoFailed)}>{busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {progress === 0 && !result ? 'Un momento…' : `Exportando… ${Math.round(progress * 100)}%`}</> : 'Exportar MP4'}</Button>
-            {busy && <Button variant="outline" onClick={() => abort.current?.abort()}>Cancelar</Button>}
+            {busy && <Button variant="outline" onClick={() => abort.current?.abort()}>{t('ex.014')}</Button>}
           </div>
         </>
       )}
@@ -244,10 +245,10 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
       {result && (
         <div className="space-y-2">
           <Notice tone="ok">Listo: {result.name} · {fmtMB(result.blob.size)} MB · {(result.durationMs / 1000).toFixed(1).replace('.', ',')} s.</Notice>
-          {result.audioNote && <Notice>{result.audioNote} El video salió sin sonido.</Notice>}
+          {result.audioNote && <Notice>{result.audioNote} {t('ex2.silentVideo')}</Notice>}
           <div className="flex gap-2">
-            <a href={result.url} download={result.name} className="flex-1"><Button full><Download className="w-5 h-5" /> Descargar</Button></a>
-            {canShare && <Button variant="outline" onClick={() => void share()} aria-label="Compartir"><Share2 className="w-5 h-5" /></Button>}
+            <a href={result.url} download={result.name} className="flex-1"><Button full><Download className="w-5 h-5" /> {t('ex.015')}</Button></a>
+            {canShare && <Button variant="outline" onClick={() => void share()} aria-label={t('ex.020')}><Share2 className="w-5 h-5" /></Button>}
           </div>
         </div>
       )}

@@ -7,12 +7,13 @@ import type { PoseTrack } from '@/lib/media/poseTrack';
 import { getMediaStore, MEDIA_ERROR_TEXT, MediaStoreError, type MediaRef } from '@/lib/media/store';
 import { buildDrawList, paint } from '@/lib/overlay/draw';
 import { makeViewport, type Rect } from '@/lib/overlay/viewport';
-import { PHASE_KEYS, PHASE_LABEL, phaseMarks, seekTimeForFrame, SPEED_LABEL, SPEEDS, type PhaseKey, type PhaseMark, type Speed } from '@/lib/reviewPlayer';
+import { PHASE_KEYS, phaseLabel, phaseMarks, seekTimeForFrame, speedLabel, SPEEDS, type PhaseKey, type PhaseMark, type Speed } from '@/lib/reviewPlayer';
 import { safeCrop, type CropResult } from '@/lib/safeCrop';
 import { buildWarp, DEFAULT_GUIDES, guidesAllowed, headUsesNose, reviewModelAt, warpSuspicious, type PhaseTimes } from '@/lib/swingReview';
 import type { SwingResult } from '@/lib/swing';
 import { probeClock } from '@/lib/videoProbe';
 import { Notice, Segmented } from '@/components/ui';
+import { t } from '@/i18n';
 
 export interface CompareSide {
   mediaId: string;
@@ -231,38 +232,38 @@ export default function CompareView({ a, b }: { a: CompareSide; b: CompareSide }
   return (
     <div className="space-y-3" data-compare>
       <div className="flex flex-wrap gap-2 items-center text-xs">
-        <span className="px-2 py-1 rounded-full bg-muted font-medium" data-compare-badge>{sameClip ? 'Mismo clip' : 'Golpes distintos'}</span>
-        {warp && <span className="text-muted-foreground">Sincronizados por: {warp.keys.map((k) => PHASE_LABEL[k].toLowerCase()).join(', ')}</span>}
+        <span className="px-2 py-1 rounded-full bg-muted font-medium" data-compare-badge>{sameClip ? t('cv2.sameClip') : t('cv2.differentShots')}</span>
+        {warp && <span className="text-muted-foreground">{t('cv2.syncedBy', { list: warp.keys.map((k) => phaseLabel(k).toLowerCase()).join(', ') })}</span>}
       </div>
       <div className="grid grid-cols-2 gap-2">
         {panel(a, A.data, cropA, vA, cA, wA, 'a')}
         {panel(b, B.data, cropB, vB, cB, wB, 'b')}
       </div>
-      {(cropA?.letterbox || cropB?.letterbox) && <p className="text-[11px] text-muted-foreground">Un panel muestra el cuadro entero con bandas: el cuerpo y el palo no caben en el recorte.</p>}
-      {!warp && <Notice>No se pueden sincronizar: falta una fase en común o están fuera de orden. Revisa las fases en la revisión de cada swing.</Notice>}
-      {warp && warpSuspicious(warp) && <Notice>Un tramo del swing de B es más de 2 veces más rápido o lento que el de A. Revisa que las fases estén bien marcadas.</Notice>}
-      {viewDiff && <Notice>Los dos videos no son de la misma vista (frente / desde atrás): la comparación no es directa.</Notice>}
+      {(cropA?.letterbox || cropB?.letterbox) && <p className="text-[11px] text-muted-foreground">{t('cv.001')}</p>}
+      {!warp && <Notice>{t('cv.002')}</Notice>}
+      {warp && warpSuspicious(warp) && <Notice>{t('cv.003')}</Notice>}
+      {viewDiff && <Notice>{t('cv.004')}</Notice>}
       {clubDiff && <Notice>Los palos son distintos ({a.club} y {b.club}).</Notice>}
 
       <fieldset disabled={off} className="contents">
-        <input type="range" aria-label="Posición" className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / clockA.fpsNominal}
+        <input type="range" aria-label={t('cv.007')} className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / clockA.fpsNominal}
           value={Math.min(to, Math.max(from, uiT))} onChange={(e) => { pause(); setActive(null); seekBoth(seekTimeForFrame(clockA, frameOf(clockA, +e.target.value))); }} />
         <div className="flex flex-wrap gap-2 items-center">
-          <button className={chip(false)} onClick={togglePlay} aria-label={playing ? 'Pausar' : 'Reproducir'}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
-          <button className={chip(false)} onClick={() => step(-1)} aria-label="Cuadro anterior"><ChevronLeft className="w-4 h-4 inline" /></button>
-          <button className={chip(false)} onClick={() => step(1)} aria-label="Cuadro siguiente"><ChevronRight className="w-4 h-4 inline" /></button>
+          <button className={chip(false)} onClick={togglePlay} aria-label={playing ? t('player.pause') : t('player.play')}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
+          <button className={chip(false)} onClick={() => step(-1)} aria-label={t('cv.008')}><ChevronLeft className="w-4 h-4 inline" /></button>
+          <button className={chip(false)} onClick={() => step(1)} aria-label={t('cv.009')}><ChevronRight className="w-4 h-4 inline" /></button>
           <span className="text-xs text-muted-foreground tabular-nums">cuadro A {frameOf(clockA, uiT)}</span>
         </div>
         <div className="flex flex-wrap gap-2">
-          {common.map((k) => <button key={k} className={chip(active === k)} onClick={() => goPhase(k)}>{PHASE_LABEL[k]}</button>)}
+          {common.map((k) => <button key={k} className={chip(active === k)} onClick={() => goPhase(k)}>{phaseLabel(k)}</button>)}
         </div>
-        <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => { setSpeed(+v as Speed); if (vA.current) vA.current.playbackRate = +v; }} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: SPEED_LABEL[s] }))} />
+        <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => { setSpeed(+v as Speed); if (vA.current) vA.current.playbackRate = +v; }} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: speedLabel(s) }))} />
         <div className="flex gap-2">
-          <button className={chip(skeleton)} aria-pressed={skeleton} onClick={() => setSkeleton((s) => !s)}>Esqueleto</button>
+          <button className={chip(skeleton)} aria-pressed={skeleton} onClick={() => setSkeleton((s) => !s)}>{t('cv.005')}</button>
         </div>
       </fieldset>
-      {probing && <p className="text-xs text-muted-foreground">Midiendo los cuadros por segundo…</p>}
-      <p className="text-[11px] text-muted-foreground">A es el reloj maestro; B se ajusta para que las fases coincidan. Sin el audio no puedo saber si los dos videos son el mismo golpe.</p>
+      {probing && <p className="text-xs text-muted-foreground">{t('cv.006')}</p>}
+      <p className="text-[11px] text-muted-foreground">{t('cv2.masterNote')}</p>
     </div>
   );
 }

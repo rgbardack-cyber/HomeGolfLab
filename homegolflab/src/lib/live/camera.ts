@@ -2,6 +2,7 @@
  * Cámara en vivo (plan F10.1 y F10.6): textos de los errores de permiso, comprobación previa del permiso y monitor de rendimiento.
  * Todo puro salvo `queryCameraPermission` (usa `navigator.permissions`, que no existe en todos los navegadores).
  */
+import { t } from '@/i18n';
 
 export interface CameraProblem { title: string; detail: string; retry: boolean; /** Hay que ir a los ajustes del teléfono/navegador. */ settings: boolean }
 
@@ -10,17 +11,17 @@ export function cameraProblem(e: unknown): CameraProblem {
   const name = e && typeof e === 'object' && 'name' in e ? String((e as { name: unknown }).name) : '';
   switch (name) {
     case 'NotAllowedError': case 'PermissionDeniedError':
-      return { title: 'Necesito permiso para usar la cámara', detail: 'Actívalo en los ajustes del teléfono o del navegador y vuelve a intentarlo. La imagen no sale de tu teléfono.', retry: true, settings: true };
+      return { title: t('cam.denied.title'), detail: t('cam.denied.detail'), retry: true, settings: true };
     case 'NotFoundError': case 'DevicesNotFoundError':
-      return { title: 'No encuentro una cámara', detail: 'Este dispositivo no tiene cámara disponible. Puedes subir un video en la pestaña "Subir video".', retry: false, settings: false };
+      return { title: t('cam.notFound.title'), detail: t('cam.notFound.detail'), retry: false, settings: false };
     case 'NotReadableError': case 'TrackStartError':
-      return { title: 'La cámara está ocupada', detail: 'Otra app la está usando. Ciérrala y vuelve a intentarlo.', retry: true, settings: false };
+      return { title: t('cam.busy.title'), detail: t('cam.busy.detail'), retry: true, settings: false };
     case 'OverconstrainedError':
-      return { title: 'La cámara no admite esa configuración', detail: 'Prueba con la otra cámara del teléfono.', retry: true, settings: false };
+      return { title: t('cam.over.title'), detail: t('cam.over.detail'), retry: true, settings: false };
     case 'SecurityError':
-      return { title: 'La cámara solo funciona en una conexión segura', detail: 'Abre la app desde una dirección https.', retry: false, settings: false };
+      return { title: t('cam.secure.title'), detail: t('cam.secure.detail'), retry: false, settings: false };
     default:
-      return { title: 'No se pudo abrir la cámara', detail: e instanceof Error && e.message ? e.message : 'Inténtalo de nuevo.', retry: true, settings: false };
+      return { title: t('cam.fail.title'), detail: e instanceof Error && e.message ? e.message : t('cam.fail.detail'), retry: true, settings: false };
   }
 }
 

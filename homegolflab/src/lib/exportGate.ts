@@ -18,6 +18,7 @@
  * - Un fallo al codificar después de desbloquear deja el pase vivo (se reintenta sin otro anuncio).
  */
 import type { ExportPass } from '@/store';
+import { t } from '@/i18n';
 
 export const PASS_TTL_MS = 24 * 60 * 60 * 1000;
 /** Intentos de cargar el anuncio antes de caer a la exportación gratis diaria (plan 9.1: 2). */
@@ -103,9 +104,9 @@ function freeDailyOrBlock(s: GateState, c: GateContext, why: string): GateResult
   if (c.freeExportDate === null || c.freeExportDate < c.today) {
     const pass = newPass(c, s.analysisId!, 'placeholder', '', `free-${c.today}`);
     pass.via = 'free_daily';
-    return ok({ ...s, status: 'exporting', passId: pass.id, message: `${why} Tienes 1 exportación gratis al día sin anuncio: se usó la de hoy.` }, { grant: pass, useFreeDaily: true });
+    return ok({ ...s, status: 'exporting', passId: pass.id, message: `${why} ${t('gate.freeToday')}` }, { grant: pass, useFreeDaily: true });
   }
-  return ok({ ...s, status: 'ad_unavailable', message: `${why} ${FREE_DAILY_USED_TEXT}` });
+  return ok({ ...s, status: 'ad_unavailable', message: `${why} ${t('gate.freeUsed')}` });
 }
 
 /**
@@ -117,14 +118,14 @@ export function gateStep(s: GateState, e: GateEvent, c: GateContext): GateResult
     case 'reset': return ok(INITIAL_GATE);
     case 'cancel':
       if (s.status === 'idle' || s.status === 'done') return ok(s);
-      return ok({ ...s, status: 'cancelled', message: s.status === 'exporting' ? 'Exportación cancelada.' : undefined });
+      return ok({ ...s, status: 'cancelled', message: s.status === 'exporting' ? t('ex2.cancelled') : undefined });
     case 'request': {
       if (s.status === 'requesting_ad' || s.status === 'showing' || s.status === 'rewarded' || s.status === 'exporting') return ok(s);   // reentrada bloqueada
       const base: GateState = { status: 'idle', analysisId: e.analysisId, loadAttempts: 0, passId: null };
       const have = findValidPass(c.passes, e.analysisId, c.now);
       if (have) return ok({ ...base, status: 'exporting', passId: have.id }, { usePassId: have.id });
       if (c.premium) { const p = newPass(c, e.analysisId, 'premium', e.specHash); return ok({ ...base, status: 'exporting', passId: p.id }, { grant: p }); }
-      if (c.consent === 'declined') return freeDailyOrBlock(base, c, 'No quieres ver anuncios.');
+      if (c.consent === 'declined') return freeDailyOrBlock(base, c, t('gate.declined'));
       return ok({ ...base, status: 'requesting_ad', loadAttempts: 1 });
     }
     case 'ad_loaded':
@@ -134,11 +135,11 @@ export function gateStep(s: GateState, e: GateEvent, c: GateContext): GateResult
     case 'ad_load_failed': {
       if (s.status !== 'requesting_ad') return ok(s);
       if (s.loadAttempts < MAX_LOAD_ATTEMPTS) return ok({ ...s, loadAttempts: s.loadAttempts + 1 });   // quien llama espera y vuelve a cargar
-      return freeDailyOrBlock({ ...s, loadAttempts: s.loadAttempts }, c, AD_UNAVAILABLE_TEXT);
+      return freeDailyOrBlock({ ...s, loadAttempts: s.loadAttempts }, c, t('gate.adUnavailable'));
     }
     case 'ad_show_failed': {
       if (s.status !== 'showing' && s.status !== 'requesting_ad') return ok(s);
-      const r = freeDailyOrBlock(s, c, 'No se pudo mostrar el anuncio.');
+      const r = freeDailyOrBlock(s, c, t('gate.adFailed'));
       return r.state.status === 'ad_unavailable' ? ok({ ...r.state, status: 'ad_failed_to_show' }) : r;
     }
     case 'ad_rewarded': {

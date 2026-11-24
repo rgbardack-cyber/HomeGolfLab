@@ -17,16 +17,18 @@ const walk = (dir: string): string[] => readdirSync(dir).flatMap((f) => {
 const norm = (p: string) => p.slice(SRC.length + 1).replace(/\\/g, '/');
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-/** Archivos que todavía tienen texto escrito directo. Se quitan de aquí cuando se migran; la lista solo puede achicarse. */
-const PENDING_FILES = new Set<string>([
-    'components/VideoFlight.tsx', 'components/VideoReview.tsx', 'components/CompareView.tsx', 'components/ExportSheet.tsx',
-  'components/FlightPlayer.tsx', 'components/ConsentCard.tsx', 'components/FlagsPanel.tsx',
-]);
+/** Archivos que todavía tienen texto escrito directo. Se quitan de aquí cuando se migran; la lista solo puede achicarse. (Hoy: ninguno.) */
+const PENDING_FILES = new Set<string>([]);
+
+/**
+ * Archivos que se excluyen a propósito (no son texto para el usuario final):
+ * - `FlagsPanel`: panel interno de pruebas, solo existe en desarrollo o con VITE_INTERNAL=1 (nunca en la build pública).
+ */
+const EXCLUDED_FILES = new Set<string>(['components/FlagsPanel.tsx']);
 
 /**
  * Excepciones justificadas (texto que NO se traduce):
  * - nombres de marca y de producto: HomeGolfLab, HomeLAB;
- * - `FlagsPanel` y `ConsentCard`: panel interno de pruebas (solo en desarrollo) y consentimiento (texto legal pendiente del abogado; ver plan-idiomas.md).
  */
 const ALLOWED = new Set(['HomeGolfLab', 'HomeLAB', 'Swing', 'Ball tracking', 'H', 'XP']);
 
@@ -37,7 +39,7 @@ function visibleLiterals(src: string): string[] {
   for (const m of s.matchAll(/>([^<>{}=;()]*)</g)) {
     const txt = m[1].replace(/\s+/g, ' ').trim();
     // Se descartan comparaciones y accesos a propiedades (`info.cap && <Notice`), que no son texto.
-    if (/[A-Za-zÁ-ÿ]{3,}/.test(txt) && !/&&|\|\||=>|\w\.\w/.test(txt) && !/^[:?,.)]/.test(txt)) out.push(txt);
+    if (/[A-Za-zÁ-ÿ]{3,}/.test(txt) && !/&&|\|\||=>|\w\.\w/.test(txt) && !/^[:?,.)]/.test(txt) && !/^(new )?Promise$/.test(txt)) out.push(txt);
   }
   for (const m of s.matchAll(/\b(?:title|placeholder|aria-label|alt|label|subtitle)="([^"{}]*)"/g)) {
     if (/[A-Za-zÁ-ÿ]{3,}/.test(m[1])) out.push(m[1]);
@@ -65,7 +67,7 @@ describe('i18n: sin texto visible escrito directo', () => {
     const found: Record<string, string[]> = {};
     for (const f of files) {
       const n = norm(f);
-      if (PENDING_FILES.has(n)) continue;
+      if (PENDING_FILES.has(n) || EXCLUDED_FILES.has(n)) continue;
       const lits = visibleLiterals(readFileSync(f, 'utf8'));
       if (lits.length) found[n] = lits;
     }

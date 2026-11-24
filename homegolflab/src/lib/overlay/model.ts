@@ -5,6 +5,7 @@
  */
 import type { MediaMs } from '@/lib/media/clock';
 import type { Pt2 } from './viewport';
+import { t } from '@/i18n';
 
 /** Confianza 0–1. Por debajo de `hide` no se dibuja nada; entre `hide` y `solid` se dibuja atenuado y (líneas) punteado. */
 export const CONF = { hide: 0.4, solid: 0.6 } as const;
@@ -52,23 +53,24 @@ export interface FlightStyle { color: string; width: number; dash: number[]; lab
 
 /** Tabla de estilos del plan 4.6. El morado (#9B7BEA) es PROPUESTA: validar contraste con fondos reales. */
 export const FLIGHT_STYLES: Record<FlightKind, FlightStyle> = {
-  observed: { color: '#6DCF8E', width: 1.8, dash: [], label: 'Tramo visto' },
-  descent: { color: '#E8C04A', width: 1.8, dash: [], label: 'Bajada vista en el video' },
-  gap: { color: 'rgba(255,255,255,0.7)', width: 1.0, dash: [1.5, 2.5], label: 'Sin ver la bola' },
-  estimated: { color: '#9B7BEA', width: 1.2, dash: [3, 2.5], label: 'Trayectoria estimada · no medida' },
+  observed: { color: '#6DCF8E', width: 1.8, dash: [], get label() { return t('overlay.observed'); } },
+  descent: { color: '#E8C04A', width: 1.8, dash: [], get label() { return t('overlay.descent'); } },
+  gap: { color: 'rgba(255,255,255,0.7)', width: 1.0, dash: [1.5, 2.5], get label() { return t('overlay.gap'); } },
+  estimated: { color: '#9B7BEA', width: 1.2, dash: [3, 2.5], get label() { return t('overlay.estimated'); } },
 };
 export const FLIGHT_OUTLINE = { color: 'rgba(0,0,0,0.55)', extra: 1.4 } as const;
 /** La continuación estimada se desvanece de 0,9 a 0,4 a lo largo de su recorrido (longitud acumulada, en orden cronológico). */
 export const ESTIMATED_ALPHA = { from: 0.9, to: 0.4 } as const;
-export const LOST_LABEL = 'Última vez vista';
+/** Etiqueta en el idioma actual. */
+export const lostLabel = (): string => t('overlay.lost');
 
 /** Leyenda en el orden en que se muestra (la misma para vista previa y exportación). */
 export const FLIGHT_LEGEND: readonly { kind: FlightKind | 'lost'; label: string }[] = [
-  { kind: 'observed', label: FLIGHT_STYLES.observed.label },
-  { kind: 'descent', label: FLIGHT_STYLES.descent.label },
-  { kind: 'gap', label: FLIGHT_STYLES.gap.label },
-  { kind: 'estimated', label: FLIGHT_STYLES.estimated.label },
-  { kind: 'lost', label: LOST_LABEL },
+  { kind: 'observed', get label() { return FLIGHT_STYLES.observed.label; } },
+  { kind: 'descent', get label() { return FLIGHT_STYLES.descent.label; } },
+  { kind: 'gap', get label() { return FLIGHT_STYLES.gap.label; } },
+  { kind: 'estimated', get label() { return FLIGHT_STYLES.estimated.label; } },
+  { kind: 'lost', get label() { return lostLabel(); } },
 ];
 
 export interface FlightSegment {

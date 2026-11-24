@@ -8,7 +8,7 @@
  */
 import type { MediaMs } from '@/lib/media/clock';
 import {
-  BONES, CONF, ESTIMATED_ALPHA, FLIGHT_OUTLINE, FLIGHT_STYLES, GUIDE_STYLE, JOINTS, LABEL_STYLE, LOST_LABEL, SKELETON_STYLE,
+  BONES, CONF, ESTIMATED_ALPHA, FLIGHT_OUTLINE, FLIGHT_STYLES, GUIDE_STYLE, JOINTS, LABEL_STYLE, lostLabel, SKELETON_STYLE,
   type FlightSegment, type GuideItem, type OverlayModel, type SkeletonSample,
 } from './model';
 import { project, screenUnit, type Viewport } from './viewport';
@@ -117,7 +117,7 @@ export function buildDrawList(model: OverlayModel, t: MediaMs, vp: Viewport): Dr
       const p = P(fl.lost);
       ops.push({ op: 'circle', x: p.x, y: p.y, r: 4.5 * u, stroke: 'rgba(0,0,0,0.6)', lineWidth: 2.8 * u, dash: [], alpha: 1 });
       ops.push({ op: 'circle', x: p.x, y: p.y, r: 4.5 * u, stroke: '#FFFFFF', lineWidth: 1.4 * u, dash: [], alpha: 1 });
-      ops.push({ op: 'text', x: p.x, y: p.y + 10 * u, text: LOST_LABEL, color: LABEL_STYLE.color, size: LABEL_STYLE.size * u, align: 'center', bg: LABEL_STYLE.bg, alpha: 1 });
+      ops.push({ op: 'text', x: p.x, y: p.y + 10 * u, text: lostLabel(), color: LABEL_STYLE.color, size: LABEL_STYLE.size * u, align: 'center', bg: LABEL_STYLE.bg, alpha: 1 });
     }
   }
 

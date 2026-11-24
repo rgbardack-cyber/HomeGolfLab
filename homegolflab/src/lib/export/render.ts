@@ -16,12 +16,14 @@ import { containRect, makeViewport, type Rect } from '../overlay/viewport';
 import type { SwingView } from '../swing';
 import { buildWarp, headUsesNose, reviewModelAt, type GuideSet, type PhaseTimes } from '../swingReview';
 import { sourceAt, type Timeline } from './timeline';
+import { t } from '@/i18n';
 
 export const OUT_W = 1080;
 export const OUT_H = 1920;
 export const BRAND = { green: '#276749', ink: '#0E1B14', fog: '#F6F9F7', gold: '#D4A735', trace: '#6DCF8E' } as const;
 export type Template = 'swing' | 'compare' | 'flight';
 export const TEMPLATE_TITLE: Record<Template, string> = { swing: 'Revisión de swing', compare: 'Comparación', flight: 'Ball tracking' };
+export const templateTitle = (k: Template): string => t(`export.template.${k}`);
 
 /** Una fuente (un clip) tal como la necesita el render. */
 export interface ExportSource {
@@ -174,7 +176,7 @@ export async function renderExportFrame(
     }
     paintPanelOverlay(ctx, p, sources[p.sourceIndex], k, (c, ops) => paint(c, ops));
   }
-  paintChrome(ctx, W, H, { ...chrome, title: TEMPLATE_TITLE[opt.template], label: fm.held ? fm.label : undefined });
+  paintChrome(ctx, W, H, { ...chrome, title: templateTitle(opt.template), label: fm.held ? fm.label : undefined });
   return true;
 }
 

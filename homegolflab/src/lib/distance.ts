@@ -9,6 +9,7 @@
  * Todo se guarda en METROS (D2); la conversión a yardas es solo al mostrar (`lib/units.ts`).
  */
 import { fmtDist, type DistUnit } from './units';
+import { t } from '@/i18n';
 
 export type DistanceKind = 'carry' | 'total';
 export interface DistanceResult {
@@ -22,6 +23,7 @@ export interface DistanceResult {
 }
 
 export const KIND_LABEL: Record<DistanceKind, string> = { carry: 'Carry', total: 'Total' };
+export const kindLabel = (k: DistanceKind): string => t(`dist.kind.${k}`);
 
 export const unavailableDistance = (kind: DistanceKind = 'carry'): DistanceResult => ({ kind, state: 'unavailable', assumptions: [] });
 
@@ -31,22 +33,22 @@ export function manualDistance(meters: number, kind: DistanceKind): DistanceResu
   return { kind, state: 'measured_manual', meters, method: 'manual', assumptions: [] };
 }
 
-export interface DistanceView { title: string; text: string; badge: 'Medida por ti' | 'Estimada, no validada' | null; canRegister: boolean }
+export interface DistanceView { title: string; text: string; badge: string | null; canRegister: boolean }
 
 /** Cómo se presenta una distancia en la interfaz. Lo manual siempre dice «Medida por ti»; lo estimado, que no está validado. */
 export function distanceView(d: DistanceResult | null, unit: DistUnit): DistanceView {
   if (!d || d.state === 'unavailable') {
     return {
-      title: 'Distancia no disponible', canRegister: true, badge: null,
-      text: 'Con un video de teléfono no se puede medir la distancia de un tiro completo. Si la sabes (un monitor de lanzamiento, el yardaje del range), anótala a mano.',
+      title: t('dist.unavailable.title'), canRegister: true, badge: null,
+      text: t('dist.unavailable.text'),
     };
   }
-  const which = KIND_LABEL[d.kind].toLowerCase();
-  if (d.state === 'measured_manual') return { title: `${KIND_LABEL[d.kind]}: ${fmtDist(d.meters!, unit)}`, text: `Distancia (${which}) anotada por ti.`, badge: 'Medida por ti', canRegister: true };
+  const which = kindLabel(d.kind).toLowerCase();
+  if (d.state === 'measured_manual') return { title: `${kindLabel(d.kind)}: ${fmtDist(d.meters!, unit)}`, text: t('dist.manualText', { kind: which }), badge: t('dist.badge.manual'), canRegister: true };
   const [lo, hi] = d.interval90Meters ?? [d.meters!, d.meters!];
   return {
-    title: `${KIND_LABEL[d.kind]}: ~${fmtDist(d.meters!, unit, 0)}`,
-    text: `Estimación entre ${fmtDist(lo, unit, 0)} y ${fmtDist(hi, unit, 0)}. Supuestos: ${d.assumptions.join('; ')}.`,
+    title: `${kindLabel(d.kind)}: ~${fmtDist(d.meters!, unit, 0)}`,
+    text: t('dist.estimateText', { lo: fmtDist(lo, unit, 0), hi: fmtDist(hi, unit, 0), assumptions: d.assumptions.join('; ') }),
     badge: 'Estimada, no validada', canRegister: true,
   };
 }

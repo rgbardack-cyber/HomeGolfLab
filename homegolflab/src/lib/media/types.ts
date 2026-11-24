@@ -1,4 +1,5 @@
 import type { Clock } from './clock';
+import { t } from '@/i18n';
 
 /** Referencia a un video guardado (plan 4.9). Lo pesado vive en el backend de medios; en localStorage solo van los ids. */
 export interface MediaRef {
@@ -45,6 +46,9 @@ export class MediaStoreError extends Error {
   }
 }
 
+export const mediaErrorText = (c: MediaErrorCode): string => t(`media.${c}`);
+
+/** Español base; en pantalla se usa `mediaErrorText()`. */
 export const MEDIA_ERROR_TEXT: Record<MediaErrorCode, string> = {
   no_space: 'No hay espacio suficiente para guardar el video. Libera espacio o borra videos guardados en Perfil.',
   unavailable: 'Este dispositivo no permite guardar videos ahora. El análisis se muestra, pero el video no se guardará.',

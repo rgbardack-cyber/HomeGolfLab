@@ -4,10 +4,11 @@ import { debugReview, type DebugBag } from '@/lib/debugHook';
 import { flightLayer, type FlightTrack } from '@/lib/flightTrack';
 import { frameOf } from '@/lib/media/clock';
 import { buildDrawList, paint } from '@/lib/overlay/draw';
-import { FLIGHT_LEGEND, FLIGHT_STYLES, LOST_LABEL, type FlightKind } from '@/lib/overlay/model';
+import { FLIGHT_LEGEND, FLIGHT_STYLES, lostLabel, type FlightKind } from '@/lib/overlay/model';
 import { makeViewport } from '@/lib/overlay/viewport';
-import { SPEED_LABEL, SPEEDS, seekTimeForFrame, type Speed } from '@/lib/reviewPlayer';
+import { speedLabel, SPEEDS, seekTimeForFrame, type Speed } from '@/lib/reviewPlayer';
 import { Notice, Segmented } from '@/components/ui';
+import { t } from '@/i18n';
 
 const chip = 'h-9 px-3 rounded-full text-xs font-semibold border bg-card border-border';
 
@@ -84,16 +85,16 @@ export default function FlightPlayer({ url, track, w, h, startMs }: { url: strin
         <video ref={vRef} src={url} muted playsInline preload="auto" className="absolute inset-0 w-full h-full object-contain" onEnded={() => setPlaying(false)} />
         <canvas ref={cRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       </div>
-      <input type="range" aria-label="Posición del tiro" className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / track.clock.fpsNominal}
+      <input type="range" aria-label={t('fp.003')} className="w-full accent-[hsl(var(--primary))]" min={from} max={to} step={1000 / track.clock.fpsNominal}
         value={Math.min(to, Math.max(from, uiT))} onChange={(e) => { pause(); seek(seekTimeForFrame(track.clock, frameOf(track.clock, +e.target.value))); }} />
       <div className="flex flex-wrap items-center gap-2">
-        <button className={chip} onClick={toggle} aria-label={playing ? 'Pausar' : 'Reproducir'}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
-        <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => { setSpeed(+v as Speed); if (vRef.current) vRef.current.playbackRate = +v; }} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: SPEED_LABEL[s] }))} />
+        <button className={chip} onClick={toggle} aria-label={playing ? t('player.pause') : t('player.play')}>{playing ? <Pause className="w-4 h-4 inline" /> : <Play className="w-4 h-4 inline" />}</button>
+        <Segmented<`${Speed}`> value={`${speed}`} onChange={(v) => { setSpeed(+v as Speed); if (vRef.current) vRef.current.playbackRate = +v; }} options={SPEEDS.map((s) => ({ value: `${s}` as `${Speed}`, label: speedLabel(s) }))} />
       </div>
       <FlightLegend track={track} />
-      {d.state === 'not_confirmed' && d.evidence.apexIndex !== null && <p className="text-xs text-muted-foreground" data-descent-chip>Bajada no confirmada: no hay suficientes puntos claros para afirmarlo.</p>}
-      {d.state === 'confirmed' && <p className="text-xs text-muted-foreground">La bajada es EN LA IMAGEN{`; `}desde atrás la perspectiva puede adelantarla. No es el ápice real.</p>}
-      {track.continuation.state === 'shown' && <Notice>La línea morada es una estimación con un modelo, no una medición. No la uses para juzgar el tiro.</Notice>}
+      {d.state === 'not_confirmed' && d.evidence.apexIndex !== null && <p className="text-xs text-muted-foreground" data-descent-chip>{t('fp.001')}</p>}
+      {d.state === 'confirmed' && <p className="text-xs text-muted-foreground">{t('fp2.descent')}</p>}
+      {track.continuation.state === 'shown' && <Notice>{t('fp.002')}</Notice>}
     </div>
   );
 }
@@ -106,9 +107,9 @@ function FlightLegend({ track }: { track: FlightTrack }) {
   const lost = track.observed.length > 0 && (track.endReason === 'lost' || track.endReason === 'frame_exit');
   const rows = FLIGHT_LEGEND.filter((r) => (r.kind === 'lost' ? lost : present.has(r.kind as FlightKind)));
   return (
-    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground px-1" aria-label="Leyenda" data-flight-legend>
+    <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground px-1" aria-label={t('fp.004')} data-flight-legend>
       {rows.map((r) => {
-        if (r.kind === 'lost') return <span key="lost" className="flex items-center gap-1.5"><svg width="14" height="14" aria-hidden><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>{LOST_LABEL}</span>;
+        if (r.kind === 'lost') return <span key="lost" className="flex items-center gap-1.5"><svg width="14" height="14" aria-hidden><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>{lostLabel()}</span>;
         const st = FLIGHT_STYLES[r.kind as (typeof STYLE_KIND)[number]];
         return (
           <span key={r.kind} className="flex items-center gap-1.5">

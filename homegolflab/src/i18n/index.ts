@@ -16,7 +16,7 @@ import { ko } from './locales/ko';
 import { sv } from './locales/sv';
 import { pt } from './locales/pt';
 import { nl } from './locales/nl';
-import { badgeDictEs, homelabDictEs, noticeDictEs } from './locales/dynamic';
+import { badgeDictEs, consentDictEs, homelabDictEs, noticeDictEs } from './locales/dynamic';
 import { AREAS } from './areas';
 
 export type { Locale } from './core';
@@ -32,7 +32,7 @@ let built: Readonly<Record<Locale, Dict>> | null = null;
 function build(): Readonly<Record<Locale, Dict>> {
   if (built) return built;
   const base: Readonly<Record<Locale, Dict>> = {
-    es: { ...es, ...badgeDictEs(), ...noticeDictEs(), ...homelabDictEs() },
+    es: { ...es, ...badgeDictEs(), ...noticeDictEs(), ...homelabDictEs(), ...consentDictEs() },
     'es-ES': esES,
     en, 'en-GB': enGB, de, fr, it, ja, ko, sv, pt, nl,
   };
@@ -96,4 +96,9 @@ export function fmtNumber(n: number, decimals: number): string {
 /** Fecha en el idioma actual. */
 export function fmtDate(d: Date, opts: Intl.DateTimeFormatOptions): string {
   try { return d.toLocaleDateString(bcp47(), opts); } catch { return d.toLocaleDateString('es', opts); }
+}
+
+/** Separador decimal del idioma actual (coma o punto). */
+export function decimalSep(): string {
+  try { return new Intl.NumberFormat(bcp47()).format(1.5).charAt(1) || '.'; } catch { return ','; }
 }
