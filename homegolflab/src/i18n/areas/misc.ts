@@ -1,6 +1,6 @@
 /**
  * Área «misc»: x
- * Idiomas incluidos aquí: es, en, pt, de, fr, it, ja, ko. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
+ * Idiomas incluidos aquí: es, en, pt, de, fr, it, ja, ko, sv. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
  */
 import type { Area } from './index';
 
@@ -116,5 +116,19 @@ export const misc: Area = {
     "coach.notConfigured": "이 테스트 버전에는 AI 코치가 포함되어 있지 않습니다.",
     "coach.failed": "AI 분석에 실패했습니다. 다시 시도하세요.",
     "coach.quota": "이번 달 분석을 모두 사용했습니다. 다음 달 1일에 초기화됩니다.",
+  },
+  sv: {
+    "sw2.analyzing": "Analyserar… {p}%",
+    "vf2.following": "Följer… {p}%",
+    "cv2.frameA": "bildruta A {n}",
+    "vr2.frameLine": "bildruta {n} · {s} s",
+    "guide.head": "Huvud",
+    "guide.torso": "Bål",
+    "guide.leadArm": "Ledande arm",
+    "guide.hips": "Höfter",
+    "coach.offline": "Ingen kontakt med AI-coachen. Kontrollera ditt internet.",
+    "coach.notConfigured": "Den här testversionen innehåller inte AI-coachen.",
+    "coach.failed": "AI-analysen misslyckades. Försök igen.",
+    "coach.quota": "Du har använt alla analyser den här månaden. De nollställs första dagen nästa månad.",
   },
 };
