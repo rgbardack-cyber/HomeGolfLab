@@ -19,7 +19,7 @@ const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(
 
 /** Archivos que todavía tienen texto escrito directo. Se quitan de aquí cuando se migran; la lista solo puede achicarse. */
 const PENDING_FILES = new Set<string>([
-  'pages/Swing.tsx', 'pages/Tracking.tsx',
+  'pages/Swing.tsx',
   'components/VideoFlight.tsx', 'components/VideoReview.tsx', 'components/CompareView.tsx', 'components/ExportSheet.tsx',
   'components/FlightPlayer.tsx', 'components/ConsentCard.tsx', 'components/FlagsPanel.tsx',
 ]);

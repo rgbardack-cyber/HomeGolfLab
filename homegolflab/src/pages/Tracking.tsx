@@ -7,12 +7,14 @@ import { fmtClock, isLocked, remainingSec } from '@/lib/ads';
 import AdGate from '@/components/AdGate';
 import RecordingTips from '@/components/RecordingTips';
 import VideoFlight from '@/components/VideoFlight';
-import { analyzeShot, CLUBS, detectMovingBright, dispersion, type P2, type Shot, type TrackPoint } from '@/lib/tracking';
+import { analyzeShot, clubLabel, CLUBS, detectMovingBright, dispersion, type P2, type Shot, type TrackPoint } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, Segmented, Stat } from '@/components/ui';
+import { t, useT } from '@/i18n';
 
 type Tab = 'camera' | 'manual' | 'video';
 
 export default function Tracking() {
+  useT();
   const mode = useStore((s) => s.mode);
   const unit = useUnit();
   const addSession = useStore((s) => s.addSession);
@@ -31,8 +33,8 @@ export default function Tracking() {
   const locked = isLocked(usedSec, premium);
   useEffect(() => {
     if (premium || locked) return;
-    const t = setInterval(() => { if (document.visibilityState === 'visible') addTrackingTime(1); }, 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') addTrackingTime(1); }, 1000);
+    return () => clearInterval(timer);
   }, [premium, locked, addTrackingTime]);
 
   const save = () => {
@@ -48,14 +50,14 @@ export default function Tracking() {
       <PageHeader
         icon={<Target className="w-5 h-5" />}
         title="Ball tracking"
-        subtitle={mode === 'casa' ? 'Mide tus putts y registra tus tiros' : 'Registra tus tiros y tu dispersión'}
-        right={<div className="text-right"><p className="font-heading text-2xl font-bold text-primary leading-none">{shots.length}</p><p className="text-[11px] text-muted-foreground">tiros</p></div>}
+        subtitle={mode === 'casa' ? t('tr.subtitleCasa') : t('tr.subtitleCancha')}
+        right={<div className="text-right"><p className="font-heading text-2xl font-bold text-primary leading-none">{shots.length}</p><p className="text-[11px] text-muted-foreground">{t('tr.shotsUnit')}</p></div>}
       />
       {!premium && !locked && (
         <div className="flex items-center gap-2 text-xs bg-muted rounded-xl px-3 py-2">
           <Clock className="w-4 h-4 text-primary shrink-0" />
-          <span className="flex-1">Tiempo gratis: <span className="font-bold tabular-nums">{fmtClock(remainingSec(usedSec))}</span>. Después, 1 anuncio para seguir.</span>
-          <Link to="/perfil" className="font-semibold text-primary shrink-0">Sin anuncios</Link>
+          <span className="flex-1">{t('tr.freeBefore')}<span className="font-bold tabular-nums">{fmtClock(remainingSec(usedSec))}</span>{t('tr.freeAfter')}</span>
+          <Link to="/perfil" className="font-semibold text-primary shrink-0">{t('tr.noAds')}</Link>
         </div>
       )}
 
@@ -67,24 +69,24 @@ export default function Tracking() {
             value={tab}
             onChange={setTab}
             options={[
-              { value: 'camera', label: <><Camera className="w-4 h-4" /> Cámara</> },
-              { value: 'manual', label: <><PencilLine className="w-4 h-4" /> Manual</> },
-              { value: 'video', label: <><Video className="w-4 h-4" /> Video</> },
+              { value: 'camera', label: <><Camera className="w-4 h-4" /> {t('tr.tab.camera')}</> },
+              { value: 'manual', label: <><PencilLine className="w-4 h-4" /> {t('tr.tab.manual')}</> },
+              { value: 'video', label: <><Video className="w-4 h-4" /> {t('tr.tab.video')}</> },
             ]}
           />
           {tab === 'camera' ? <CameraTracker onShot={add} /> : tab === 'video' ? <VideoFlight /> : <ManualEntry onShot={add} />}
         </>
       )}
-      {saved && <Notice tone="ok">Sesión guardada.</Notice>}
+      {saved && <Notice tone="ok">{t('tr.saved')}</Notice>}
 
       {shots.length > 0 && (
         <>
           {d && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Stat label="Distancia media" value={d.avgCarryM} unit="m" />
-              <Stat label="Desvío medio" value={`${d.avgLateralM > 0 ? '+' : ''}${d.avgLateralM}`} unit="m" />
-              <Stat label="Dispersión lateral" value={`±${d.lateralStdM}`} unit="m" />
-              <Stat label="Consistencia" value={shots.length < 2 ? '—' : d.consistency} unit={shots.length < 2 ? '' : '%'} tone={d.consistency >= 80 ? 'good' : d.consistency >= 60 ? 'warn' : undefined} />
+              <Stat label={t('tr.stat.avgCarry')} value={d.avgCarryM} unit="m" />
+              <Stat label={t('tr.stat.avgLat')} value={`${d.avgLateralM > 0 ? '+' : ''}${d.avgLateralM}`} unit="m" />
+              <Stat label={t('tr.stat.latStd')} value={`±${d.lateralStdM}`} unit="m" />
+              <Stat label={t('tr.stat.consistency')} value={shots.length < 2 ? '—' : d.consistency} unit={shots.length < 2 ? '' : '%'} tone={d.consistency >= 80 ? 'good' : d.consistency >= 60 ? 'warn' : undefined} />
             </div>
           )}
           {shots.length >= 2 && <DispersionMap shots={shots} unit={unit} />}
@@ -93,15 +95,15 @@ export default function Tracking() {
               <div key={s.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                 <span className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-bold">{shots.length - i}</span>
                 <span className="flex-1 min-w-0">
-                  <span className="font-medium">{s.club}</span>
+                  <span className="font-medium">{clubLabel(s.club)}</span>
                   <span className="text-muted-foreground"> · {fmtDist(s.carryM, unit)} · {fmtLateral(s.lateralM, unit)}</span>
-                  {s.source === 'camera' && <span className="block text-xs text-muted-foreground">{s.directionDeg}° · {s.speedMps} m/s · {s.onLine ? 'en línea ✓' : 'fuera de línea'}</span>}
+                  {s.source === 'camera' && <span className="block text-xs text-muted-foreground">{s.directionDeg}° · {s.speedMps} m/s · {s.onLine ? t('tr.onLine') : t('tr.offLine')}</span>}
                 </span>
-                <button aria-label="Borrar tiro" onClick={() => setShots((p) => p.filter((x) => x.id !== s.id))} className="p-2 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+                <button aria-label={t('tr.deleteShot')} onClick={() => setShots((p) => p.filter((x) => x.id !== s.id))} className="p-2 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
               </div>
             ))}
           </Card>
-          <Button full onClick={save}><Save className="w-5 h-5" /> Guardar sesión ({shots.length} tiros)</Button>
+          <Button full onClick={save}><Save className="w-5 h-5" /> {t('tr.saveSession', { n: shots.length })}</Button>
         </>
       )}
     </div>
@@ -111,6 +113,7 @@ export default function Tracking() {
 /* ───────────────────────── Mapa de dispersión ───────────────────────── */
 
 function DispersionMap({ shots, unit }: { shots: Shot[]; unit: DistUnit }) {
+  useT();
   const W = 320, H = 220, pad = 24;
   const maxLat = Math.max(0.1, ...shots.map((s) => Math.abs(s.lateralM))) * 1.25;
   const maxCar = Math.max(0.5, ...shots.map((s) => s.carryM)) * 1.1;
@@ -118,13 +121,13 @@ function DispersionMap({ shots, unit }: { shots: Shot[]; unit: DistUnit }) {
   const y = (m: number) => H - pad - (m / maxCar) * (H - 2 * pad);
   return (
     <Card className="!p-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground px-2 pb-1">Mapa de dispersión</p>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl bg-primary/10" role="img" aria-label="Mapa de dispersión de tiros">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground px-2 pb-1">{t('tr.map.title')}</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded-xl bg-primary/10" role="img" aria-label={t('tr.map.aria')}>
         <line x1={W / 2} y1={pad / 2} x2={W / 2} y2={H - pad / 2} stroke="var(--color-primary)" strokeDasharray="4 4" strokeWidth="1" />
         <circle cx={W / 2} cy={H - pad} r="4" fill="var(--color-foreground)" />
         {shots.map((s) => <circle key={s.id} cx={x(s.lateralM)} cy={y(s.carryM)} r="6" fill={s.source === 'camera' ? 'var(--color-accent)' : 'var(--color-primary)'} stroke="#fff" strokeWidth="1.5" />)}
-        <text x={pad / 2} y={H - 6} fontSize="10" fill="var(--color-muted-foreground)">← izq. {fmtDist(maxLat, unit)}</text>
-        <text x={W - pad / 2} y={H - 6} fontSize="10" textAnchor="end" fill="var(--color-muted-foreground)">der. {fmtDist(maxLat, unit)} →</text>
+        <text x={pad / 2} y={H - 6} fontSize="10" fill="var(--color-muted-foreground)">{t('tr.map.left', { d: fmtDist(maxLat, unit) })}</text>
+        <text x={W - pad / 2} y={H - 6} fontSize="10" textAnchor="end" fill="var(--color-muted-foreground)">{t('tr.map.right', { d: fmtDist(maxLat, unit) })}</text>
       </svg>
     </Card>
   );
@@ -133,6 +136,7 @@ function DispersionMap({ shots, unit }: { shots: Shot[]; unit: DistUnit }) {
 /* ───────────────────────── Registro manual ───────────────────────── */
 
 function ManualEntry({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void }) {
+  useT();
   const unit = useUnit();
   const [club, setClub] = useState('Hierro 7');
   const [carry, setCarry] = useState('');
@@ -143,24 +147,24 @@ function ManualEntry({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void 
   const input = 'mt-1 w-full h-11 rounded-xl border border-border bg-card px-3';
   return (
     <Card className="space-y-4">
-      <p className="text-sm text-muted-foreground">Anota cada tiro: palo, distancia y cuánto se desvió del objetivo. Ideal para el range o el campo.</p>
+      <p className="text-sm text-muted-foreground">{t('tr.manual.lead')}</p>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block col-span-2"><span className="text-xs text-muted-foreground">Palo</span>
-          <select value={club} onChange={(e) => setClub(e.target.value)} className={input}>{CLUBS.map((x) => <option key={x}>{x}</option>)}</select>
+        <label className="block col-span-2"><span className="text-xs text-muted-foreground">{t('tr.manual.club')}</span>
+          <select value={club} onChange={(e) => setClub(e.target.value)} className={input}>{CLUBS.map((x) => <option key={x} value={x}>{clubLabel(x)}</option>)}</select>
         </label>
-        <label className="block"><span className="text-xs text-muted-foreground">Distancia ({UNIT_SHORT[unit]})</span>
+        <label className="block"><span className="text-xs text-muted-foreground">{t('tr.manual.distance', { u: UNIT_SHORT[unit] })}</span>
           <input type="number" inputMode="decimal" min="0" value={carry} onChange={(e) => setCarry(e.target.value)} placeholder="135" className={input} />
         </label>
-        <label className="block"><span className="text-xs text-muted-foreground">Desvío lateral ({UNIT_SHORT[unit]})</span>
+        <label className="block"><span className="text-xs text-muted-foreground">{t('tr.manual.lateral', { u: UNIT_SHORT[unit] })}</span>
           <input type="number" inputMode="decimal" min="0" value={lat} onChange={(e) => setLat(e.target.value)} className={input} />
         </label>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => setSide(-1)} className={`h-11 rounded-xl border text-sm font-medium ${side === -1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>← Izquierda</button>
-        <button onClick={() => setSide(1)} className={`h-11 rounded-xl border text-sm font-medium ${side === 1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>Derecha →</button>
+        <button onClick={() => setSide(-1)} className={`h-11 rounded-xl border text-sm font-medium ${side === -1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{t('tr.manual.left')}</button>
+        <button onClick={() => setSide(1)} className={`h-11 rounded-xl border text-sm font-medium ${side === 1 ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{t('tr.manual.right')}</button>
       </div>
       <Button full disabled={!(c > 0)} onClick={() => { onShot({ source: 'manual', club, carryM: toMeters(c, unit), lateralM: toMeters(Math.abs(l), unit) * side }); setCarry(''); setLat('0'); }}>
-        <Plus className="w-5 h-5" /> Agregar tiro
+        <Plus className="w-5 h-5" /> {t('tr.manual.add')}
       </Button>
     </Card>
   );
@@ -172,6 +176,7 @@ type Step = 'off' | 'ball' | 'target' | 'ready' | 'armed' | 'tracking';
 const PW = 240; // ancho de la imagen de análisis
 
 function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => void }) {
+  useT();
   const unit = useUnit();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -183,6 +188,7 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
   const [target, setTarget] = useState<P2 | null>(null);
   const [dist, setDist] = useState(() => inputValue(2, unit));      // distancia a la bola en la unidad elegida (por defecto el equivalente a 2 m)
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgOk, setMsgOk] = useState(false);   // el aviso es un putt en línea (no depende del idioma del texto)
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [trail, setTrail] = useState<P2[]>([]);
@@ -212,7 +218,7 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
       setStep('ball');
       loop();
     } catch (e) {
-      setError(e instanceof DOMException && e.name === 'NotAllowedError' ? 'Necesito permiso para usar la cámara.' : 'No se pudo abrir la cámara. ' + (e instanceof Error ? e.message : ''));
+      setError(e instanceof DOMException && e.name === 'NotAllowedError' ? t('tr.cam.permission') : t('tr.cam.openFail') + (e instanceof Error ? e.message : ''));
     } finally { setLoading(false); }
   };
 
@@ -252,8 +258,9 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
           const r = analyzeShot({ points: pts, start: b, target: g, distanceM: dm, aspect: ar });
           if (r) {
             onShot({ source: 'camera', club: 'Putter', carryM: dm, lateralM: r.missCm / 100, speedMps: r.speedMps, directionDeg: r.directionDeg, onLine: r.onLine, quality: r.quality });
-            setMsg(`${r.onLine ? 'En línea ✓' : 'Fuera de línea'} · ${Math.abs(r.directionDeg)}° ${r.directionDeg > 0 ? 'a la derecha' : r.directionDeg < 0 ? 'a la izquierda' : ''} · ${r.speedMps} m/s`);
-          } else setMsg('No pude seguir la bola. Revisa la luz y que la bola contraste con el piso.');
+            setMsgOk(r.onLine);
+            setMsg(`${r.onLine ? t('tr.cam.onLine') : t('tr.cam.offLine')} · ${Math.abs(r.directionDeg)}° ${r.directionDeg > 0 ? t('tr.cam.toRight') : r.directionDeg < 0 ? t('tr.cam.toLeft') : ''} · ${r.speedMps} m/s`);
+          } else { setMsgOk(false); setMsg(t('tr.cam.lost')); }
           pts = [];
           setStep('ready');
         }
@@ -271,8 +278,8 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
   };
 
   const hint: Record<Step, string> = {
-    off: '', ball: '1. Toca la bola en la imagen', target: '2. Toca el objetivo (hoyo o marca)',
-    ready: 'Coloca la bola en su marca y pulsa “Armar”', armed: 'Armado: haz tu putt', tracking: 'Siguiendo la bola…',
+    off: '', ball: t('tr.hint.ball'), target: t('tr.hint.target'),
+    ready: t('tr.hint.ready'), armed: t('tr.hint.armed'), tracking: t('tr.hint.tracking'),
   };
 
   return (
@@ -282,8 +289,8 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
         {step === 'off' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white text-center p-6">
             <Camera className="w-10 h-10 opacity-80" />
-            <p className="text-sm opacity-80">Fija el teléfono (trípode o apoyado) detrás de ti, mirando al objetivo, y que se vean la bola y el objetivo.</p>
-            <Button variant="gold" onClick={start} disabled={loading}>{loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Abriendo…</> : <><Camera className="w-5 h-5" /> Abrir cámara</>}</Button>
+            <p className="text-sm opacity-80">{t('tr.cam.setup')}</p>
+            <Button variant="gold" onClick={start} disabled={loading}>{loading ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('tr.cam.opening')}</> : <><Camera className="w-5 h-5" /> {t('tr.cam.open')}</>}</Button>
           </div>
         ) : (
           <>
@@ -291,34 +298,34 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
               {ball && target && <line x1={ball.x * 100} y1={ball.y * 100} x2={target.x * 100} y2={target.y * 100} stroke="#e8c04a" strokeWidth="0.5" strokeDasharray="2 1.5" vectorEffect="non-scaling-stroke" />}
               {trail.length > 1 && <polyline points={trail.map((p) => `${p.x * 100},${p.y * 100}`).join(' ')} fill="none" stroke="#6dcf8e" strokeWidth="2" vectorEffect="non-scaling-stroke" />}
             </svg>
-            {ball && <Marker p={ball} label="Bola" />}
-            {target && <Marker p={target} label="Objetivo" gold />}
+            {ball && <Marker p={ball} label={t('tr.marker.ball')} />}
+            {target && <Marker p={target} label={t('tr.marker.target')} gold />}
             <div className="absolute top-3 left-3 right-3 bg-black/60 text-white text-sm font-medium rounded-xl px-3 py-2 text-center">{hint[step]}</div>
           </>
         )}
       </div>
 
       {error && <Notice tone="error">{error}</Notice>}
-      {msg && step !== 'off' && <Notice tone={msg.startsWith('En línea') ? 'ok' : 'info'}>{msg}</Notice>}
+      {msg && step !== 'off' && <Notice tone={msgOk ? 'ok' : 'info'}>{msg}</Notice>}
 
       {step !== 'off' && (
         <Card className="!p-4 space-y-3">
           <label className="flex items-center gap-3">
-            <span className="text-sm flex-1">Distancia real de la bola al objetivo</span>
+            <span className="text-sm flex-1">{t('tr.cam.realDist')}</span>
             <input type="number" inputMode="decimal" step="0.1" min="0.3" value={dist} onChange={(e) => setDist(e.target.value)} className="w-20 h-10 rounded-xl border border-border px-2 text-center" />
             <span className="text-sm text-muted-foreground">{UNIT_SHORT[unit]}</span>
           </label>
           <div className="flex gap-2">
-            <Button full variant={step === 'armed' || step === 'tracking' ? 'gold' : 'primary'} disabled={!(ball && target && (parseToMeters(dist, unit) ?? 0) > 0) || step === 'armed' || step === 'tracking'} onClick={() => { setTrail([]); setMsg(null); setStep('armed'); }}>
-              <Crosshair className="w-5 h-5" /> {step === 'armed' ? 'Esperando el putt…' : step === 'tracking' ? 'Midiendo…' : 'Armar'}
+            <Button full variant={step === 'armed' || step === 'tracking' ? 'gold' : 'primary'} disabled={!(ball && target && (parseToMeters(dist, unit) ?? 0) > 0) || step === 'armed' || step === 'tracking'} onClick={() => { setTrail([]); setMsg(null); setMsgOk(false); setStep('armed'); }}>
+              <Crosshair className="w-5 h-5" /> {step === 'armed' ? t('tr.cam.waiting') : step === 'tracking' ? t('tr.cam.measuring') : t('tr.cam.arm')}
             </Button>
-            <Button variant="outline" onClick={() => { setBall(null); setTarget(null); setTrail([]); setStep('ball'); }}>Marcar de nuevo</Button>
-            <Button variant="outline" onClick={stop} aria-label="Cerrar cámara"><Square className="w-4 h-4" /></Button>
+            <Button variant="outline" onClick={() => { setBall(null); setTarget(null); setTrail([]); setStep('ball'); }}>{t('tr.cam.remark')}</Button>
+            <Button variant="outline" onClick={stop} aria-label={t('tr.cam.close')}><Square className="w-4 h-4" /></Button>
           </div>
         </Card>
       )}
       <p className="text-xs text-muted-foreground px-1">
-        Mide dirección y velocidad de salida en putts y chips rodados. Funciona mejor con bola blanca sobre una superficie más oscura y el teléfono quieto. La escala usa la distancia que indicas, así que es una aproximación. Un swing completo no se puede medir con la cámara del teléfono: usa el registro manual.
+        {t('tr.cam.note')}
       </p>
     </div>
   );

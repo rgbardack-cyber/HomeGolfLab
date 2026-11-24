@@ -8,6 +8,7 @@
  * Un swing completo NO se puede medir así: a 30 cuadros por segundo la bola sale del cuadro
  * en 1–2 imágenes. Para eso existe el registro manual de tiros.
  */
+import { t } from '@/i18n';
 
 export interface P2 { x: number; y: number }
 export interface TrackPoint extends P2 { t: number }
@@ -136,3 +137,13 @@ export function dispersion(shots: Shot[]): Dispersion | null {
 }
 
 export const CLUBS = ['Putter', 'LW', 'SW', 'PW', 'Hierro 9', 'Hierro 8', 'Hierro 7', 'Hierro 6', 'Hierro 5', 'Hierro 4', 'Híbrido', 'Madera 5', 'Madera 3', 'Driver'];
+
+/** Nombre del palo en el idioma actual. El valor guardado sigue siendo el de `CLUBS` (en español); un nombre desconocido se muestra tal cual. */
+export function clubLabel(club: string): string {
+  const m = /^(Hierro|Madera) (\d)$/.exec(club);
+  if (m) return t(m[1] === 'Hierro' ? 'club.iron' : 'club.wood', { n: m[2] });
+  if (club === 'Putter') return t('club.putter');
+  if (club === 'Híbrido') return t('club.hybrid');
+  if (club === 'Driver') return t('club.driver');
+  return club;
+}
