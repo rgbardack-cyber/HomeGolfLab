@@ -6,15 +6,16 @@
  * - El almacenamiento es una interfaz: `MemoryStore` (pruebas) y `FileStore` (JSON en disco, un solo proceso).
  *
  * ADVERTENCIA antes de encender esto en producción: todavía no hay cuentas ni recibos de compra. El «usuario» llega en
- * un encabezado que el cliente controla, así que cualquiera puede inventar usuarios nuevos y saltarse la cuota, y el
- * pase no se puede reclamar sin un recibo verificado de App Store / Google Play. Falta: identidad firmada y
- * verificación del recibo. Ver docs/spec-cuota-coach.md.
+ * un encabezado que el cliente controla (`x-hgl-user`). Inventar un id NO regala análisis (un usuario nuevo es `free` con límite 0),
+ * pero quien conozca el id de otro puede gastar su cuota, y el pase o `premium` no se pueden dar sin un recibo verificado de App Store /
+ * Google Play. Falta: identidad firmada y verificación del recibo. `server/guards.ts` impide arrancar en producción con esto encendido
+ * mientras no exista el verificador. Ver docs/spec-cuota-coach.md y docs/revision-2026-11-24.md (hallazgo 2).
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
   EARLY_ADOPTER_CAP, addUsage, defaultQuotaConfig, isPlan, quotaStatus,
-  type ApiUsage, type PlanId, type QuotaConfig, type QuotaStatus, type UsageRecord, tokensOfUsage,
+  type ApiUsage, type PlanId, type QuotaConfig, type QuotaStatus, type UsageRecord, tokensOfUsage, usageFor,
 } from '../src/lib/plans.ts';
 
 export interface UserRecord { plan: PlanId; usage?: UsageRecord; passGrantedAt?: string }
@@ -108,6 +109,24 @@ export class Entitlements {
     return quotaStatus(rec?.plan ?? 'free', rec?.usage, now, this.cfg);
   }
 
+  /**
+   * Reserva `tokens` ANTES de llamar a la API: dos peticiones simultáneas ya no ven la misma cuota intacta (hallazgo 4). Se niega si ya
+   * no queda cuota; la última reserva puede pasarse del límite (no se sabe cuánto costará), pero nunca más de una reserva por petición en vuelo.
+   */
+  reserve(userId: string, tokens: number, now: Date = new Date()): { ok: true } | { ok: false; status: QuotaStatus } {
+    const status = this.status(userId, now);
+    if (!status.allowed) return { ok: false, status };
+    this.recordUsage(userId, { input_tokens: tokens }, now);
+    return { ok: true };
+  }
+
+  /** Cambia la reserva por lo que reportó la API (`actual` = 0 si la API no llegó a responder). Nunca deja el consumo bajo cero. */
+  settle(userId: string, reserved: number, actual: number, now: Date = new Date()): void {
+    const cur = this.store.get(userId) ?? { plan: 'free' as PlanId };
+    const used = usageFor(cur.usage, now);
+    const tokens = Math.max(0, used.tokens - Math.max(0, Math.floor(reserved)) + Math.max(0, Math.floor(actual)));
+    this.store.set(userId, { ...cur, usage: { period: used.period, tokens } });
+  }
   /** Registra lo que gastó una petición, según el `usage` de la API. Devuelve los tokens contados. */
   recordUsage(userId: string, usage: ApiUsage | null | undefined, now: Date = new Date()): number {
     const tokens = tokensOfUsage(usage);

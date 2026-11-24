@@ -15,13 +15,23 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import { Entitlements, FileStore, validUserId } from './entitlements.ts';
+import { DailyBudget, RateLimiter, SCAN_TOKENS_ESTIMATE, UNAVAILABLE_TODAY_MESSAGE, clientIp, readConfig, secretMatches } from './guards.ts';
 import { LOCALES, isLocale } from '../src/i18n/core.ts';
-import { QUOTA_EXHAUSTED_MESSAGE, TOKENS_PER_ANALYSIS_ESTIMATE, quotaConfigFromEnv, type ApiUsage } from '../src/lib/plans.ts';
+import { QUOTA_EXHAUSTED_MESSAGE, TOKENS_PER_ANALYSIS_ESTIMATE, quotaConfigFromEnv, tokensOfUsage, type ApiUsage } from '../src/lib/plans.ts';
+
+// Configuración y guardas de arranque (bloque 4): si algo es inseguro, el servidor no arranca.
+const { config, problems } = readConfig(process.env);
+if (problems.length) {
+  for (const p of problems) console.error(`Configuración inválida: ${p}`);
+  process.exit(1);
+}
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGES = 4;
-const RATE_LIMIT = { max: 10, windowMs: 60 * 60 * 1000 }; // por dirección IP
+const limiter = new RateLimiter(10, 60 * 60 * 1000); // por dirección IP y por ruta
+// Tope diario de tokens para todo el servidor (DAILY_TOKEN_BUDGET). Sin la variable no hay tope; en producción es obligatoria.
+const budget = new DailyBudget(config.dailyBudget);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
 // Planes, pase Early Adopter y cuota del coach (bloque F). Apagado por defecto: sin ENTITLEMENTS_ENABLED=1 todo funciona como antes.
@@ -102,16 +112,6 @@ Escribe en español latino neutro, de tú, directo y breve. Las notas del jugado
 // El cliente toma las credenciales del entorno. Se crea al primer uso para que el servidor arranque aunque falten.
 let client: Anthropic | null = null;
 const configured = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
-const hits = new Map<string, number[]>();
-
-function rateLimited(ip: string) {
-  const now = Date.now();
-  const recent = (hits.get(ip) ?? []).filter((t) => now - t < RATE_LIMIT.windowMs);
-  if (recent.length >= RATE_LIMIT.max) { hits.set(ip, recent); return true; }
-  recent.push(now); hits.set(ip, recent);
-  return false;
-}
-
 function cors(req: IncomingMessage, res: ServerResponse) {
   const origin = req.headers.origin;
   if (!origin) return;
@@ -122,7 +122,7 @@ function cors(req: IncomingMessage, res: ServerResponse) {
   if (local || ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Headers', 'content-type');
+    res.setHeader('Access-Control-Allow-Headers', 'content-type, x-hgl-user');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   }
 }
@@ -183,8 +183,30 @@ const CoachBodySchema = z.object({
   notes: z.string().max(300).optional(),
 });
 
-async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<{ result: CoachResult; usage: ApiUsage }> {
+/**
+ * Igual que `messages.parse` del SDK, pero entrega el `usage` ANTES de validar la respuesta. `parse` lanza un error si el texto no cumple el
+ * esquema y entonces el uso se pierde: esas llamadas sí cuestan tokens (hallazgo 5, comprobado con una API falsa el 24 nov 2026).
+ */
+async function askStructured<S extends z.ZodType>(schema: S, params: Anthropic.Beta.Messages.MessageCreateParamsNonStreaming, onUsage: (u: ApiUsage) => void): Promise<{ refused: boolean; value: z.infer<S> | null }> {
   client ??= new Anthropic();
+  const format = betaZodOutputFormat(schema);
+  const response = await client.beta.messages.create({
+    ...params,
+    betas: [...(params.betas ?? []), 'structured-outputs-2025-12-15'],
+    output_config: { ...params.output_config, format: { type: 'json_schema', schema: format.schema } },
+  });
+  onUsage(response.usage);
+  if (response.stop_reason === 'refusal') return { refused: true, value: null };
+  const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
+  try {
+    const parsed = schema.safeParse(JSON.parse(text));
+    return { refused: false, value: parsed.success ? parsed.data : null };
+  } catch {
+    return { refused: false, value: null };
+  }
+}
+
+async function coachSwing(body: z.infer<typeof CoachBodySchema>, onUsage: (u: ApiUsage) => void): Promise<CoachResult> {
   const context = [
     `Vista de la cámara: ${body.view === 'atras' ? 'desde atrás, sobre la línea de tiro' : 'de frente al jugador'}.`,
     body.lefty != null ? `Según la app, el jugador es ${body.lefty ? 'zurdo' : 'diestro'}.` : '',
@@ -193,13 +215,11 @@ async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<{ resu
     body.findings?.length ? `Lo que la app ya le dijo al jugador:\n${body.findings.map((f) => `- ${f}`).join('\n')}` : '',
     body.notes ? `Notas del jugador: ${body.notes}` : '',
   ].filter(Boolean).join('\n\n');
-  const response = await client.beta.messages.parse({
-    model: 'claude-opus-5-5',
+  const { refused, value } = await askStructured(CoachSchema, {
+    model: config.coachModel,
     max_tokens: 16000,
     thinking: { type: 'adaptive' },
-    // Si el modelo principal declina por seguridad, la API reintenta sola con el modelo de respaldo.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...fallbackFor(config.coachModel),
     system: COACH_SYSTEM + languageDirective(body.language),
     messages: [{
       role: 'user',
@@ -211,22 +231,19 @@ async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<{ resu
         { type: 'text' as const, text: `Analiza mi swing.\n\n${context}` },
       ],
     }],
-    output_config: { effort: 'medium', format: betaZodOutputFormat(CoachSchema) },
-  });
-  if (response.stop_reason === 'refusal') throw new HttpError(422, 'No se pudieron analizar esas fotos. Prueba con otro video.');
-  if (!response.parsed_output) throw new HttpError(502, 'El análisis no devolvió un resultado válido. Inténtalo de nuevo.');
-  return { result: response.parsed_output, usage: response.usage };
+    output_config: { effort: 'medium' },
+  }, onUsage);
+  if (refused) throw new HttpError(422, 'No se pudieron analizar esas fotos. Prueba con otro video.');
+  if (!value) throw new HttpError(502, 'El análisis no devolvió un resultado válido. Inténtalo de nuevo.');
+  return value;
 }
 
-async function scan(body: z.infer<typeof BodySchema>): Promise<ScanResult> {
-  client ??= new Anthropic();
-  const response = await client.beta.messages.parse({
-    model: 'claude-opus-5-5',
+async function scan(body: z.infer<typeof BodySchema>, onUsage: (u: ApiUsage) => void): Promise<ScanResult> {
+  const { refused, value } = await askStructured(ScanSchema, {
+    model: config.scanModel,
     max_tokens: 16000,
     thinking: { type: 'adaptive' },
-    // Si el modelo principal declina por seguridad, la API reintenta sola con el modelo de respaldo.
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    ...fallbackFor(config.scanModel),
     system: SYSTEM + languageDirective(body.language),
     messages: [{
       role: 'user',
@@ -235,11 +252,39 @@ async function scan(body: z.infer<typeof BodySchema>): Promise<ScanResult> {
         { type: 'text' as const, text: `Analiza mi espacio de práctica.${body.notes ? `\n\nNotas del jugador: ${body.notes}` : ''}` },
       ],
     }],
-    output_config: { effort: 'medium', format: betaZodOutputFormat(ScanSchema) },
-  });
-  if (response.stop_reason === 'refusal') throw new HttpError(422, 'No se pudo analizar esa imagen. Prueba con otra foto del espacio.');
-  if (!response.parsed_output) throw new HttpError(502, 'El análisis no devolvió un resultado válido. Inténtalo de nuevo.');
-  return response.parsed_output;
+    output_config: { effort: 'medium' },
+  }, onUsage);
+  if (refused) throw new HttpError(422, 'No se pudo analizar esa imagen. Prueba con otra foto del espacio.');
+  if (!value) throw new HttpError(502, 'El análisis no devolvió un resultado válido. Inténtalo de nuevo.');
+  return value;
+}
+
+/**
+ * Si el modelo principal declina por seguridad, la API reintenta sola con el modelo de respaldo. Haiku 5.5 no tiene respaldo en el servidor
+ * (guía de `claude-api`): ahí no se envía. **No medido** con una clave real: lo mide el bloque 3.
+ */
+function fallbackFor(model: string) {
+  return /haiku/.test(model) ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const };
+}
+
+/**
+ * Reserva tokens ANTES de llamar a la API y ajusta con el `usage` real al terminar, también si hubo rechazo o error (hallazgos 4 y 5).
+ * Dos topes: el diario de todo el servidor y, con la cuota encendida, el mensual del usuario. Si la API no llegó a responder, no hay
+ * uso que contar y la reserva se libera.
+ */
+async function withSpend<T>(estimate: number, userId: string | undefined, fn: (onUsage: (u: ApiUsage) => void) => Promise<T>): Promise<T> {
+  if (!budget.reserve(estimate)) throw new HttpError(503, UNAVAILABLE_TODAY_MESSAGE, { code: 'unavailable_today' });
+  if (entitlements && userId) {
+    const r = entitlements.reserve(userId, estimate);
+    if (!r.ok) { budget.settle(estimate, 0); throw new HttpError(429, QUOTA_EXHAUSTED_MESSAGE, { code: 'quota_exhausted', resetsAt: r.status.resetsAt }); }
+  }
+  let actual = 0;
+  try {
+    return await fn((u) => { actual = tokensOfUsage(u); });
+  } finally {
+    budget.settle(estimate, actual);
+    if (entitlements && userId) entitlements.settle(userId, estimate, actual);
+  }
 }
 
 const ROUTES: Record<string, { name: string; run: (body: unknown, req: IncomingMessage) => Promise<unknown> }> = {
@@ -248,7 +293,7 @@ const ROUTES: Record<string, { name: string; run: (body: unknown, req: IncomingM
     run: (body) => {
       const parsed = BodySchema.safeParse(body);
       if (!parsed.success) throw new HttpError(400, 'Envía entre 1 y 4 imágenes en JPG, PNG o WebP.');
-      return scan(parsed.data);
+      return withSpend(SCAN_TOKENS_ESTIMATE, undefined, (onUsage) => scan(parsed.data, onUsage));
     },
   },
   '/api/swing/coach': {
@@ -256,15 +301,14 @@ const ROUTES: Record<string, { name: string; run: (body: unknown, req: IncomingM
     run: async (body, req) => {
       const parsed = CoachBodySchema.safeParse(body);
       if (!parsed.success) throw new HttpError(400, 'Envía de 1 a 3 fotos del swing en JPG, PNG o WebP, con la vista de la cámara.');
-      if (!entitlements) return (await coachSwing(parsed.data)).result;
-      // Con la cuota encendida: se niega ANTES de gastar si ya no queda, y se registra lo que reporta la API después.
-      const userId = req.headers['x-hgl-user'];
-      if (!validUserId(userId)) throw new HttpError(400, 'Falta identificar al usuario.', { code: 'no_user' });
-      const status = entitlements.status(userId);
-      if (!status.allowed) throw new HttpError(429, QUOTA_EXHAUSTED_MESSAGE, { code: 'quota_exhausted', resetsAt: status.resetsAt });
-      const { result, usage } = await coachSwing(parsed.data);
-      entitlements.recordUsage(userId, usage);
-      return result;
+      // Con la cuota encendida el usuario es obligatorio; se reserva antes de gastar y se ajusta con lo que reporta la API.
+      let userId: string | undefined;
+      if (entitlements) {
+        const id = req.headers['x-hgl-user'];
+        if (!validUserId(id)) throw new HttpError(400, 'Falta identificar al usuario.', { code: 'no_user' });
+        userId = id;
+      }
+      return withSpend(TOKENS_PER_ANALYSIS_ESTIMATE, userId, (onUsage) => coachSwing(parsed.data, onUsage));
     },
   },
 };
@@ -286,8 +330,11 @@ const server = createServer(async (req, res) => {
     const st = entitlementStatus(req);
     return st ? send(res, 200, st) : send(res, 404, { error: 'No encontrado.' });
   }
-  // Solo para desarrollo: entrega el pase sin recibo. En producción debe reemplazarse por la verificación del recibo de la tienda.
-  if (req.method === 'POST' && path === '/api/entitlements/dev-claim' && entitlements && process.env.ENTITLEMENTS_DEV_CLAIM === '1') {
+  const ip = clientIp(req.headers, req.socket.remoteAddress, config.trustProxy);
+  // Solo para desarrollo: entrega el pase sin recibo. Exige un secreto, pasa por el límite por IP y no arranca en producción (guards.ts).
+  if (req.method === 'POST' && path === '/api/entitlements/dev-claim' && entitlements && config.devClaim) {
+    if (limiter.hit(`${ip} ${path}`)) return send(res, 429, { error: 'Demasiadas solicitudes seguidas. Espera un rato e inténtalo de nuevo.' });
+    if (!secretMatches(req.headers['x-hgl-dev-secret'], config.devSecret)) return send(res, 403, { error: 'No autorizado.' });
     const userId = req.headers['x-hgl-user'];
     if (!validUserId(userId)) return send(res, 400, { error: 'Falta identificar al usuario.', code: 'no_user' });
     const r = entitlements.claimEarlyAdopter(userId);
@@ -300,7 +347,7 @@ const server = createServer(async (req, res) => {
   try {
     if (!configured()) return send(res, 503, notConfigured);
     // El límite es por dirección y por servicio: escanear el espacio no gasta los análisis de swing.
-    if (rateLimited(`${req.socket.remoteAddress ?? 'desconocido'} ${path}`)) throw new HttpError(429, 'Demasiadas solicitudes seguidas. Espera un rato e inténtalo de nuevo.');
+    if (limiter.hit(`${ip} ${path}`)) throw new HttpError(429, 'Demasiadas solicitudes seguidas. Espera un rato e inténtalo de nuevo.');
     send(res, 200, await route.run(await readJson(req), req));
   } catch (e) {
     if (e instanceof HttpError) return send(res, e.status, { error: e.message, ...e.extra });

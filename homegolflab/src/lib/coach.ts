@@ -133,6 +133,6 @@ export async function askCoach(payload: CoachPayload): Promise<CoachResult> {
   const body = await res.json().catch(() => null);
   // Sin servidor (por ejemplo, en la versión de prueba publicada en GitHub Pages) /api responde 404 con una página, no con JSON.
   if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new CoachError(t('coach.notConfigured'), 'not_configured');
-  if (!res.ok) throw new CoachError(body?.code === 'quota_exhausted' ? t('coach.quota') : (body?.error ?? t('coach.failed')), body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
+  if (!res.ok) throw new CoachError(body?.code === 'quota_exhausted' ? t('coach.quota') : body?.code === 'unavailable_today' ? t('server.unavailableToday') : (body?.error ?? t('coach.failed')), body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
   return coachInfo(body);
 }

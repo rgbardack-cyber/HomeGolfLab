@@ -117,3 +117,48 @@ describe('identidad', () => {
     for (const bad of [undefined, '', 'corto', 'x'.repeat(65), 'con espacio', '../etc/passwd', 42]) expect(validUserId(bad)).toBe(false);
   });
 });
+
+describe('reserva antes de gastar (hallazgo 4) y uso real en errores (hallazgo 5)', () => {
+  const now = T('2026-12-05T10:00:00Z');
+  const withPass = () => { const e = mk(); e.claimEarlyAdopter('usuario-aaaa'); return e; };
+
+  it('peticiones simultáneas ya no ven la cuota intacta: la tercera de tres se pasa como máximo una reserva', () => {
+    const e = withPass();
+    const r1 = e.reserve('usuario-aaaa', 7_500, now);
+    const r2 = e.reserve('usuario-aaaa', 7_500, now);
+    const r3 = e.reserve('usuario-aaaa', 7_500, now); // quedaban 5.000: pasa, y deja el consumo en 22.500
+    const r4 = e.reserve('usuario-aaaa', 7_500, now);
+    expect([r1.ok, r2.ok, r3.ok, r4.ok]).toEqual([true, true, true, false]);
+    expect(e.status('usuario-aaaa', now)).toMatchObject({ used: 22_500, remaining: 0, allowed: false });
+  });
+
+  it('settle cambia la reserva por el uso real; con 0 (la API no respondió) la libera', () => {
+    const e = withPass();
+    e.reserve('usuario-aaaa', 7_500, now);
+    e.settle('usuario-aaaa', 7_500, 5_200, now);
+    expect(e.status('usuario-aaaa', now).used).toBe(5_200);
+    e.reserve('usuario-aaaa', 7_500, now);
+    e.settle('usuario-aaaa', 7_500, 0, now);
+    expect(e.status('usuario-aaaa', now).used).toBe(5_200);
+  });
+
+  it('un rechazo o una respuesta inválida con uso real sí cuenta', () => {
+    const e = withPass();
+    e.reserve('usuario-aaaa', 7_500, now);
+    e.settle('usuario-aaaa', 7_500, tokensOfUsage({ input_tokens: 3_900, output_tokens: 600 }), now);
+    expect(e.status('usuario-aaaa', now).used).toBe(4_500);
+  });
+
+  it('el usuario gratis (límite 0) no puede reservar y no queda ningún consumo', () => {
+    const e = mk();
+    const r = e.reserve('inventado-123', 7_500, now);
+    expect(r.ok).toBe(false);
+    expect(e.status('inventado-123', now).used).toBe(0);
+  });
+
+  it('settle nunca deja el consumo bajo cero ni cambia el plan', () => {
+    const e = withPass();
+    e.settle('usuario-aaaa', 9_999, 0, now);
+    expect(e.status('usuario-aaaa', now)).toMatchObject({ used: 0, plan: 'lifetime_early_adopter' });
+  });
+});
