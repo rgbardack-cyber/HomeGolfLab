@@ -21,7 +21,7 @@ La comparto, con un ajuste: **la cuenta de Google Play de persona nueva exige pr
 | 5 | **Pruebas en dispositivos reales (F11)**: matriz abajo | Ryan graba, Claude registra | Tabla con números o «no medido» |
 | 6 | Privacidad, etiquetas, ficha de tienda (con el abogado) | Ryan + abogado | Política publicada; etiquetas enviadas |
 | 7 | UMP, ATT y anuncios reales (solo si pasó la fase 5) | Claude | Pruebas con identificadores de prueba |
-| 8 | Pase de 100 USD (compra no consumible) con `lifetime_early_adopter` (bloque F) | Claude + Ryan | Solo tras `recomendacion-monetizacion.md` |
+| 8 | Pase de 119,99 USD (compra no consumible) con `lifetime_early_adopter` (bloque F) | Claude + Ryan | Solo tras `recomendacion-monetizacion.md` |
 
 **Camino mínimo «app en un teléfono real esta semana»:** instalar Android Studio en Windows, `npx cap add android`, `npm run build && npx cap sync android`, abrir en Android Studio y correr en un teléfono Android con la depuración USB activa. No necesita cuenta de Google Play ni de Apple. **No medido:** que esto funcione con esta app (es lo que hay que probar primero).
 

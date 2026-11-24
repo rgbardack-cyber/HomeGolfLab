@@ -29,7 +29,7 @@ Fecha de consulta: **23 nov 2026**. Solo se afirma lo que se leyó en la página
 - **NO VERIFICADO:** la clave `NSUserTrackingUsageDescription` y su texto de ejemplo; la API `requestTrackingAuthorization`; la relación exacta con AdMob (la página de AdMob no menciona ATT).
 - URLs que dieron error y no se usaron: `support.google.com/admob/answer/7313306` (404), `.../3755398` (404).
 
-## 2. Tiendas: el pase de 100 USD como compra no consumible
+## 2. Tiendas: el pase de 119,99 USD como compra no consumible
 
 ### Obligación de usar los pagos de la tienda
 - **Apple** — resumen de las normas de revisión (https://developer.apple.com/app-store/review/guidelines/; **no es texto literal**, la página llegó truncada): para desbloquear funciones hay que usar la compra dentro de la app (3.1.1), con mecanismo de «restaurar compras». Para consentimiento y datos (5.1.1): enlazar la política de privacidad, explicar retención y borrado, y poder retirar el consentimiento fácilmente.
@@ -44,15 +44,15 @@ Fecha de consulta: **23 nov 2026**. Solo se afirma lo que se leyó en la página
 | Google Play, «demás mercados» | 15 % del primer millón de USD al año y 30 % sobre el exceso; 15 % en suscripciones; «15 % o menos» en otras transacciones para programas elegibles | misma |
 - **Verificar la tabla de Google en la página viva** antes de usar estos números: la extracción no relaciona bien filas y columnas. Para la cuenta de abajo se usan rangos.
 
-### Qué recibe Ryan de un pase de 100 USD (antes de impuestos, retenciones y tipo de cambio)
+### Qué recibe Ryan de un pase de 119,99 USD (antes de impuestos, retenciones y tipo de cambio)
 | Escenario | Comisión | Ryan recibe |
 |---|---|---|
-| Apple, Small Business Program (15 %) | 15 USD | **85 USD** |
-| Apple, tasa estándar de 30 % (**no verificada hoy**) | 30 USD | 70 USD |
-| Google Play, 20 % + 5 % (instalación nueva) | 25 USD | **75 USD** |
-| Google Play, 25 % + 5 % (instalación existente) | 30 USD | 70 USD |
-| Google Play, 15 % + 5 % (con programa) | 20 USD | 80 USD |
-Rango de trabajo: **70 a 85 USD por pase**. Los impuestos (por ejemplo, en Costa Rica) no se calcularon: **NO VERIFICADO**, es para el contador.
+| Apple, Small Business Program (15 %) | 18,00 USD | **101,99 USD** |
+| Apple, tasa estándar de 30 % (**no verificada hoy**) | 36,00 USD | 83,99 USD |
+| Google Play, 20 % + 5 % (instalación nueva) | 30,00 USD | **89,99 USD** |
+| Google Play, 25 % + 5 % (instalación existente) | 36,00 USD | 83,99 USD |
+| Google Play, 15 % + 5 % (con programa) | 24,00 USD | 95,99 USD |
+Rango de trabajo: **84 a 102 USD por pase** (precio de lista 119,99; antes de impuestos y retenciones). Cálculo: 119,99 menos la comisión. **Cambio de precio del 24 nov 2026:** el pase pasó de 100 a 119,99 USD; con 15 % de comisión quedan ≈ 102 USD, cerca de los 100 que Ryan quería recibir limpios. Ojo con los impuestos: en EE. UU. el impuesto de venta se suma al pagar; donde el IVA va incluido en el precio, queda menos (**NO VERIFICADO** cómo lo aplica cada tienda). Los impuestos de Ryan (LLC de un solo miembro en Wyoming) son para su contador.
 
 ## 3. Cuentas y costos de entrada
 - **Google Play Console:** cuota de registro única de **25 USD** (leída en https://support.google.com/googleplay/android-developer/answer/6112435). Las cuentas personales nuevas deben completar requisitos de prueba antes de publicar y verificar un dispositivo Android; **la cantidad de probadores y de días no se pudo leer** (la página enlaza a otro artículo).

@@ -31,7 +31,7 @@ Los videos se analizan en tu dispositivo y hoy no los guardamos. Cómo tratamos 
 ## 5. Plan gratuito, Premium y pase Early Adopter
 - **Gratis:** [lista de límites vigente, p. ej. 1 análisis de video al día], con anuncios en las apps de las tiendas.
 - **Premium:** [precio y qué incluye; todavía no hay pagos conectados].
-- **Pase Early Adopter (100 USD, solo los primeros 1.000 compradores):** compra única dentro de App Store o Google Play (no consumible), no una suscripción. Incluye [lista]. Un servicio de coach con inteligencia artificial limitado a [20.000 tokens al mes, equivalentes a N análisis: ver especificación de la cuota] que se reinicia cada mes y no se acumula. Esta oferta **no está a la venta ni se promociona todavía**.
+- **Pase Early Adopter (119,99 USD, solo los primeros 1.000 compradores):** compra única dentro de App Store o Google Play (no consumible), no una suscripción. Incluye [lista]. Un servicio de coach con inteligencia artificial limitado a [20.000 tokens al mes, equivalentes a N análisis: ver especificación de la cuota] que se reinicia cada mes y no se acumula. Esta oferta **no está a la venta ni se promociona todavía**.
 - **«De por vida» significa** [PROPUESTA; el abogado confirma]: mientras HomeGolf LAB ofrezca la app y esa función, sin pagos adicionales; no significa tu vida ni la de nadie ni garantiza que la app exista para siempre.
 - **Si el servicio cierra** [PROPUESTA]: avisaremos con [90] días de anticipación, lo que funciona sin servidor seguirá en tu dispositivo mientras la tienda lo permita, y [decidir si se reembolsa, en qué casos y cómo, según las reglas de la tienda].
 - Reembolsos, impuestos y cancelaciones los gestiona la tienda según sus reglas.

@@ -10,7 +10,7 @@ Para Ryan. Fecha: 23 nov 2026. Esto no es asesoría legal: es la lista de lo que
 - **Coach con IA.** Envía datos del análisis (métricas y hallazgos, a veces fotos o frames) a un proveedor de IA (Anthropic). Hay que decir qué sale del teléfono y a dónde va.
 - **Consentimiento para guardar videos y análisis para mejorar la app** (R9). Casilla aparte, sin marcar, que no forma parte de los términos generales. Está detrás de una bandera apagada.
 - **Home Lab.** Pide las medidas de un espacio y, si el usuario quiere, una foto o video del lugar (escaneo con IA). Pide aceptar un aviso de seguridad (R13).
-- **Pase Early Adopter de 100 USD.** Compra no consumible dentro de App Store o Google Play (R8). Incluye coach con IA con límite de 20.000 tokens al mes. Todavía no se vende ni se promociona.
+- **Pase Early Adopter de 119,99 USD.** Compra no consumible dentro de App Store o Google Play (R8). Incluye coach con IA con límite de 20.000 tokens al mes. Todavía no se vende ni se promociona.
 - **Anuncios con recompensa** (AdMob) en la app de tiendas. En la web no hay anuncios reales.
 - **Ubicación, cámara y micrófono.** Permisos de la cámara para grabar; micrófono solo si el usuario lo permite (modo en vivo).
 
@@ -74,5 +74,5 @@ Para Ryan. Fecha: 23 nov 2026. Esto no es asesoría legal: es la lista de lo que
 ## 4. Qué necesito de Ryan después
 
 - Elegir a un abogado en Costa Rica y confirmar presupuesto.
-- Decidir si el pase de 100 USD sale solo en tiendas (recomendado) o también en la web.
+- Decidir si el pase de 119,99 USD sale solo en tiendas (recomendado) o también en la web.
 - Confirmar si hay usuarios en la UE o en EE. UU. desde el primer día.
