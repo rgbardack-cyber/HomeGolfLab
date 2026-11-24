@@ -1,6 +1,6 @@
 /**
  * Área «misc»: x
- * Idiomas incluidos aquí: es, en, pt, de, fr, it. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
+ * Idiomas incluidos aquí: es, en, pt, de, fr, it, ja. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
  */
 import type { Area } from './index';
 
@@ -88,5 +88,19 @@ export const misc: Area = {
     "coach.notConfigured": "Questa versione di prova non include il coach IA.",
     "coach.failed": "L’analisi IA non è riuscita. Riprova.",
     "coach.quota": "Hai usato tutte le analisi di questo mese. Si azzerano il primo giorno del mese prossimo.",
+  },
+  ja: {
+    "sw2.analyzing": "分析中… {p}%",
+    "vf2.following": "追跡中… {p}%",
+    "cv2.frameA": "フレームA {n}",
+    "vr2.frameLine": "フレーム{n} · {s}秒",
+    "guide.head": "頭",
+    "guide.torso": "胴体",
+    "guide.leadArm": "リード腕",
+    "guide.hips": "腰",
+    "coach.offline": "AIコーチに接続できません。インターネット接続を確認してください。",
+    "coach.notConfigured": "このテスト版にはAIコーチは含まれていません。",
+    "coach.failed": "AI分析に失敗しました。もう一度お試しください。",
+    "coach.quota": "今月の分析をすべて使い切りました。来月1日にリセットされます。",
   },
 };
