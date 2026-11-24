@@ -1,0 +1,71 @@
+# Codemagic: PREPARADO, NO PROBADO Y SIN CONECTAR. No contiene claves ni cuentas.
+# Antes de usarlo, Ryan debe: crear la cuenta de Codemagic, conectar el repo, y crear la integración
+# con App Store Connect (clave de API) bajo el nombre indicado abajo. Ver docs/plan-nativo-dispositivos.md.
+# La app vive en la subcarpeta homegolflab/ del repo. Las carpetas ios/ y android/ todavía no existen:
+# los pasos las crean con `npx cap add` la primera vez [al agregarlas al repo, quitar esos comandos].
+workflows:
+  ios-testflight:
+    name: iOS a TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: HomeGolfLab-ASC   # nombre de la integración que crea Ryan (no es una clave)
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.homegolflab.app
+      vars:
+        VITE_API_URL: ""                    # dirección del servidor de producción, si existe
+      node: 22
+      xcode: latest
+    scripts:
+      - name: Instalar dependencias y construir la web
+        script: |
+          cd homegolflab
+          npm ci
+          npm run build
+      - name: Agregar iOS y sincronizar
+        script: |
+          cd homegolflab
+          [ -d ios ] || npx cap add ios
+          npx cap sync ios
+      - name: Firma
+        script: |
+          xcode-project use-profiles
+      - name: Compilar la app
+        script: |
+          cd homegolflab/ios/App
+          xcode-project build-ipa --workspace App.xcworkspace --scheme App
+    artifacts:
+      - homegolflab/ios/App/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-prueba-interna:
+    name: Android (archivo AAB para prueba interna)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      node: 22
+      java: 17
+      android_signing:
+        - homegolflab_keystore              # referencia a una llave que Ryan sube a Codemagic; no se escribe aquí
+    scripts:
+      - name: Instalar dependencias y construir la web
+        script: |
+          cd homegolflab
+          npm ci
+          npm run build
+      - name: Agregar Android y sincronizar
+        script: |
+          cd homegolflab
+          [ -d android ] || npx cap add android
+          npx cap sync android
+      - name: Compilar el AAB firmado
+        script: |
+          cd homegolflab/android
+          ./gradlew bundleRelease
+    artifacts:
+      - homegolflab/android/app/build/outputs/bundle/release/*.aab
