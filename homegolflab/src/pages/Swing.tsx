@@ -18,7 +18,7 @@ import { swingWindows, type SwingWindow } from '@/lib/swingWindows';
 import { framesToPoseTrack } from '@/lib/media/poseTrack';
 import { getMediaStore } from '@/lib/media/store';
 import { makeClock } from '@/lib/media/clock';
-import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, SWING_ERROR_TEXT, TEMPO, VIEW_LABEL, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
+import { analyzeSwing, findSwingWindow, framingCheck, hipLine, viewOfFrame, SPINE_SIDE, swingErrorText, TEMPO, viewLabel, type Frame, type SwingResult, type SwingView, type Tone, LM } from '@/lib/swing';
 import { askCoach, coachPayload, CoachError, POSITION_LABEL, type CoachImage, type CoachResult, type Position } from '@/lib/coach';
 import { bodyMask, findShaft, pointsDown, readClub, targetSide, toGray, SHAFT_MIN_CONFIDENCE, type Shaft } from '@/lib/club';
 import { createLiveDetector, detectResilient, drawSkeleton, loadPose, PoseFailure } from '@/lib/pose';
@@ -26,6 +26,11 @@ import { seekVideo } from '@/lib/videoSeek';
 import { CLUBS } from '@/lib/tracking';
 import { Button, Card, Notice, PageHeader, PremiumGate, ScoreRing, Segmented, Stat } from '@/components/ui';
 import RecordingTips from '@/components/RecordingTips';
+import { fmtDate, t } from '@/i18n';
+import { clubLabel } from '@/lib/tracking';
+
+/** «1 swing» / «3 swings» en el idioma actual. */
+const nSwings = (n: number): string => (n === 1 ? t('sw2.swingOne') : t('sw2.swingMany', { n }));
 
 type Tab = 'video' | 'live';
 type ViewChoice = SwingView | 'auto';
@@ -46,53 +51,53 @@ export default function Swing() {
       <div className="space-y-5">
         <PageHeader
           icon={<Activity className="w-5 h-5" />}
-          title="Análisis de swing"
-          subtitle={`${new Date(saved.at).toLocaleDateString('es', { day: 'numeric', month: 'long' })} · ${saved.mode === 'casa' ? 'Casa' : 'Cancha'}${saved.live ? ' · en vivo' : ''}${saved.club ? ` · palo: ${saved.club}` : ''}`}
+          title={t('sw.038')}
+          subtitle={`${fmtDate(new Date(saved.at), { day: 'numeric', month: 'long' })} · ${saved.mode === 'casa' ? t('mode.casa') : t('mode.cancha')}${saved.live ? ` · ${t('home.liveTag')}` : ''}${saved.club ? ` · ${t('sw2.clubLabel', { club: clubLabel(saved.club) })}` : ''}`}
         />
         {flags.videoReview && saved.mediaId && (
           <VideoReview key={saved.mediaId} r={saved.swing} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} manual={saved.reviewMarks} onManual={(m) => setReviewMarks(saved.id, m)} />
         )}
-        {flags.compare && saved.mediaId && <Link to={`/comparar?a=${saved.id}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
+        {flags.compare && saved.mediaId && <Link to={`/comparar?a=${saved.id}`} className="inline-block text-sm underline">{t('sw.001')}</Link>}
         {flags.videoReview && !saved.mediaId && (
-          <Notice>{saved.live ? 'Los análisis en vivo todavía no guardan el video, así que no hay revisión.' : 'Este análisis es anterior y no guardó el video. Se ve el resultado, sin revisión del movimiento.'}</Notice>
+          <Notice>{saved.live ? t('sw2.noReviewLive') : t('sw2.noReviewOld')}</Notice>
         )}
         <SwingResultView r={saved.swing} />
-        <Button full variant="outline" onClick={() => setParams({})}><ArrowLeft className="w-5 h-5" /> Analizar otro swing</Button>
+        <Button full variant="outline" onClick={() => setParams({})}><ArrowLeft className="w-5 h-5" /> {t('sw.002')}</Button>
       </div>
     );
   }
   return (
     <div className="space-y-5">
       <RecordingTips area="swing" />
-      <PageHeader icon={<Activity className="w-5 h-5" />} title="Análisis de swing" subtitle={mode === 'casa' ? 'En casa: de frente o desde atrás, cuerpo entero' : 'En cancha: apoya el teléfono a unos 3 m, de frente o desde atrás'} />
+      <PageHeader icon={<Activity className="w-5 h-5" />} title={t('sw.038')} subtitle={mode === 'casa' ? t('sw2.subCasa') : t('sw2.subCancha')} />
       <Segmented<Tab>
         value={tab}
         onChange={setTab}
         options={[
-          { value: 'video', label: <><Upload className="w-4 h-4" /> Subir video</> },
-          { value: 'live', label: <><Video className="w-4 h-4" /> En vivo</>, locked: !premium },
+          { value: 'video', label: <><Upload className="w-4 h-4" /> {t('sw.003')}</> },
+          { value: 'live', label: <><Video className="w-4 h-4" /> {t('sw.004')}</>, locked: !premium },
         ]}
       />
       <div className="space-y-1.5">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground px-1">Vista de la cámara</p>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground px-1">{t('sw.005')}</p>
         <Segmented<ViewChoice>
           value={view}
           onChange={setView}
           options={[
-            { value: 'auto', label: 'Automática' },
-            { value: 'frente', label: VIEW_LABEL.frente },
-            { value: 'atras', label: VIEW_LABEL.atras },
+            { value: 'auto', label: t('sw2.viewAuto') },
+            { value: 'frente', label: viewLabel('frente') },
+            { value: 'atras', label: viewLabel('atras') },
           ]}
         />
         <p className="text-xs text-muted-foreground px-1">
-          {view === 'auto' ? 'La app reconoce sola si te grabas de frente o desde atrás, sobre la línea de tiro.'
-            : view === 'frente' ? 'De frente: tempo, giros, postura, cabeza, y si las caderas giran o se desplazan.'
-            : 'Desde atrás, sobre la línea de tiro: inclinación, rodillas, cabeza y extensión temprana (caderas hacia la bola).'}
+          {view === 'auto' ? t('sw2.hintAuto')
+            : view === 'frente' ? t('sw2.hintFrente')
+            : t('sw2.hintAtras')}
         </p>
       </div>
       {tab === 'video' ? <UploadAnalyzer view={view} /> : premium ? <LiveAnalyzer view={view} /> : (
-        <PremiumGate title="Análisis en vivo">
-          Coloca el teléfono de frente, activa la cámara y recibe la nota y la corrección de cada swing al instante, sin tocar la pantalla. Disponible en Premium.
+        <PremiumGate title={t('sw.039')}>
+          {t('sw.006')}
         </PremiumGate>
       )}
     </div>
@@ -134,14 +139,14 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
     try { setCoach(await askCoach(coachPayload(r, images))); }
     catch (e) {
       setQuotaHit(e instanceof CoachError && e.code === 'quota_exhausted');
-      setError(e instanceof CoachError && e.code === 'not_configured' ? 'El coach con IA todavía no está disponible en esta versión.' : e instanceof Error ? e.message : 'El análisis con IA falló.');
+      setError(e instanceof CoachError && e.code === 'not_configured' ? t('sw2.coachUnavailable') : e instanceof Error ? e.message : t('sw2.coachFailed'));
     } finally { setBusy(false); }
   };
 
   if (!premium) {
     return (
-      <PremiumGate title="Coach con IA">
-        Premium añade un coach que mira las fotos de tu swing y comenta lo que las medidas no ven: el agarre, la posición del palo, los brazos y la alineación.
+      <PremiumGate title={t('sw.008')}>
+        {t('sw.007')}
       </PremiumGate>
     );
   }
@@ -149,26 +154,26 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
     <Card className="!p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-accent" />
-        <h3 className="font-semibold text-sm">Coach con IA</h3>
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">Premium</span>
+        <h3 className="font-semibold text-sm">{t('sw.008')}</h3>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">{t('sw.009')}</span>
       </div>
       {!coach && (
         <>
-          <p className="text-sm text-muted-foreground">Un coach con IA mira estas tres fotos y las medidas, y comenta lo que las reglas no miden.</p>
+          <p className="text-sm text-muted-foreground">{t('sw.010')}</p>
           <Button full onClick={ask} disabled={busy}>
-            {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando las fotos…</> : <><Sparkles className="w-5 h-5" /> Pedir análisis con IA</>}
+            {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('sw.011')}</> : <><Sparkles className="w-5 h-5" /> {t('sw.012')}</>}
           </Button>
-          <p className="text-xs text-muted-foreground">Se envían las tres fotos de tu swing a nuestro servidor para analizarlas con IA. No se guardan.</p>
+          <p className="text-xs text-muted-foreground">{t('sw.013')}</p>
         </>
       )}
       {error && <Notice tone={quotaHit ? 'info' : 'error'}>{error}</Notice>}
-      {coach && !coach.usable && <Notice>{coach.summary || 'Las fotos no muestran un swing completo. Graba de cuerpo entero.'}</Notice>}
+      {coach && !coach.usable && <Notice>{coach.summary || t('sw2.coachNoSwing')}</Notice>}
       {coach?.usable && (
         <div className="space-y-3">
           <p className="text-sm">{coach.summary}</p>
           {coach.strengths.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Lo que haces bien</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('sw.014')}</p>
               <ul className="text-sm space-y-1 list-disc pl-4">{coach.strengths.map((t) => <li key={t}>{t}</li>)}</ul>
             </div>
           )}
@@ -176,12 +181,12 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
             <div key={pr.title} className="space-y-1">
               <p className="text-sm font-semibold">{pr.title}</p>
               {pr.why && <p className="text-sm text-muted-foreground">{pr.why}</p>}
-              {pr.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">Ejercicio: </span>{pr.drill}</p>}
+              {pr.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">{t('sw.015')} </span>{pr.drill}</p>}
             </div>
           ))}
           {coach.observations.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Foto por foto</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('sw.016')}</p>
               <ul className="text-sm space-y-1">{coach.observations.map((o) => <li key={o.position + o.note}><span className="font-semibold">{POSITION_LABEL[o.position]}: </span>{o.note}</li>)}</ul>
             </div>
           )}
@@ -189,7 +194,7 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
             <Notice>{coach.disagreements.map((d) => <span key={d} className="block">{d}</span>)}</Notice>
           )}
           <p className="text-xs text-muted-foreground">
-            Confianza {coach.confidence}. {coach.limits} Es una opinión de IA sobre tres fotos fijas: no mide velocidad, trayectoria ni la cara del palo, y puede equivocarse.
+            {t('sw2.coachCaveat', { conf: t(`sw2.conf.${coach.confidence}`), limits: coach.limits })}
           </p>
         </div>
       )}
@@ -238,8 +243,8 @@ function HipLineCard({ r, withShots }: { r: SwingResult; withShots: boolean }) {
   return (
     <Card className="!p-4 space-y-3">
       <div>
-        <h3 className="font-semibold text-sm">Línea de caderas</h3>
-        <p className="text-xs text-muted-foreground">Dónde quedan tus caderas respecto a donde empezaron. {h.note}</p>
+        <h3 className="font-semibold text-sm">{t('sw.017')}</h3>
+        <p className="text-xs text-muted-foreground">{t('sw2.hipsWhere', { note: h.note })}</p>
       </div>
       <div className="space-y-1">
         <div className="flex justify-between text-[11px] uppercase tracking-wide text-muted-foreground pl-16 pr-14">
@@ -248,7 +253,7 @@ function HipLineCard({ r, withShots }: { r: SwingResult; withShots: boolean }) {
         {h.rows.map((row) => (
           <div key={row.key} className="flex items-center gap-2">
             <span className="w-14 shrink-0 text-xs font-medium">{row.label}</span>
-            <div className="relative flex-1 h-6" role="img" aria-label={`${row.label}: ${Math.abs(row.pct)}% ${row.pct === 0 ? 'sobre la línea' : row.pct > 0 ? h.right.toLowerCase() : h.left.toLowerCase()}`}>
+            <div className="relative flex-1 h-6" role="img" aria-label={`${row.label}: ${Math.abs(row.pct)}% ${row.pct === 0 ? t('sw2.onLine') : row.pct > 0 ? h.right.toLowerCase() : h.left.toLowerCase()}`}>
               <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-border" />
               <div className="absolute left-1/2 inset-y-0 border-l-2 border-dashed border-foreground/40" />
               <div className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full" style={{ left: `${Math.min(50, pos(row.pct))}%`, width: `${Math.abs(pos(row.pct) - 50)}%`, background: TONE_COLOR[row.tone] }} />
@@ -259,7 +264,7 @@ function HipLineCard({ r, withShots }: { r: SwingResult; withShots: boolean }) {
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        La línea punteada es la posición al inicio; las cifras son {h.unit}.{withShots && ' En las fotos, la línea blanca marca ese mismo punto y el círculo, dónde están tus caderas en ese momento.'} Es una estimación desde la postura con una sola cámara.
+        {t('sw2.hipsFoot1', { unit: h.unit })}{withShots && t('sw2.hipsFootShots')}{t('sw2.hipsFoot2')}
       </p>
     </Card>
   );
@@ -268,23 +273,23 @@ function HipLineCard({ r, withShots }: { r: SwingResult; withShots: boolean }) {
 /** Muñecas (experimental, informativo): ángulo entre antebrazo y mano al inicio y en el tope. No entra en la nota. */
 function WristCard({ m }: { m: SwingResult['metrics'] }) {
   const rows = [
-    { label: 'Muñeca guía', a: m.leadWristAddressDeg, t: m.leadWristTopDeg },
-    { label: 'Muñeca trasera', a: m.trailWristAddressDeg, t: m.trailWristTopDeg },
+    { label: t('sw2.wristLead'), a: m.leadWristAddressDeg, t: m.leadWristTopDeg },
+    { label: t('sw2.wristTrail'), a: m.trailWristAddressDeg, t: m.trailWristTopDeg },
   ].filter((x) => x.a != null || x.t != null);
   if (!rows.length) return null;
   const fmt = (v: number | null | undefined) => (v == null ? '—' : `${v}°`);
   return (
     <Card className="!p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <h3 className="font-semibold text-sm">Muñecas</h3>
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">Experimental</span>
+        <h3 className="font-semibold text-sm">{t('sw.018')}</h3>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">{t('sw.019')}</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {rows.map((x) => <Stat key={x.label} label={`${x.label}: inicio → tope`} value={`${fmt(x.a)} → ${fmt(x.t)}`} />)}
-        {m.wristChangeDeg != null && <Stat label="Cambio de la guía" value={m.wristChangeDeg > 0 ? `+${m.wristChangeDeg}` : m.wristChangeDeg} unit="°" />}
+        {m.wristChangeDeg != null && <Stat label={t('sw.040')} value={m.wristChangeDeg > 0 ? `+${m.wristChangeDeg}` : m.wristChangeDeg} unit="°" />}
       </div>
       <p className="text-xs text-muted-foreground">
-        Ángulo entre el antebrazo y la mano: 180° es la mano alineada con el antebrazo; menos, la muñeca doblada. Es una estimación con una sola cámara y la mano suele quedar tapada, así que úsala para comparar tus swings entre sí, no como medida exacta. No mide la suelta de las muñecas ni la cara del palo, y no cambia la nota.
+        {t('sw2.wristFoot')}
       </p>
     </Card>
   );
@@ -293,14 +298,14 @@ function WristCard({ m }: { m: SwingResult['metrics'] }) {
 export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }) {
   const tone = (ok: boolean, mid = false) => (ok ? 'good' : mid ? 'warn' : 'bad') as 'good' | 'warn' | 'bad';
   const tempo = (
-    <Stat label="Tempo" value={`${r.metrics.tempoRatio}:1`} tone={tone(r.metrics.tempoRatio >= TEMPO.fastOk && r.metrics.tempoRatio <= TEMPO.slowOk, r.metrics.tempoRatio >= TEMPO.fastBad && r.metrics.tempoRatio <= TEMPO.slowBad)} />
+    <Stat label={t('sw.041')} value={`${r.metrics.tempoRatio}:1`} tone={tone(r.metrics.tempoRatio >= TEMPO.fastOk && r.metrics.tempoRatio <= TEMPO.slowOk, r.metrics.tempoRatio >= TEMPO.fastBad && r.metrics.tempoRatio <= TEMPO.slowBad)} />
   );
   return (
     <div className="space-y-4">
       <Card className="flex items-center gap-4">
         <ScoreRing score={r.score} />
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Nota del swing · {VIEW_LABEL[r.view ?? 'frente'].toLowerCase()}</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('sw2.noteTitle', { view: viewLabel(r.view ?? 'frente').toLowerCase() })}</p>
           <p className="text-sm mt-1">{r.summary}</p>
         </div>
       </Card>
@@ -320,37 +325,37 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
 
       {r.view === 'atras' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <Stat label="Tempo (aprox.)" value={`${r.metrics.tempoRatio}:1`} />
-          <Stat label="Inclinación al inicio" value={r.metrics.spineAddressDeg} unit="°" tone={tone(r.metrics.spineAddressDeg >= 25 && r.metrics.spineAddressDeg <= 45, r.metrics.spineAddressDeg >= 15 && r.metrics.spineAddressDeg <= 55)} />
+          <Stat label={t('sw.042')} value={`${r.metrics.tempoRatio}:1`} />
+          <Stat label={t('sw.043')} value={r.metrics.spineAddressDeg} unit="°" tone={tone(r.metrics.spineAddressDeg >= 25 && r.metrics.spineAddressDeg <= 45, r.metrics.spineAddressDeg >= 15 && r.metrics.spineAddressDeg <= 55)} />
           {r.metrics.kneeFlexDeg != null && (
-            <Stat label="Flexión de rodillas" value={r.metrics.kneeFlexDeg} unit="°" tone={tone(r.metrics.kneeFlexDeg >= 10 && r.metrics.kneeFlexDeg <= 38, true)} />
+            <Stat label={t('sw.044')} value={r.metrics.kneeFlexDeg} unit="°" tone={tone(r.metrics.kneeFlexDeg >= 10 && r.metrics.kneeFlexDeg <= 38, true)} />
           )}
-          <Stat label="Postura al impacto" value={Math.abs(r.metrics.spineImpactChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineImpactChangeDeg) <= 7, Math.abs(r.metrics.spineImpactChangeDeg) <= 14)} />
-          <Stat label="Caderas hacia la bola" value={r.metrics.hipAdvancePct} unit="%" tone={tone(r.metrics.hipAdvancePct <= 6, r.metrics.hipAdvancePct <= 14)} />
-          <Stat label="Cabeza: sube/baja" value={Math.abs(r.metrics.headVerticalPct)} unit="%" tone={tone(Math.abs(r.metrics.headVerticalPct) <= 18, Math.abs(r.metrics.headVerticalPct) <= 30)} />
+          <Stat label={t('sw.045')} value={Math.abs(r.metrics.spineImpactChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineImpactChangeDeg) <= 7, Math.abs(r.metrics.spineImpactChangeDeg) <= 14)} />
+          <Stat label={t('sw.046')} value={r.metrics.hipAdvancePct} unit="%" tone={tone(r.metrics.hipAdvancePct <= 6, r.metrics.hipAdvancePct <= 14)} />
+          <Stat label={t('sw.047')} value={Math.abs(r.metrics.headVerticalPct)} unit="%" tone={tone(Math.abs(r.metrics.headVerticalPct) <= 18, Math.abs(r.metrics.headVerticalPct) <= 30)} />
           {r.metrics.handsAddressPct != null && (
-            <Stat label="Manos al inicio" value={r.metrics.handsAddressPct} unit="%" tone={tone(r.metrics.handsAddressPct >= -5 && r.metrics.handsAddressPct <= 30, r.metrics.handsAddressPct <= 45)} />
+            <Stat label={t('sw.048')} value={r.metrics.handsAddressPct} unit="%" tone={tone(r.metrics.handsAddressPct >= -5 && r.metrics.handsAddressPct <= 30, r.metrics.handsAddressPct <= 45)} />
           )}
           {r.metrics.handsTopPct != null && (
-            <Stat label="Altura de manos (tope)" value={r.metrics.handsTopPct} unit="%" tone={tone(r.metrics.handsTopPct >= 0, true)} />
+            <Stat label={t('sw.049')} value={r.metrics.handsTopPct} unit="%" tone={tone(r.metrics.handsTopPct >= 0, true)} />
           )}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {tempo}
-          <Stat label="Giro de hombros" value={r.metrics.shoulderTurnDeg} unit="°" tone={tone(r.metrics.shoulderTurnDeg >= 75, r.metrics.shoulderTurnDeg >= 55)} />
-          <Stat label="Giro de caderas" value={r.metrics.hipTurnDeg} unit="°" tone={tone(r.metrics.hipTurnDeg <= 60, true)} />
-          <Stat label="Inclinación lateral" value={Math.abs(r.metrics.spineChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[0], Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[1])} />
-          <Stat label="Mov. de cabeza" value={r.metrics.headSwayPct} unit="%" tone={tone(r.metrics.headSwayPct <= 25, r.metrics.headSwayPct <= 45)} />
-          <Stat label="Avance de cadera" value={r.metrics.hipShiftPct} unit="%" tone={tone(r.metrics.hipShiftPct >= 8, r.metrics.hipShiftPct >= -5)} />
-          <Stat label="Brazo guía (tope)" value={r.metrics.leadArmDeg} unit="°" tone={tone(r.metrics.leadArmDeg >= 140, true)} />
+          <Stat label={t('sw.050')} value={r.metrics.shoulderTurnDeg} unit="°" tone={tone(r.metrics.shoulderTurnDeg >= 75, r.metrics.shoulderTurnDeg >= 55)} />
+          <Stat label={t('sw.051')} value={r.metrics.hipTurnDeg} unit="°" tone={tone(r.metrics.hipTurnDeg <= 60, true)} />
+          <Stat label={t('sw.052')} value={Math.abs(r.metrics.spineChangeDeg)} unit="°" tone={tone(Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[0], Math.abs(r.metrics.spineChangeDeg) <= SPINE_SIDE[1])} />
+          <Stat label={t('sw.053')} value={r.metrics.headSwayPct} unit="%" tone={tone(r.metrics.headSwayPct <= 25, r.metrics.headSwayPct <= 45)} />
+          <Stat label={t('sw.054')} value={r.metrics.hipShiftPct} unit="%" tone={tone(r.metrics.hipShiftPct >= 8, r.metrics.hipShiftPct >= -5)} />
+          <Stat label={t('sw.055')} value={r.metrics.leadArmDeg} unit="°" tone={tone(r.metrics.leadArmDeg >= 140, true)} />
           {r.metrics.handsTopPct != null && (
-            <Stat label="Altura de manos (tope)" value={r.metrics.handsTopPct} unit="%" tone={tone(r.metrics.handsTopPct >= 0, true)} />
+            <Stat label={t('sw.049')} value={r.metrics.handsTopPct} unit="%" tone={tone(r.metrics.handsTopPct >= 0, true)} />
           )}
         </div>
       )}
       <p className="text-xs text-muted-foreground px-1">
-        Subida {r.metrics.backswingSec}s · bajada {r.metrics.downswingSec}s · {r.metrics.framesUsed} cuadros{r.lefty != null && ` · leído como ${r.lefty ? 'zurdo' : 'diestro'}`}. Medidas estimadas a partir de tu postura con una sola cámara; manos y brazos se leen al inicio y en el tope.{r.view === 'atras' && ' Desde atrás el tempo es aproximado y no cuenta para la nota: se mide mejor de frente.'}
+        {t('sw2.metaLine', { up: r.metrics.backswingSec, down: r.metrics.downswingSec, frames: r.metrics.framesUsed })}{r.lefty != null && (r.lefty ? t('sw2.metaLefty') : t('sw2.metaRighty'))}{t('sw2.metaEst')}{r.view === 'atras' && t('sw2.metaDtl')}
       </p>
 
       <WristCard m={r.metrics} />
@@ -358,23 +363,23 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
       {r.club && (
         <Card className="!p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-sm">Palo</h3>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">Experimental</span>
+            <h3 className="font-semibold text-sm">{t('sw.020')}</h3>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent/15 text-[hsl(38_70%_32%)]">{t('sw.019')}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {r.club.addressLeanDeg != null && <Stat label="Varilla al inicio" value={r.club.addressLeanDeg} unit="°" tone={tone(r.club.addressLeanDeg >= -8, true)} />}
-            {r.club.addressPlaneDeg != null && <Stat label="Varilla con el suelo" value={r.club.addressPlaneDeg} unit="°" tone="good" />}
-            {r.club.topDeg != null && <Stat label="Palo en el tope" value={r.club.topDeg} unit="°" tone={tone(r.club.topDeg >= -12 && r.club.topDeg <= 35, true)} />}
+            {r.club.addressLeanDeg != null && <Stat label={t('sw.056')} value={r.club.addressLeanDeg} unit="°" tone={tone(r.club.addressLeanDeg >= -8, true)} />}
+            {r.club.addressPlaneDeg != null && <Stat label={t('sw.057')} value={r.club.addressPlaneDeg} unit="°" tone="good" />}
+            {r.club.topDeg != null && <Stat label={t('sw.058')} value={r.club.topDeg} unit="°" tone={tone(r.club.topDeg >= -12 && r.club.topDeg <= 35, true)} />}
           </div>
           {r.club.feedback.map((f) => (
             <div key={f.key} className="space-y-1">
               <p className="text-sm font-semibold">{f.title}</p>
               <p className="text-sm text-muted-foreground">{f.detail}</p>
-              {f.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">Ejercicio: </span>{f.drill}</p>}
+              {f.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">{t('sw.015')} </span>{f.drill}</p>}
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            La app busca la varilla en la imagen cuando el palo está casi quieto. Puede confundirla con una línea del fondo o de la ropa: compárala con la línea rosa de las fotos. No cambia la nota. {r.club.topDeg != null && 'En el tope, 0° es paralelo al suelo; negativo es que se pasa.'}
+            {t('sw2.clubFoot')}{r.club.topDeg != null && t('sw2.clubFootTop')}
           </p>
         </Card>
       )}
@@ -391,7 +396,7 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
                 <h3 className="font-semibold text-sm">{f.title}</h3>
               </div>
               <p className="text-sm text-muted-foreground">{f.detail}</p>
-              {f.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">Ejercicio: </span>{f.drill}</p>}
+              {f.drill && <p className="text-sm bg-muted rounded-lg px-3 py-2"><span className="font-semibold">{t('sw.015')} </span>{f.drill}</p>}
             </Card>
           );
         })}
@@ -406,18 +411,18 @@ export function SwingResultView({ r, shots }: { r: SwingResult; shots?: Shot[] }
 // cuadro cede el hilo al esperar el "seeked", así que la página no se congela. En teléfonos tarda más.
 const MAX_SECONDS = 30;
 
-const VIDEO_ERR = 'No se pudo leer el video. Graba en MP4 (H.264) o pon la cámara del iPhone en "Más compatible" y vuelve a subirlo.';
+const videoErr = () => t('sw2.videoErr');
 const WAIT_MS = 8000;
 
 /** Mueve el video a `sec` y espera a que muestre ese cuadro. Falla con un mensaje claro si el video no responde. */
-const seek = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS).catch(() => { throw new Error(VIDEO_ERR); });
+const seek = (v: HTMLVideoElement, sec: number) => seekVideo(v, sec, WAIT_MS).catch(() => { throw new Error(videoErr()); });
 
 /** Espera a que el video tenga sus datos básicos (duración y tamaño). */
 const metadata = (v: HTMLVideoElement) =>
   v.readyState >= 1 ? Promise.resolve() : new Promise<void>((res, rej) => {
-    const timer = setTimeout(() => rej(new Error(VIDEO_ERR)), WAIT_MS);
+    const timer = setTimeout(() => rej(new Error(videoErr())), WAIT_MS);
     v.addEventListener('loadedmetadata', () => { clearTimeout(timer); res(); }, { once: true });
-    v.addEventListener('error', () => { clearTimeout(timer); rej(new Error(VIDEO_ERR)); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(timer); rej(new Error(videoErr())); }, { once: true });
   });
 
 const COARSE = 1 / 10;
@@ -582,20 +587,20 @@ async function captureKeyFrames(v: HTMLVideoElement, frames: Frame[], r: SwingRe
 function HowToRecord() {
   return (
     <Card className="!p-4 space-y-3">
-      <h3 className="font-semibold text-sm">Cómo grabarte</h3>
+      <h3 className="font-semibold text-sm">{t('sw.021')}</h3>
       <div className="grid grid-cols-2 gap-3">
         {(['frente', 'atras'] as const).map((vw) => (
           <figure key={vw} className="bg-muted rounded-xl p-2 text-center">
             <Silhouette view={vw} color="currentColor" className="w-full h-32 text-primary" />
-            <figcaption className="text-xs font-medium mt-1">{VIEW_LABEL[vw]}</figcaption>
+            <figcaption className="text-xs font-medium mt-1">{viewLabel(vw)}</figcaption>
           </figure>
         ))}
       </div>
       <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
-        <li>Teléfono fijo, a la altura de la cintura y a unos 3 metros.</li>
-        <li>Cuerpo entero: que se vean los pies y quede aire sobre la cabeza para el palo.</li>
-        <li>De frente: la cámara mira a tu pecho. Desde atrás: la cámara detrás de tus manos, apuntando al objetivo.</li>
-        <li>Para que la app vea el palo, busca un fondo liso y buena luz.</li>
+        <li>{t('sw.022')}</li>
+        <li>{t('sw.023')}</li>
+        <li>{t('sw.024')}</li>
+        <li>{t('sw.025')}</li>
       </ul>
     </Card>
   );
@@ -609,7 +614,7 @@ function HowToRecord() {
 function ClubPicker({ value, onChange }: { value: string | null; onChange: (c: string | null) => void }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">Palo de este swing</p>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('sw.026')}</p>
       <div className="flex flex-wrap gap-1.5">
         {CLUBS.filter((c) => c !== 'Putter').map((c) => (
           <button
@@ -624,7 +629,7 @@ function ClubPicker({ value, onChange }: { value: string | null; onChange: (c: s
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
-        {value ? `Palo confirmado: ${value}. Los siguientes swings usarán este palo hasta que cambies.` : 'Sin palo confirmado. Elígelo tú; si tocas el mismo otra vez, se quita.'}
+        {value ? t('sw2.clubConfirmed', { club: clubLabel(value) }) : t('sw2.clubNone')}
       </p>
     </div>
   );
@@ -685,7 +690,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       await metadata(v);
       v.pause();
       const dur = Math.min(v.duration || 0, MAX_SECONDS);
-      if (!(dur > 0.5)) throw new Error(VIDEO_ERR);
+      if (!(dur > 0.5)) throw new Error(videoErr());
       const aspect = v.videoWidth && v.videoHeight ? v.videoWidth / v.videoHeight : 1;
       if (dbg) Object.assign(dbg, { aspect, dur, videoW: v.videoWidth, videoH: v.videoHeight });
       const sampled = await sampleVideo(v, pose, dur, aspect, setProgress);
@@ -706,14 +711,14 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         if (typeof c !== 'string') { r = c; frames = sampled.coarse.frames; if (dbg) dbg.usedCoarse = true; }
       }
       if (dbg) Object.assign(dbg, { result: r, analysisFrames: frames });
-      if (typeof r === 'string') { setError(SWING_ERROR_TEXT[r]); if (dbg) dbg.errorText = SWING_ERROR_TEXT[r]; }
+      if (typeof r === 'string') { setError(swingErrorText(r)); if (dbg) dbg.errorText = swingErrorText(r); }
       else {
         const start = frames.find((x) => x.t === r.times?.address);
         if (start) {
           const fr = framingCheck(start.lm);
           if (dbg) Object.assign(dbg, { framing: fr, framingFrame: start });
           // Con varios swings se analiza el último (el de la bola suele ser el último): se dice, para que no parezca un error.
-          const several = sampled.swings > 1 ? `Se vieron ${sampled.swings} swings en el video; se analizó el último. ` : '';
+          const several = sampled.swings > 1 ? t('sw2.severalSeen', { n: sampled.swings }) : '';
           if (several || !fr.ok) {
             setWarn(several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}. Algunas medidas pueden salir menos precisas.`));
             if (dbg) Object.assign(dbg, { warnText: several + (fr.ok ? '' : `Encuadre mejorable. ${fr.hint}.`), swings: sampled.swings });
@@ -755,16 +760,16 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
           setSaved({ sessionId: sess.id });
           void getMediaStore().then((st) => persistReview(st, { file, frames: reviewFrames, hz, video: { durationMs, w: v.videoWidth, h: v.videoHeight }, sessionId: sess.id, result: r })).then((out) => {
             if (tokenRef.current !== token) return; // el usuario ya cambió de video o volvió a analizar
-            if (!out.ok) { setMediaNotice('El análisis se guardó, pero ' + out.message.charAt(0).toLowerCase() + out.message.slice(1)); return; }
+            if (!out.ok) { setMediaNotice(t('sw2.savedBut', { msg: out.message.charAt(0).toLowerCase() + out.message.slice(1) })); return; }
             useStore.getState().attachMedia(sess.id, out.ids);
             setSaved({ sessionId: sess.id, ...out.ids });
-            if (!out.persistent) setMediaNotice('En este navegador el video no se conservará al cerrar la pestaña (por ejemplo en modo privado).');
-          }).catch(() => setMediaNotice('El análisis se guardó, pero el video no se pudo guardar.'));
+            if (!out.persistent) setMediaNotice(t('sw2.noPersist'));
+          }).catch(() => setMediaNotice(t('sw2.videoNotSaved')));
         }
       }
     } catch (e) {
-      setError('No se pudo analizar el video. ' + (e instanceof Error ? e.message : ''));
-      if (dbg) dbg.thrown = 'No se pudo analizar el video. ' + (e instanceof Error ? e.message : String(e));
+      setError(t('sw2.analyzeFail') + (e instanceof Error ? e.message : ''));
+      if (dbg) dbg.thrown = t('sw2.analyzeFail') + (e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
       if (dbg) Object.assign(dbg, { done: true, ms: Math.round(performance.now() - (dbg.t0 as number)) });
@@ -791,8 +796,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       const r2 = analyzeSwing(frames, { lefty: profile.lefty, view, aspect, sampled: n });
       if (stale()) return;
       if (typeof r2 === 'string') {
-        setError('No pude leer ese swing: ' + SWING_ERROR_TEXT[r2] + ' Se conserva el análisis anterior.');
-        if (dbg) Object.assign(dbg, { errorText: SWING_ERROR_TEXT[r2], result: r2, done: true });
+        setError(t('sw2.rereadFail', { why: swingErrorText(r2) }));
+        if (dbg) Object.assign(dbg, { errorText: swingErrorText(r2), result: r2, done: true });
         return;
       }
       const rd = await addReviewData(v, pose, frames, r2, dur * 1000);
@@ -816,7 +821,7 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       if (saved.mediaId && saved.poseTrackId) setSaved({ ...saved }); // la revisión recarga la pista
       if (dbg) Object.assign(dbg, { result: r2, finish: rd.finish, done: true });
     } catch (e) {
-      if (!stale()) setError('No se pudo analizar ese swing. ' + (e instanceof Error ? e.message : ''));
+      if (!stale()) setError(t('sw2.reanalyzeFail') + (e instanceof Error ? e.message : ''));
       if (dbg) Object.assign(dbg, { thrown: String(e), done: true });
     } finally {
       setChoosing(false);
@@ -825,8 +830,8 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
 
   if (quota.showGate && !result) {
     return (
-      <PremiumGate title="Ya usaste tu análisis de hoy">
-        La versión gratuita incluye {FREE.swingUploadsPerDay} análisis de video por día. Con Premium son ilimitados y además tienes el análisis en vivo.
+      <PremiumGate title={t('sw.059')}>
+        {t('sw2.dailyLimit', { n: FREE.swingUploadsPerDay })}
       </PremiumGate>
     );
   }
@@ -837,14 +842,14 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url ? (
           <video
             ref={videoRef} src={url} controls={!busy} muted playsInline className="w-full rounded-xl bg-black max-h-[50vh]"
-            onError={() => setError(VIDEO_ERR)}
+            onError={() => setError(videoErr())}
             onLoadedMetadata={(e) => { const d = e.currentTarget.duration; setTooLong(Number.isFinite(d) && d > MAX_SECONDS + 0.5 ? Math.ceil(d) : null); }}
           />
         ) : (
           <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border rounded-xl py-10 cursor-pointer hover:bg-muted/50">
             <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Upload className="w-5 h-5" /></span>
-            <span className="font-medium">Sube o graba tu swing</span>
-            <span className="text-xs text-muted-foreground">Un solo swing, de frente o desde atrás, de cuerpo entero · máx. {MAX_SECONDS} s</span>
+            <span className="font-medium">{t('sw.027')}</span>
+            <span className="text-xs text-muted-foreground">{t('sw2.uploadHint', { s: MAX_SECONDS })}</span>
             <input type="file" accept="video/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
           </label>
         )}
@@ -852,17 +857,17 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
         {url && (
           <div className="flex gap-2">
             <Button full onClick={analyze} disabled={busy || choosing || !quota.canAnalyze}>
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> Ya analizado</> : <><Activity className="w-5 h-5" /> Analizar swing</>}
+              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Analizando… {progress}%</> : !quota.canAnalyze && analyzed ? <><Activity className="w-5 h-5" /> {t('sw.028')}</> : <><Activity className="w-5 h-5" /> {t('sw.029')}</>}
             </Button>
-            <Button variant="outline" disabled={busy || choosing} onClick={() => { tokenRef.current++; setSaved(null); setMediaNotice(null); setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label="Cambiar video"><RefreshCw className="w-5 h-5" /></Button>
+            <Button variant="outline" disabled={busy || choosing} onClick={() => { tokenRef.current++; setSaved(null); setMediaNotice(null); setUrl(null); setResult(null); setError(null); setShots([]); setWarn(null); setTooLong(null); setAnalyzed(false); savedRef.current = false; setChoices([]); }} aria-label={t('sw.060')}><RefreshCw className="w-5 h-5" /></Button>
           </div>
         )}
-        {!profile.premium && <p className="text-xs text-muted-foreground text-center">Gratis: {Math.max(0, FREE.swingUploadsPerDay - used)} de {FREE.swingUploadsPerDay} análisis disponibles hoy.</p>}
+        {!profile.premium && <p className="text-xs text-muted-foreground text-center">{t('sw2.freeLeft', { n: Math.max(0, FREE.swingUploadsPerDay - used), total: FREE.swingUploadsPerDay })}</p>}
       </Card>
       {!url && <HowToRecord />}
       {tooLong && (
         <Notice>
-          Tu video dura {tooLong} s y solo se analizan los primeros {MAX_SECONDS} s. Si tu swing queda después, recorta el video para que el swing esté dentro y vuelve a subirlo.
+          {t('sw2.tooLong', { len: tooLong, max: MAX_SECONDS })}
         </Notice>
       )}
       {error && <Notice tone="error">{error}</Notice>}
@@ -870,13 +875,13 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
       {mediaNotice && <Notice>{mediaNotice}</Notice>}
       {result?.viewMismatch && (
         <Notice tone="error">
-          Elegiste "{VIEW_LABEL[result.view ?? 'frente']}", pero este video parece {VIEW_LABEL[result.viewMismatch].toLowerCase()}. Las medidas pueden salir mal: cambia la vista a "Automática" y analiza de nuevo.
+          {t('sw2.viewMismatch', { chosen: viewLabel(result.view ?? 'frente'), actual: viewLabel(result.viewMismatch).toLowerCase(), auto: t('sw2.viewAuto') })}
         </Notice>
       )}
       {flags.videoReview && choices.length > 1 && result && (
         <Card className="space-y-3">
-          <p className="text-sm font-medium" data-swing-chooser>Se vieron {choices.length} swings en el video</p>
-          <p className="text-xs text-muted-foreground">Analicé el último. Si el que querías es otro, tócalo: no cuenta como otro análisis.</p>
+          <p className="text-sm font-medium" data-swing-chooser>{t('sw2.choicesTitle', { n: choices.length })}</p>
+          <p className="text-xs text-muted-foreground">{t('sw.030')}</p>
           <div className="grid grid-cols-3 gap-2">
             {choices.map((c, i) => (
               <button key={c.w.index} disabled={choosing || (!saved?.mediaId && !mediaNotice)} onClick={() => void chooseSwing(i)} aria-pressed={i === chosen}
@@ -886,13 +891,13 @@ function UploadAnalyzer({ view }: { view: ViewChoice }) {
               </button>
             ))}
           </div>
-          {choosing && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando el otro swing…</p>}
+          {choosing && <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('sw.031')}</p>}
         </Card>
       )}
       {result && flags.videoReview && saved?.mediaId && (
         <VideoReview key={`${saved.mediaId}:${chosen}`} r={result} mediaId={saved.mediaId} poseTrackId={saved.poseTrackId} onManual={(m) => useStore.getState().setReviewMarks(saved.sessionId, m)} />
       )}
-      {result && flags.compare && saved?.mediaId && <Link to={`/comparar?a=${saved.sessionId}`} className="inline-block text-sm underline">Comparar con otro swing</Link>}
+      {result && flags.compare && saved?.mediaId && <Link to={`/comparar?a=${saved.sessionId}`} className="inline-block text-sm underline">{t('sw.001')}</Link>}
       {result && <SwingResultView r={result} shots={shots} />}
     </div>
   );
@@ -929,7 +934,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
   const [useMic, setUseMic] = useState(false);
   useEffect(() => { void queryCameraPermission().then(setPerm); }, []);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
-  const [status, setStatus] = useState('Colócate de cuerpo entero frente a la cámara');
+  const [status, setStatus] = useState(() => t('sw2.liveStatusInit'));
   const [swings, setSwings] = useState<SwingResult[]>([]);
   const swingsRef = useRef<SwingResult[]>([]);
   // Silueta guía: qué vista se ve, si el jugador está bien encuadrado y si toca mostrarla.
@@ -983,7 +988,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       await v.play();
       setOn(true);
       if (liveFlags.liveRecording && typeof MediaRecorder !== 'undefined') {
-        const rec = new LiveRecorder({ create: (s, m) => new MediaRecorder(s, { mimeType: m }) as never, isSupported: (t) => MediaRecorder.isTypeSupported(t), now: () => performance.now() }, (e) => setPerfNote(e === 'warn' ? 'Llevas 12 minutos grabando: a los 15 se detiene la grabación.' : 'Se llegó a los 15 minutos: la grabación se detuvo (el análisis sigue).'));
+        const rec = new LiveRecorder({ create: (s, m) => new MediaRecorder(s, { mimeType: m }) as never, isSupported: (t) => MediaRecorder.isTypeSupported(t), now: () => performance.now() }, (e) => setPerfNote(e === 'warn' ? t('sw2.recWarn') : t('sw2.recStop')));
         if (rec.start(stream)) { recRef.current = rec; marksRef.current = []; dimsRef.current = { w: v.videoWidth, h: v.videoHeight }; }
       }
 
@@ -1004,14 +1009,14 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
             step(f, now);
             // F10.6: si se procesan menos de 12 cuadros por segundo durante 5 s, se baja la entrada a 640×480 y se avisa.
             if (fps.record(now) === 'lower') {
-              void stream.getVideoTracks()[0]?.applyConstraints({ width: { ideal: 640 }, height: { ideal: 480 } }).then(() => setPerfNote('Bajé la resolución de la cámara para que el análisis vaya fluido.')).catch(() => setPerfNote('Tu teléfono va lento: cierra otras apps para mejorar el análisis en vivo.'));
+              void stream.getVideoTracks()[0]?.applyConstraints({ width: { ideal: 640 }, height: { ideal: 480 } }).then(() => setPerfNote(t('sw2.lowerRes'))).catch(() => setPerfNote(t('sw2.slowPhone')));
             }
           })
           .catch((e) => {
             stop();
             setError(e instanceof PoseFailure
-              ? 'El análisis de postura falló varias veces seguidas. Cierra otras apps o pestañas y vuelve a iniciar.'
-              : 'Se interrumpió el análisis en vivo. ' + (e instanceof Error ? e.message : ''));
+              ? t('sw2.poseFail')
+              : t('sw2.liveInterrupted') + (e instanceof Error ? e.message : ''));
           })
           .finally(() => { busy = false; });
       };
@@ -1034,7 +1039,7 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
             swingsRef.current = [res, ...swingsRef.current];
             setSwings(swingsRef.current);
             setStatus(`Swing ${swingsRef.current.length}: ${res.score}/100`);
-          } else setStatus('No pude leer ese swing. Repítelo de cuerpo entero');
+          } else setStatus(t('sw2.liveReadFail'));
         }
       };
       loop();
@@ -1087,11 +1092,11 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
         {!on && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white p-6 text-center">
             <Camera className="w-10 h-10 opacity-80" />
-            <p className="text-sm opacity-80">Apoya el teléfono a unos 3 metros, de frente o desde atrás, y entra de cuerpo entero.</p>
-            {liveFlags.liveRecording && <label className="flex items-center gap-2 text-xs opacity-80"><input type="checkbox" checked={useMic} onChange={(e) => setUseMic(e.target.checked)} /> Usar el micrófono para distinguir golpes con bola (opcional)</label>}
-            <p className="text-xs opacity-60" data-camera-permission>{perm === 'denied' ? 'La cámara está bloqueada: actívala en los ajustes del teléfono o del navegador.' : 'Uso la cámara para ver tu postura. La imagen se procesa en tu teléfono y no se envía ni se guarda.'}</p>
+            <p className="text-sm opacity-80">{t('sw.032')}</p>
+            {liveFlags.liveRecording && <label className="flex items-center gap-2 text-xs opacity-80"><input type="checkbox" checked={useMic} onChange={(e) => setUseMic(e.target.checked)} /> {t('sw.033')}</label>}
+            <p className="text-xs opacity-60" data-camera-permission>{perm === 'denied' ? t('sw2.camBlocked') : t('sw2.camPrivacy')}</p>
             <Button variant="gold" onClick={() => start()} disabled={loading}>
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando…</> : <><Video className="w-5 h-5" /> Iniciar análisis en vivo</>}
+              {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> {t('sw.034')}</> : <><Video className="w-5 h-5" /> {t('sw.035')}</>}
             </Button>
           </div>
         )}
@@ -1105,8 +1110,8 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
               <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white rounded-xl px-4 py-3 flex items-center gap-3">
                 <span className="font-heading text-4xl font-bold">{last.score}</span>
                 <span className="text-sm leading-snug">
-                  <span className="block opacity-70">Tempo {last.metrics.tempoRatio}:1 · {last.view === 'atras' ? `inclinación ${last.metrics.spineAddressDeg}°` : `hombros ${last.metrics.shoulderTurnDeg}°`}</span>
-                  <span className="block font-semibold">{topIssue ? topIssue.title : '¡Swing muy sólido!'}</span>
+                  <span className="block opacity-70">{last.view === 'atras' ? t('sw2.liveTempoDtl', { ratio: last.metrics.tempoRatio, deg: last.metrics.spineAddressDeg }) : t('sw2.liveTempoFace', { ratio: last.metrics.tempoRatio, deg: last.metrics.shoulderTurnDeg })}</span>
+                  <span className="block font-semibold">{topIssue ? topIssue.title : t('sw2.liveSolid')}</span>
                 </span>
               </div>
             )}
@@ -1116,24 +1121,24 @@ function LiveAnalyzer({ view }: { view: ViewChoice }) {
       {error && <Notice tone="error">{error}</Notice>}
       {perfNote && <Notice>{perfNote}</Notice>}
       {interrupted && (
-        <Notice>Pausé la cámara porque saliste de la app. {swings.length ? `Tus ${swings.length} swing${swings.length > 1 ? 's' : ''} siguen aquí: ` : ''}toca Reanudar para seguir o Terminar para guardar.</Notice>
+        <Notice>{t('sw2.pausedA')}{swings.length ? t('sw2.pausedB', { count: nSwings(swings.length) }) : ''}{t('sw2.pausedC')}</Notice>
       )}
       {interrupted && (
         <div className="flex gap-2">
-          <Button full onClick={() => void start(facing, false)}><Video className="w-4 h-4" /> Reanudar</Button>
-          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
+          <Button full onClick={() => void start(facing, false)}><Video className="w-4 h-4" /> {t('sw.036')}</Button>
+          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> {t('sw2.finish')}{swings.length ? ` (${swings.length})` : ''}</Button>
         </div>
       )}
       {on && (
         <div className="flex gap-2">
-          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> Terminar sesión{swings.length ? ` (${swings.length})` : ''}</Button>
-          <Button variant="outline" onClick={flip} aria-label="Cambiar cámara"><RefreshCw className="w-5 h-5" /></Button>
+          <Button full variant="outline" onClick={finish}><Square className="w-4 h-4" /> {t('sw2.finish')}{swings.length ? ` (${swings.length})` : ''}</Button>
+          <Button variant="outline" onClick={flip} aria-label={t('sw.061')}><RefreshCw className="w-5 h-5" /></Button>
         </div>
       )}
       {clipIds.length > 0 && !on && <LiveClips ids={clipIds} sound={clipSound} />}
       {!on && !interrupted && swings.length > 0 && (
         <>
-          <Notice tone="ok">Sesión guardada con {swings.length} swing{swings.length > 1 ? 's' : ''}. Este fue el mejor:</Notice>
+          <Notice tone="ok">{t('sw2.liveSaved', { count: nSwings(swings.length) })}</Notice>
           <SwingResultView r={swings.reduce((a, b) => (b.score > a.score ? b : a))} />
         </>
       )}
@@ -1156,7 +1161,7 @@ function LiveClips({ ids, sound }: { ids: string[]; sound: BallSound[] }) {
   if (!urls.length) return null;
   return (
     <div className="space-y-2" data-live-clips>
-      <p className="text-sm font-medium">Videos de tus swings</p>
+      <p className="text-sm font-medium">{t('sw.037')}</p>
       <div className="grid grid-cols-2 gap-2">{urls.map((u, i) => <div key={u}><video src={u} controls playsInline muted className="w-full rounded-xl bg-black" aria-label={`Swing ${i + 1}`} />{sound[i] && <p className="text-[11px] text-muted-foreground mt-0.5">{BALL_SOUND_LABEL[sound[i]]}</p>}</div>)}</div>
     </div>
   );

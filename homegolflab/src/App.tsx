@@ -63,7 +63,7 @@ function UnlockToast() {
 }
 
 export default function App() {
-  const { t } = useT();
+  const { t, locale } = useT();
   const name = useStore((s) => s.profile.name);
   // Al arrancar: borra exportaciones y grabaciones temporales de más de 24 h y respeta el tope de espacio (F2.3).
   // Solo si hay funciones de video encendidas: si no, la app ni abre el almacén de medios.
@@ -88,7 +88,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-2xl mx-auto px-4 pt-5 pb-28">
+      {/* key={locale}: al cambiar de idioma las pantallas se vuelven a armar con los textos nuevos (sin esto cada componente tendría que suscribirse). */}
+      <main key={locale} className="flex-1 w-full max-w-2xl mx-auto px-4 pt-5 pb-28">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/swing" element={<Swing />} />

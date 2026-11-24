@@ -12,7 +12,7 @@ const OVERRIDE_ONLY = new Set<Locale>(['es-ES', 'en-GB']);
  * Áreas de texto que un idioma todavía NO tiene (caen en inglés). Prioridad de calidad (decisión de trabajo, a confirmar con Ryan): inglés y portugués primero.
  * Cada vez que se traduce un área se quita su prefijo de aquí; la prueba falla si el prefijo ya no hace falta o si falta algo fuera de la lista.
  */
-const PENDING_FILL: string[] = ['fb.', 'swing.err.', 'frame.', 'hip.', 'view.'];
+const PENDING_FILL: string[] = ['fb.', 'swing.err.', 'frame.', 'hip.', 'view.', 'sw.', 'sw2.'];
 const PENDING_AREAS: Partial<Record<Locale, string[]>> = { de: PENDING_FILL, fr: PENDING_FILL, it: PENDING_FILL, ja: PENDING_FILL, ko: PENDING_FILL, sv: PENDING_FILL, nl: PENDING_FILL };
 
 describe('elección del idioma', () => {
@@ -126,7 +126,7 @@ describe('diccionarios', () => {
   it('R8: ningún texto de ningún idioma menciona la IA, salvo las claves de R8_PENDING (ya lo hacían en español; decide Ryan)', () => {
     // Textos que ya nombraban la IA ANTES de traducir. Se traducen fieles; quitarlos o no es decisión de Ryan (plan-idiomas.md, «R8 pendiente»).
     // Esta lista solo puede achicarse: una clave nueva que nombre la IA hace fallar la prueba.
-    const R8_PENDING = new Set<string>(['hl.scanMeasures', 'hl.scan.errNotConfigured']);
+    const R8_PENDING = new Set<string>(['hl.scanMeasures', 'hl.scan.errNotConfigured', 'sw.008', 'sw.010', 'sw.012', 'sw.013', 'sw2.coachUnavailable', 'sw2.coachFailed', 'sw2.coachCaveat']);
     // Siglas en MAYÚSCULAS (sin /i: «ai» es una palabra normal en francés e italiano) y frases completas sin importar mayúsculas.
     const sigla = /(^|[^A-Za-zÁ-ÿ])(IA|AI|KI)(?![A-Za-zÁ-ÿ])/;
     const frase = /inteligencia artificial|artificial intelligence|intelligence artificielle|intelligenza artificiale|人工知能|인공지능|artificiell intelligens|inteligência artificial|kunstmatige intelligentie|claude/i;

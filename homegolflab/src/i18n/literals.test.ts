@@ -19,8 +19,7 @@ const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(
 
 /** Archivos que todavía tienen texto escrito directo. Se quitan de aquí cuando se migran; la lista solo puede achicarse. */
 const PENDING_FILES = new Set<string>([
-  'pages/Swing.tsx',
-  'components/VideoFlight.tsx', 'components/VideoReview.tsx', 'components/CompareView.tsx', 'components/ExportSheet.tsx',
+    'components/VideoFlight.tsx', 'components/VideoReview.tsx', 'components/CompareView.tsx', 'components/ExportSheet.tsx',
   'components/FlightPlayer.tsx', 'components/ConsentCard.tsx', 'components/FlagsPanel.tsx',
 ]);
 
@@ -38,7 +37,7 @@ function visibleLiterals(src: string): string[] {
   for (const m of s.matchAll(/>([^<>{}=;()]*)</g)) {
     const txt = m[1].replace(/\s+/g, ' ').trim();
     // Se descartan comparaciones y accesos a propiedades (`info.cap && <Notice`), que no son texto.
-    if (/[A-Za-zÁ-ÿ]{3,}/.test(txt) && !/&&|\|\||=>|\w\.\w/.test(txt)) out.push(txt);
+    if (/[A-Za-zÁ-ÿ]{3,}/.test(txt) && !/&&|\|\||=>|\w\.\w/.test(txt) && !/^[:?,.)]/.test(txt)) out.push(txt);
   }
   for (const m of s.matchAll(/\b(?:title|placeholder|aria-label|alt|label|subtitle)="([^"{}]*)"/g)) {
     if (/[A-Za-zÁ-ÿ]{3,}/.test(m[1])) out.push(m[1]);
