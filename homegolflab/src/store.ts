@@ -10,6 +10,7 @@ import type { ShotShape } from '@/lib/shotShape';
 import { asUnit, DEFAULT_UNIT, type DistUnit } from '@/lib/units';
 import type { DistanceResult } from '@/lib/distance';
 import { HOMELAB_NOTICE_VERSION, type HomelabNoticeAcceptance } from '@/lib/homelabNotice';
+import { appendEvent, newEvent, sanitizeLog, type ConsentEvent } from '@/lib/consent';
 
 export type Mode = 'casa' | 'cancha';
 
@@ -63,6 +64,8 @@ interface State {
   freeExportDate: string | null;    // día (AAAA-MM-DD) de la última exportación gratis diaria sin anuncio (D5)
   adsConsent: 'granted' | 'declined' | 'unknown'; // el usuario acepta o rechaza ver anuncios (D5)
   homelabNotice: HomelabNoticeAcceptance | null;  // aviso de seguridad del HomeLAB: cuándo y qué versión aceptó (R13)
+  consentUserId: string | null;     // id anónimo local para el registro de consentimiento (todavía no hay cuentas)
+  consentLog: ConsentEvent[];       // R9: cada decisión con usuario, fecha y versión del texto (solo se agrega)
 
   setMode: (m: Mode) => void;
   setCurrentClub: (c: string | null) => void;
@@ -94,6 +97,8 @@ interface State {
   setAdsConsent: (c: 'granted' | 'declined' | 'unknown') => void;
   /** Guarda que el usuario aceptó el aviso de seguridad del HomeLAB (fecha y versión del texto). */
   acceptHomelabNotice: () => void;
+  /** R9: registra aceptar, retirar o pedir el borrado. Solo se llama desde la casilla aparte (bandera `consentFlow`). */
+  recordConsent: (action: 'granted' | 'withdrawn' | 'deletion_requested') => void;
   reset: () => void;
 }
 
@@ -117,6 +122,8 @@ const initial = {
   freeExportDate: null as string | null,
   adsConsent: 'unknown' as 'granted' | 'declined' | 'unknown',
   homelabNotice: null as HomelabNoticeAcceptance | null,
+  consentUserId: null as string | null,
+  consentLog: [] as ConsentEvent[],
 };
 
 export const useStore = create<State>()(
@@ -159,6 +166,11 @@ export const useStore = create<State>()(
       markFreeExport: (day) => set({ freeExportDate: day }),
       setAdsConsent: (adsConsent) => set({ adsConsent }),
       acceptHomelabNotice: () => set({ homelabNotice: { acceptedAt: new Date().toISOString(), version: HOMELAB_NOTICE_VERSION } }),
+      recordConsent: (action) => {
+        const userId = get().consentUserId ?? crypto.randomUUID();
+        const log = sanitizeLog(get().consentLog);
+        set({ consentUserId: userId, consentLog: appendEvent(log, newEvent(userId, action, crypto.randomUUID())) });
+      },
       reset: () => set({ ...initial }),
     }),
     // version 1 (F2.1): agrega `exportPasses` y los ids de medios. `migrate` conserva todo lo que ya había guardado.

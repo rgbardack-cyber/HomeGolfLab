@@ -5,7 +5,7 @@ describe('banderas (1.4)', () => {
   it('todo nace apagado', () => {
     const f = resolveFlags({}, {}, false);
     expect(FLAG_NAMES.every((n) => f[n] === false)).toBe(true);
-    expect(FLAG_NAMES).toHaveLength(9);
+    expect(FLAG_NAMES).toHaveLength(10);
   });
 
   it('el nombre de la variable sale en MAYÚSCULAS con guiones bajos', () => {

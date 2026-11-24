@@ -7,6 +7,7 @@ import { clearAllMedia } from '@/lib/media/cleanup';
 import { getMediaStore } from '@/lib/media/store';
 import StorageCard from '@/components/StorageCard';
 import FlagsPanel from '@/components/FlagsPanel';
+import ConsentCard from '@/components/ConsentCard';
 import { asUnit, UNIT_LABEL, type DistUnit } from '@/lib/units';
 
 const PREMIUM = ['Ball tracking sin anuncios ni pausas', 'Análisis de swing en vivo', 'Análisis de video ilimitados', 'Todo lo que se agregue a Premium más adelante'];
@@ -70,6 +71,8 @@ export default function Perfil() {
       </Card>
 
       {anyMediaFlag(flags) && <StorageCard />}
+
+      {flags.consentFlow && <ConsentCard />}
 
       {INTERNAL && <FlagsPanel />}
 

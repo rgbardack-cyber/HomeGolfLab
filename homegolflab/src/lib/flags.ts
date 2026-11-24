@@ -9,7 +9,7 @@
 import { useSyncExternalStore } from 'react';
 
 export const FLAG_NAMES = [
-  'videoReview', 'compare', 'flightV2', 'flightEstimate', 'shotShapeAuto', 'distanceEstimate', 'export', 'exportGate', 'liveRecording',
+  'videoReview', 'compare', 'flightV2', 'flightEstimate', 'shotShapeAuto', 'distanceEstimate', 'export', 'exportGate', 'liveRecording', 'consentFlow',
 ] as const;
 export type FlagName = (typeof FLAG_NAMES)[number];
 export type FlagValues = Record<FlagName, boolean>;
@@ -24,6 +24,7 @@ export const FLAG_INFO: Record<FlagName, { label: string; desc: string }> = {
   export: { label: 'Exportar video', desc: 'Editor de exportación vertical 1080×1920.' },
   exportGate: { label: 'Anuncio para descargar', desc: 'Pase de exportación con anuncio recompensado (plan Gratis).' },
   liveRecording: { label: 'Grabación en vivo', desc: 'Graba y recorta los golpes del modo en vivo (Premium).' },
+  consentFlow: { label: 'Consentimiento de datos', desc: 'Casilla aparte para guardar videos y análisis (R9). Guardar videos sigue desactivado.' },
 };
 
 /** `videoReview` → `VITE_FLAG_VIDEO_REVIEW`. */
