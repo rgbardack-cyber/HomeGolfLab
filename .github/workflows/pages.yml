@@ -11,7 +11,7 @@ name: Publicar en GitHub Pages
 on:
   workflow_dispatch:
   push:
-    branches: [main, feat/video-review-export]
+    branches: [release/v1]
 
 permissions:
   contents: read

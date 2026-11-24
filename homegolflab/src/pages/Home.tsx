@@ -31,7 +31,7 @@ export default function Home() {
     <div className="space-y-6">
       <section className="rounded-2xl p-6 text-primary-foreground bg-gradient-to-br from-primary to-[hsl(152_35%_40%)]">
         <p className="text-sm opacity-80 first-letter:uppercase">{fecha}</p>
-        <h1 className="font-heading text-3xl font-bold mt-1">{profile.name ? t('home.hello', { name: profile.name }) : 'HomeGolfLab'}</h1>
+        <h1 className="font-heading text-3xl font-bold mt-1">{profile.name ? t('home.hello', { name: profile.name }) : 'HomeGolf LAB'}</h1>
         <p className="opacity-90 mt-1">{mode === 'casa' ? t('home.subtitleCasa') : t('home.subtitleCancha')}</p>
         <div className="grid grid-cols-3 gap-2 mt-5">
           <div className="bg-white/15 rounded-xl p-3">

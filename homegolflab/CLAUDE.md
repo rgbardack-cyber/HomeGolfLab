@@ -6,7 +6,7 @@ App de práctica de golf. Esta carpeta es la reconstrucción (noviembre 2026) y 
 Dueño: Ryan. Responder y escribir la interfaz en español.
 
 ## Decisiones tomadas
-- Nombre: HomeGolfLab (por ahora).
+- Nombre visible: HomeGolf LAB (decidido el 24 nov 2026). Identificadores en minúsculas (`homegolflab`); repo y URL de Pages siguen como HomeGolfLab.
 - Plataforma: web React + Vite + Tailwind, empaquetada con Capacitor para App Store y Play Store (`capacitor.config.ts`, appId `com.homegolflab.app`). Todo debe funcionar dentro de la app sin depender de servidores externos: el modelo de postura y el motor WASM están en `public/`.
 - Dos modos: **Casa** y **Cancha** (selector en el encabezado). HomeLAB es solo de Casa.
 - Versión 1 = Análisis de swing, HomeLAB, Ball tracking y medallas. Los desafíos quedan para una actualización futura.
@@ -63,7 +63,7 @@ Lo que se aprendió al probar con swings reales (nov 2026, cuatro swings de una 
 - La cuota gratis es 1 análisis de video al día: en las pruebas hay que activar Premium (modo prueba) en Perfil.
 
 ## Publicar en GitHub Pages
-- `.github/workflows/pages.yml` construye con `VITE_BASE=/<repositorio>/` y publica `homegolflab/dist` (con `404.html` para los enlaces directos). Solo se dispara a mano o al hacer push a `main`.
+- `.github/workflows/pages.yml` construye con `VITE_BASE=/<repositorio>/` y publica `homegolflab/dist` (con `404.html` para los enlaces directos). Solo se dispara a mano o al hacer push a `release/v1`.
 - `vite.config.ts` toma `base` de `VITE_BASE` (por defecto `/`, como siempre) y `main.tsx` usa `import.meta.env.BASE_URL` como `basename` del router.
 - En Pages no hay `/api`: HomeLAB con foto y el coach con IA responden "esta versión de prueba no incluye…" (`not_configured`).
 - `npm run build:static` (modo `static`) deja en `dist-static/` una build con rutas relativas y router con `#` que funciona soltada en cualquier hosting estático con HTTPS (Netlify Drop, Cloudflare Pages, Vercel…), en cualquier subdirectorio y sin configurar redirecciones. Comprobada sirviéndola bajo un subdirectorio sin `404.html`. Para llevarla a un teléfono sin GitHub Pages.

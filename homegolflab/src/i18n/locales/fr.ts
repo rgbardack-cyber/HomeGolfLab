@@ -37,8 +37,6 @@ export const fr: Readonly<Record<string, string>> = {
   'perfil.pitch': 'Passe à Premium : sans publicité et avec analyse en direct.', 'perfil.free': 'Gratuit', 'perfil.premium': 'Premium',
   'perfil.free1': '1 analyse vidéo par jour', 'perfil.free2': 'HomeLAB complet', 'perfil.free3': 'Ball tracking : 15 min, puis 1 publicité pour continuer', 'perfil.free4': 'Badges et niveaux',
   'perfil.prem1': 'Ball tracking sans publicité ni pauses', 'perfil.prem2': 'Analyse du swing en direct', 'perfil.prem3': 'Analyses vidéo illimitées', 'perfil.prem4': 'Tout ce qui sera ajouté à Premium plus tard',
-  'perfil.paymentsNotice': 'Les paiements ne sont pas encore connectés. Ce bouton sert uniquement à tester l’app : dans la version des boutiques, il est remplacé par l’achat intégré à l’App Store et à Google Play.',
-  'perfil.backToFree': 'Revenir au forfait gratuit (test)', 'perfil.activate': 'Activer Premium (mode test)',
   'perfil.dataTitle': 'Données', 'perfil.dataText': 'Tes {n} séances et tes badges sont enregistrés uniquement sur cet appareil. Il n’y a pas encore de comptes ni de sauvegarde dans le cloud.',
   'perfil.cancel': 'Annuler', 'perfil.confirmWipe': 'Oui, tout supprimer', 'perfil.wipe': 'Supprimer toutes mes données',
   'perfil.wipeError': 'Impossible de supprimer les vidéos enregistrées. Réessaie ; tes données sont intactes.',

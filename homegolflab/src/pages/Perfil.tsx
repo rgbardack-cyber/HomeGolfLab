@@ -6,6 +6,7 @@ import { anyMediaFlag, INTERNAL, useFlags } from '@/lib/flags';
 import { clearAllMedia } from '@/lib/media/cleanup';
 import { getMediaStore } from '@/lib/media/store';
 import StorageCard from '@/components/StorageCard';
+import PremiumTestSwitch from '@/components/PremiumTestSwitch';
 import FlagsPanel from '@/components/FlagsPanel';
 import ConsentCard from '@/components/ConsentCard';
 import { asUnit, unitLabel, type DistUnit } from '@/lib/units';
@@ -74,12 +75,7 @@ export default function Perfil() {
           <ul className="space-y-1.5"><li className="font-semibold text-muted-foreground">{t('perfil.free')}</li>{FREE_LIST.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />{t(f)}</li>)}</ul>
           <ul className="space-y-1.5"><li className="font-semibold text-primary">{t('perfil.premium')}</li>{PREMIUM.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />{t(f)}</li>)}</ul>
         </div>
-        <Notice>
-          {t('perfil.paymentsNotice')}
-        </Notice>
-        <Button full variant={profile.premium ? 'outline' : 'gold'} onClick={() => setProfile({ premium: !profile.premium })}>
-          {profile.premium ? t('perfil.backToFree') : t('perfil.activate')}
-        </Button>
+        {INTERNAL && <PremiumTestSwitch />}
       </Card>
 
       {anyMediaFlag(flags) && <StorageCard />}

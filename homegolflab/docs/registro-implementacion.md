@@ -346,3 +346,12 @@ Comprobado en esta máquina (Windows 11): no hay `java`, `adb`, `ANDROID_HOME` n
 - **Medido en `release/v1` (Node v26.13.0; el CI usa 22, no medido):** `npm ci` sin vulnerabilidades, `typecheck` sin errores, **538 de 538** pruebas, `build` correcto con `VITE_BASE=/HomeGolfLab/`.
 - **Hallazgo:** en `dist/`, `Activar Premium` = **1** (esperado 0), `Funciones de prueba` = 0, `__hgl` = 0. `release/v1` no trae `2dfc975`; además la clave `perfil.activate` queda en el diccionario aunque el botón se oculte. Detalle y opciones en la auditoría. **Sin corregir: espera a Ryan.**
 - **No medido:** Node 22, un teléfono, portugués y demás idiomas, Tracking y Logros.
+
+## 24 nov 2026 (noche): decisiones de Ryan 1 a 16, primera tanda
+- **Decisiones recibidas:** 1A, 2A, 3A, 4A (3 USD en total para toda la primera pasada), 6A, 7A, 8A, 9A, 10A, 11A, 13A, 14A, 15A (solo propuesta; Ryan decide el valor). Pendientes: 5 (R18, Ryan consulta con alguien), 12 y 16.
+- **6A:** `feat/video-review-export` local devuelta a `562f5b0` (= `origin`). `2dfc975` sigue en `fix/ocultar-premium-prueba-web`; no se perdió nada. `pages.yml` ahora se dispara solo con push a `release/v1` (antes `main` y `feat/video-review-export`).
+- **8A:** marca visible «HomeGolf LAB» en encabezado, portada, `<title>`, manifest, título de compartir, marca de agua (10 idiomas), prompt del coach, log del servidor y `appName`. Sin cambio: nombre del archivo exportado (`HomeGolfLab-…mp4`), identificadores, repo y URL de Pages. La casilla de consentimiento ya decía «HomeGolf LAB»: **no cambió y `CONSENT_VERSION` sigue en 1** (16 no hace falta).
+- **9A:** `appId` `com.homegolflab.app` confirmado por Ryan.
+- **10A:** el interruptor «Activar Premium (modo prueba)» pasó a `components/PremiumTestSwitch.tsx` (texto directo, excluido de la traducción como `FlagsPanel`), dibujado solo con `INTERNAL`. Se quitaron las claves `perfil.paymentsNotice`, `perfil.backToFree` y `perfil.activate` de los 10 diccionarios. **Medido en `dist/`:** `Activar Premium` 0 y `Funciones de prueba` 0.
+- **11A:** la línea «BORRADOR…» ya no se dibuja en la pantalla HomeLAB (se quitó `notice.draft` de la pantalla y de los diccionarios). Sigue en `docs/legal/` y en `HOMELAB_NOTICE_DRAFT` (el código). La de la casilla de consentimiento (`consent.draft`) no se tocó: la bandera sigue apagada.
+- **Medido:** `typecheck` sin errores, **538 de 538** pruebas, `build` correcto con `VITE_BASE=/HomeGolfLab/` (Node v26.13.0; el CI usa 22, no medido).

@@ -191,7 +191,7 @@ export default function ExportSheet({ r, mediaId, poseTrackId, manual, premium, 
   const share = async () => {
     if (!result) return;
     const file = new File([result.blob], result.name, { type: 'video/mp4' });
-    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'HomeGolfLab' }); } catch { /* cancelado */ }
+    try { if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: 'HomeGolf LAB' }); } catch { /* cancelado */ }
   };
   const canShare = typeof navigator !== 'undefined' && typeof navigator.canShare === 'function' && typeof File !== 'undefined';
 

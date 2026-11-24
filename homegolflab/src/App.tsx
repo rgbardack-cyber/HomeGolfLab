@@ -77,7 +77,7 @@ export default function App() {
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2 min-w-0">
             <span className="w-8 h-8 rounded-lg bg-primary text-primary-foreground font-heading font-bold flex items-center justify-center">H</span>
-            <span className="font-heading font-bold text-base min-[400px]:text-lg whitespace-nowrap">HomeGolfLab</span>
+            <span className="font-heading font-bold text-base min-[400px]:text-lg whitespace-nowrap">HomeGolf LAB</span>
           </Link>
           <div className="ml-auto flex items-center gap-1.5">
             <ModeSwitch />

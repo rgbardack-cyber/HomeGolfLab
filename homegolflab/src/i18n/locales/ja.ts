@@ -37,8 +37,6 @@ export const ja: Readonly<Record<string, string>> = {
   'perfil.pitch': 'プレミアムにすると、広告なし＋ライブ分析が使えます。', 'perfil.free': '無料', 'perfil.premium': 'プレミアム',
   'perfil.free1': '動画分析は1日1回', 'perfil.free2': 'HomeLABのすべて', 'perfil.free3': 'ボールトラッキング：15分、続けるには広告1回', 'perfil.free4': 'バッジとレベル',
   'perfil.prem1': '広告も中断もないボールトラッキング', 'perfil.prem2': 'ライブスイング分析', 'perfil.prem3': '動画分析が無制限', 'perfil.prem4': '今後プレミアムに追加されるすべて',
-  'perfil.paymentsNotice': '支払いはまだ接続されていません。このスイッチはアプリを試すためだけのものです。ストア版では、App StoreとGoogle Playのアプリ内購入に置き換わります。',
-  'perfil.backToFree': '無料プランに戻す（テスト）', 'perfil.activate': 'プレミアムを有効にする（テストモード）',
   'perfil.dataTitle': 'データ', 'perfil.dataText': '{n}件のセッションとバッジは、この端末にだけ保存されます。アカウントやクラウドバックアップはまだありません。',
   'perfil.cancel': 'キャンセル', 'perfil.confirmWipe': 'はい、すべて削除', 'perfil.wipe': '自分のデータをすべて削除',
   'perfil.wipeError': '保存した動画を削除できませんでした。もう一度お試しください。データはそのままです。',

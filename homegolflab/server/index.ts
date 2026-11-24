@@ -1,5 +1,5 @@
 /**
- * Servidor de HomeGolfLab.
+ * Servidor de HomeGolf LAB.
  *
  * Dos trabajos, los dos con visión de Claude:
  *  - /api/homelab/scan: recibe fotos del espacio del jugador y devuelve las medidas estimadas,
@@ -81,7 +81,7 @@ const CoachSchema = z.object({
 });
 export type CoachResult = z.infer<typeof CoachSchema>;
 
-const COACH_SYSTEM = `Eres el coach de golf de HomeGolfLab, una app para practicar golf en casa.
+const COACH_SYSTEM = `Eres el coach de golf de HomeGolf LAB, una app para practicar golf en casa.
 Recibes hasta tres fotos de UN swing del jugador, en este orden y con su etiqueta: inicio (antes de empezar), tope (final de la subida) e impacto (un cuadro cercano al impacto; a la velocidad de un video normal puede ser un instante antes o después). Las fotos vienen sin marcas.
 También recibes la vista de la cámara ("de frente" al jugador, o "desde atrás" sobre la línea de tiro), si el jugador es diestro o zurdo según la app, y las medidas que la app estimó a partir de la postura.
 
@@ -313,4 +313,4 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`HomeGolfLab server en http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`HomeGolf LAB server en http://localhost:${PORT}`));

@@ -37,8 +37,6 @@ export const ko: Readonly<Record<string, string>> = {
   'perfil.pitch': '프리미엄으로 바꾸면 광고 없이 실시간 분석을 쓸 수 있어요.', 'perfil.free': '무료', 'perfil.premium': '프리미엄',
   'perfil.free1': '영상 분석 하루 1회', 'perfil.free2': 'HomeLAB 전체', 'perfil.free3': '볼 트래킹: 15분, 이어서 하려면 광고 1회', 'perfil.free4': '배지와 레벨',
   'perfil.prem1': '광고와 중단 없는 볼 트래킹', 'perfil.prem2': '실시간 스윙 분석', 'perfil.prem3': '무제한 영상 분석', 'perfil.prem4': '앞으로 프리미엄에 추가되는 모든 것',
-  'perfil.paymentsNotice': '결제는 아직 연결되지 않았습니다. 이 스위치는 앱을 시험해 보는 용도입니다. 스토어 버전에서는 App Store와 Google Play의 인앱 구매로 바뀝니다.',
-  'perfil.backToFree': '무료 요금제로 돌아가기(테스트)', 'perfil.activate': '프리미엄 켜기(테스트 모드)',
   'perfil.dataTitle': '데이터', 'perfil.dataText': '세션 {n}개와 배지는 이 기기에만 저장됩니다. 아직 계정이나 클라우드 백업은 없습니다.',
   'perfil.cancel': '취소', 'perfil.confirmWipe': '네, 모두 삭제', 'perfil.wipe': '내 데이터 모두 삭제',
   'perfil.wipeError': '저장된 영상을 삭제하지 못했습니다. 다시 시도하세요. 데이터는 그대로입니다.',

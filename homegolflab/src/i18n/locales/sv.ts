@@ -37,8 +37,6 @@ export const sv: Readonly<Record<string, string>> = {
   'perfil.pitch': 'Gå över till Premium: utan reklam och med liveanalys.', 'perfil.free': 'Gratis', 'perfil.premium': 'Premium',
   'perfil.free1': '1 videoanalys per dag', 'perfil.free2': 'Hela HomeLAB', 'perfil.free3': 'Bollspårning: 15 min, sedan 1 annons för att fortsätta', 'perfil.free4': 'Medaljer och nivåer',
   'perfil.prem1': 'Bollspårning utan reklam och pauser', 'perfil.prem2': 'Livesvinganalys', 'perfil.prem3': 'Obegränsade videoanalyser', 'perfil.prem4': 'Allt som läggs till i Premium senare',
-  'perfil.paymentsNotice': 'Betalningar är inte anslutna än. Den här knappen är bara för att prova appen: i butiksversionen ersätts den av köp i appen via App Store och Google Play.',
-  'perfil.backToFree': 'Tillbaka till gratisplanen (test)', 'perfil.activate': 'Aktivera Premium (testläge)',
   'perfil.dataTitle': 'Data', 'perfil.dataText': 'Dina {n} pass och medaljer sparas bara på den här enheten. Det finns inga konton eller molnkopia ännu.',
   'perfil.cancel': 'Avbryt', 'perfil.confirmWipe': 'Ja, radera allt', 'perfil.wipe': 'Radera all min data',
   'perfil.wipeError': 'Det gick inte att radera de sparade videorna. Försök igen; din data är orörd.',

@@ -37,8 +37,6 @@ export const nl: Readonly<Record<string, string>> = {
   'perfil.pitch': 'Ga naar Premium: zonder advertenties en met live analyse.', 'perfil.free': 'Gratis', 'perfil.premium': 'Premium',
   'perfil.free1': '1 video-analyse per dag', 'perfil.free2': 'Volledige HomeLAB', 'perfil.free3': 'Ball tracking: 15 min, daarna 1 advertentie om door te gaan', 'perfil.free4': 'Badges en niveaus',
   'perfil.prem1': 'Ball tracking zonder advertenties of pauzes', 'perfil.prem2': 'Live swing-analyse', 'perfil.prem3': 'Onbeperkte video-analyses', 'perfil.prem4': 'Alles wat later aan Premium wordt toegevoegd',
-  'perfil.paymentsNotice': 'Betalingen zijn nog niet gekoppeld. Deze schakelaar is alleen om de app uit te proberen: in de storeversie wordt hij vervangen door aankoop in de app via de App Store en Google Play.',
-  'perfil.backToFree': 'Terug naar gratis abonnement (test)', 'perfil.activate': 'Premium activeren (testmodus)',
   'perfil.dataTitle': 'Gegevens', 'perfil.dataText': 'Je {n} sessies en badges worden alleen op dit apparaat bewaard. Er zijn nog geen accounts of back-up in de cloud.',
   'perfil.cancel': 'Annuleren', 'perfil.confirmWipe': 'Ja, alles verwijderen', 'perfil.wipe': 'Al mijn gegevens verwijderen',
   'perfil.wipeError': 'De opgeslagen video’s konden niet worden verwijderd. Probeer het opnieuw; je gegevens zijn ongewijzigd.',

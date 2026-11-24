@@ -1,5 +1,5 @@
 import { RECORDING_TIPS } from '@/lib/recordingTips';
-import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE } from '@/lib/homelabNotice';
+import { HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE } from '@/lib/homelabNotice';
 import { BADGES, LEVELS } from '@/lib/badges';
 import { DRILLS, GEAR_LABEL } from '@/lib/homelab';
 import { CONSENT_CHECKBOX_TEXT, CONSENT_DRAFT, CONSENT_NOTE, CONSENT_TITLE } from '@/lib/consent';
@@ -24,7 +24,6 @@ export function noticeDictEs(): Record<string, string> {
     c.items.forEach((s, i) => { out[`tips.${area}.item.${i}`] = s; });
     out[`tips.${area}.note`] = c.note;
   }
-  out['notice.draft'] = HOMELAB_NOTICE_DRAFT;
   out['notice.title'] = HOMELAB_NOTICE_TITLE;
   HOMELAB_NOTICE_ITEMS.forEach((s, i) => { out[`notice.item.${i}`] = s; });
   out['notice.quick.title'] = HOMELAB_QUICK_TITLE;

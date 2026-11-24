@@ -1,6 +1,6 @@
 {
-  "name": "HomeGolfLab",
-  "short_name": "HomeGolfLab",
+  "name": "HomeGolf LAB",
+  "short_name": "HomeGolf LAB",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

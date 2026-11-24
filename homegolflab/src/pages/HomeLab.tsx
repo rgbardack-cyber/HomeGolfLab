@@ -177,7 +177,6 @@ function SafetyNotice({ acceptedAt, onAccept, onClose }: { acceptedAt: string | 
   useT();
   return (
     <Card className="space-y-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('notice.draft')}</p>
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-5 h-5 text-destructive" />
         <h2 className="font-heading text-lg font-semibold">{t('notice.title')}</h2>

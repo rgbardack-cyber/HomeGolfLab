@@ -22,15 +22,15 @@ const PENDING_FILES = new Set<string>([]);
 
 /**
  * Archivos que se excluyen a propósito (no son texto para el usuario final):
- * - `FlagsPanel`: panel interno de pruebas, solo existe en desarrollo o con VITE_INTERNAL=1 (nunca en la build pública).
+ * - `FlagsPanel` y `PremiumTestSwitch`: paneles internos de pruebas, solo existen en desarrollo o con VITE_INTERNAL=1 (nunca en la build pública).
  */
-const EXCLUDED_FILES = new Set<string>(['components/FlagsPanel.tsx']);
+const EXCLUDED_FILES = new Set<string>(['components/FlagsPanel.tsx', 'components/PremiumTestSwitch.tsx']);
 
 /**
  * Excepciones justificadas (texto que NO se traduce):
  * - nombres de marca y de producto: HomeGolfLab, HomeLAB;
  */
-const ALLOWED = new Set(['HomeGolfLab', 'HomeLAB', 'Swing', 'Ball tracking', 'H', 'XP']);
+const ALLOWED = new Set(['HomeGolfLab', 'HomeGolf LAB', 'HomeLAB', 'Swing', 'Ball tracking', 'H', 'XP']);
 
 function visibleLiterals(src: string): string[] {
   const s = stripComments(src);
