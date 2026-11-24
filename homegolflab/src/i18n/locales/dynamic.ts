@@ -1,6 +1,7 @@
 import { RECORDING_TIPS } from '@/lib/recordingTips';
 import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE } from '@/lib/homelabNotice';
 import { BADGES, LEVELS } from '@/lib/badges';
+import { DRILLS, GEAR_LABEL } from '@/lib/homelab';
 
 /** Claves de medallas y niveles: el texto en español sigue viviendo en `lib/badges.ts` (una sola fuente) y aquí solo se indexa. */
 export const badgeKey = (id: string, part: 'label' | 'desc') => `badge.${id}.${part}`;
@@ -27,5 +28,16 @@ export function noticeDictEs(): Record<string, string> {
   HOMELAB_NOTICE_ITEMS.forEach((s, i) => { out[`notice.item.${i}`] = s; });
   out['notice.quick.title'] = HOMELAB_QUICK_TITLE;
   HOMELAB_QUICK_ITEMS.forEach((s, i) => { out[`notice.quick.item.${i}`] = s; });
+  return out;
+}
+
+/** Equipo y ejercicios del HomeLAB: el español sigue en `lib/homelab.ts`. */
+export function homelabDictEs(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [g, label] of Object.entries(GEAR_LABEL)) out[`gear.${g}`] = label;
+  for (const d of DRILLS) {
+    out[`drill.${d.id}.name`] = d.name; out[`drill.${d.id}.desc`] = d.description;
+    out[`drill.${d.id}.target`] = d.target; out[`drill.${d.id}.cue`] = d.cue;
+  }
   return out;
 }

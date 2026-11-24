@@ -12,6 +12,7 @@ export const GEAR_LABEL: Record<Gear, string> = {
 };
 
 import { fmtDist, fromMeters, toMeters, type DistUnit } from './units';
+import { t } from '@/i18n';
 
 export interface Space { lengthM: number; widthM: number; ceilingM: number; floor: Floor; gear: Gear[] }
 
@@ -32,29 +33,29 @@ export function zones(s: Space, unit: DistUnit = 'm'): Zone[] {
   const has = (g: Gear) => s.gear.includes(g);
   const puttSurface = s.floor !== 'duro' || has('matPutt');
   const putt: Zone = !has('putter')
-    ? { type: 'putt', label: 'Putting', ok: false, note: 'Necesitas un putter.' }
+    ? { type: 'putt', label: t('zone.putt'), ok: false, note: t('zone.putt.needPutter') }
     : s.lengthM < LIMITS.puttLengthM
-      ? { type: 'putt', label: 'Putting', ok: false, note: `Hace falta al menos ${dMin(LIMITS.puttLengthM)} libres de largo.` }
+      ? { type: 'putt', label: t('zone.putt'), ok: false, note: t('zone.putt.minLen', { d: dMin(LIMITS.puttLengthM) }) }
       : !puttSurface
-        ? { type: 'putt', label: 'Putting', ok: false, note: 'En piso duro la bola no rueda bien: usa un mat de putting o una alfombra.' }
-        : { type: 'putt', label: 'Putting', ok: true, note: `Carril de ${d(Math.min(s.lengthM, 6))}.` };
+        ? { type: 'putt', label: t('zone.putt'), ok: false, note: t('zone.putt.hardFloor') }
+        : { type: 'putt', label: t('zone.putt'), ok: true, note: t('zone.putt.ok', { d: d(Math.min(s.lengthM, 6)) }) };
 
   const chip: Zone = !has('wedge')
-    ? { type: 'chip', label: 'Chip', ok: false, note: 'Necesitas un wedge.' }
+    ? { type: 'chip', label: t('zone.chip'), ok: false, note: t('zone.chip.needWedge') }
     : s.lengthM < LIMITS.chipLengthM
-      ? { type: 'chip', label: 'Chip', ok: false, note: `Hace falta al menos ${dMin(LIMITS.chipLengthM)} de largo.` }
+      ? { type: 'chip', label: t('zone.chip'), ok: false, note: t('zone.chip.minLen', { d: dMin(LIMITS.chipLengthM) }) }
       : s.floor === 'duro' && !has('matGolpeo')
-          ? { type: 'chip', label: 'Chip', ok: false, note: 'En piso duro necesitas un mat de golpeo.' }
-          : { type: 'chip', label: 'Chip', ok: true, note: has('red') ? 'Hacia la red.' : has('foam') ? 'Con bolas de foam a un objetivo.' : 'Recomendado: bolas de foam o una red.' };
+          ? { type: 'chip', label: t('zone.chip'), ok: false, note: t('zone.chip.hardFloor') }
+          : { type: 'chip', label: t('zone.chip'), ok: true, note: has('red') ? t('zone.chip.okNet') : has('foam') ? t('zone.chip.okFoam') : t('zone.chip.okRec') };
 
   const clubs = has('hierros') || has('wedge');
   const swing: Zone = !clubs
-    ? { type: 'swing', label: 'Swing completo', ok: false, note: 'Necesitas hierros o un wedge.' }
+    ? { type: 'swing', label: t('zone.swing'), ok: false, note: t('zone.swing.needClubs') }
     : s.ceilingM < LIMITS.swingCeilingM
-      ? { type: 'swing', label: 'Swing completo', ok: false, note: `Techo de ${d(s.ceilingM)}: muy bajo para un swing completo (mínimo ${dMin(LIMITS.swingCeilingM)}).` }
+      ? { type: 'swing', label: t('zone.swing'), ok: false, note: t('zone.swing.lowCeiling', { d: d(s.ceilingM), min: dMin(LIMITS.swingCeilingM) }) }
       : s.widthM < LIMITS.swingWidthM || s.lengthM < LIMITS.swingLengthM
-        ? { type: 'swing', label: 'Swing completo', ok: false, note: `Hace falta un espacio libre de ${dMin(LIMITS.swingWidthM)} × ${dMin(LIMITS.swingLengthM)}.` }
-        : { type: 'swing', label: 'Swing completo', ok: true, note: has('red') ? 'Con bola hacia la red.' : 'Sin bola (swings de práctica).' };
+        ? { type: 'swing', label: t('zone.swing'), ok: false, note: t('zone.swing.minArea', { w: dMin(LIMITS.swingWidthM), l: dMin(LIMITS.swingLengthM) }) }
+        : { type: 'swing', label: t('zone.swing'), ok: true, note: has('red') ? t('zone.swing.okNet') : t('zone.swing.okNoBall') };
   return [putt, chip, swing];
 }
 
@@ -87,7 +88,8 @@ export const DRILLS: Drill[] = [
 export const NO_HOME_DRILL: readonly string[] = ['hips'];
 
 export interface PlanDrill extends Drill { done: boolean }
-export interface Plan { date: string; theme: string; minutes: number; drills: PlanDrill[]; note: string }
+/** `themeKey` (planes nuevos) permite mostrar el tema en el idioma elegido; los planes viejos guardados solo traen `theme`. */
+export interface Plan { date: string; theme: string; themeKey?: ZoneType | 'libre'; minutes: number; drills: PlanDrill[]; note: string }
 
 const THEMES: Record<ZoneType | 'libre', string> = { putt: 'Día de putting', chip: 'Día de juego corto', swing: 'Día de swing', libre: 'Fundamentos y sensaciones' };
 
@@ -119,9 +121,11 @@ export function buildPlan(space: Space, dateISO: string, focusKeys: string[] = [
 
   const drills = [warm, ...picked, cool].filter(Boolean).map((d) => ({ ...d, done: false }));
   const minutes = drills.reduce((s, d) => s + d.minutes, 0);
-  const blocked = zs.filter((z) => !z.ok);
-  return {
-    date: dateISO, theme: THEMES[focusZone], minutes, drills,
-    note: `Espacio de ${fmtDist(space.lengthM, unit)} × ${fmtDist(space.widthM, unit)}` + (blocked.length ? `. No disponible hoy: ${blocked.map((b) => b.label.toLowerCase()).join(', ')}.` : '.'),
-  };
+  return { date: dateISO, theme: THEMES[focusZone], themeKey: focusZone, minutes, drills, note: planNote(space, unit) };
+}
+
+/** Nota del plan (tamaño del espacio y lo que no se puede hacer hoy), escrita en el idioma actual. Se calcula al mostrar, no se guarda. */
+export function planNote(space: Space, unit: DistUnit = 'm'): string {
+  const blocked = zones(space, unit).filter((z) => !z.ok);
+  return t('plan.space', { l: fmtDist(space.lengthM, unit), w: fmtDist(space.widthM, unit) }) + (blocked.length ? t('plan.blocked', { list: blocked.map((b) => b.label.toLowerCase()).join(', ') }) : '.');
 }

@@ -2,7 +2,7 @@
  * Escaneo de HomeLAB: el jugador toma una foto o un video de su espacio y el servidor
  * (visión de Claude) devuelve medidas estimadas, equipo visible y cómo montar la práctica.
  */
-import { getLocale } from '@/i18n';
+import { getLocale, t } from '@/i18n';
 import type { Floor, Gear, Space } from './homelab';
 
 export interface ScanResult {
@@ -89,11 +89,11 @@ export async function scanSpace(images: ScanImage[], notes?: string): Promise<Sc
   try {
     res = await fetch(`${API}/api/homelab/scan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ images, notes: notes || undefined, language: getLocale() }) });
   } catch {
-    throw new ScanError('No hay conexión con el servicio de escaneo. Revisa tu internet.', 'offline');
+    throw new ScanError(t('hl.scan.errOffline'), 'offline');
   }
   const body = await res.json().catch(() => null);
   // Sin servidor (por ejemplo, en la versión de prueba publicada en GitHub Pages) /api responde 404 con una página, no con JSON.
-  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new ScanError('Esta versión de prueba no incluye el escaneo con IA.', 'not_configured');
-  if (!res.ok) throw new ScanError(body?.error ?? 'El escaneo falló. Inténtalo de nuevo.', body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
+  if (res.status === 404 || res.status === 405 || (!res.ok && !body)) throw new ScanError(t('hl.scan.errNotConfigured'), 'not_configured');
+  if (!res.ok) throw new ScanError(body?.error ?? t('hl.scan.errFailed'), body?.code ?? (res.status >= 500 ? 'unavailable' : undefined));
   return body as ScanResult;
 }

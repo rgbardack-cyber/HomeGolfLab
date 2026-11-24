@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { Camera, CheckCircle2, Circle, FlaskConical, Loader2, Pause, Play, ScanLine, Settings2, ShieldAlert, Video, XCircle } from 'lucide-react';
 import { useStore, todayISO, useUnit } from '@/store';
 import { fmtDist, inputValue, parseToMeters, UNIT_SHORT } from '@/lib/units';
-import { buildPlan, GEAR_LABEL, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
+import { buildPlan, GEAR_LABEL, planNote, zones, type Floor, type Gear, type PlanDrill, type Space } from '@/lib/homelab';
 import { fileToImages, scanInfo, scanSpace, scanToSpace, ScanError, type ScanInfo, type ScanResult } from '@/lib/scan';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
-import { HOMELAB_NOTICE_DRAFT, HOMELAB_NOTICE_ITEMS, HOMELAB_NOTICE_TITLE, HOMELAB_QUICK_ITEMS, HOMELAB_QUICK_TITLE, noticeAccepted, quickNoticeVisible } from '@/lib/homelabNotice';
+import { HOMELAB_NOTICE_ITEMS, HOMELAB_QUICK_ITEMS, noticeAccepted, quickNoticeVisible } from '@/lib/homelabNotice';
+import { fmtDate, t, td, useT } from '@/i18n';
 
 const DEFAULT: Space = { lengthM: 4, widthM: 3, ceilingM: 2.5, floor: 'alfombra', gear: ['putter'] };
-const FLOORS: { value: Floor; label: string }[] = [{ value: 'alfombra', label: 'Alfombra' }, { value: 'cesped', label: 'Césped' }, { value: 'duro', label: 'Piso duro' }];
+const FLOORS: Floor[] = ['alfombra', 'cesped', 'duro'];
 
 export default function HomeLab() {
+  useT();
   const { mode, space, plan, scan, sessions, homelabNotice, setSpace, setPlan, addSession, setMode, acceptHomelabNotice } = useStore();
   const unit = useUnit();
   const [editing, setEditing] = useState(!space);
@@ -33,8 +35,8 @@ export default function HomeLab() {
     <PageHeader
       icon={<FlaskConical className="w-5 h-5" />}
       title="HomeLAB"
-      subtitle="Tu laboratorio de práctica en casa"
-      right={space && !editing ? <button onClick={() => { setQuickDismissed(false); setEditing(true); }} aria-label="Editar espacio" className="w-10 h-10 rounded-xl hover:bg-muted flex items-center justify-center"><Settings2 className="w-5 h-5" /></button> : undefined}
+      subtitle={t('hl.subtitle')}
+      right={space && !editing ? <button onClick={() => { setQuickDismissed(false); setEditing(true); }} aria-label={t('hl.editSpace')} className="w-10 h-10 rounded-xl hover:bg-muted flex items-center justify-center"><Settings2 className="w-5 h-5" /></button> : undefined}
     />
   );
 
@@ -43,8 +45,8 @@ export default function HomeLab() {
       <div className="space-y-5">
         {header}
         <Card className="text-center space-y-3">
-          <p className="text-sm text-muted-foreground">HomeLAB arma tu práctica con el espacio y el equipo que tienes en casa. Estás en modo Cancha.</p>
-          <Button onClick={() => setMode('casa')}>Cambiar a Casa</Button>
+          <p className="text-sm text-muted-foreground">{t('hl.cancha.note')}</p>
+          <Button onClick={() => setMode('casa')}>{t('hl.cancha.switch')}</Button>
         </Card>
       </div>
     );
@@ -104,7 +106,7 @@ export default function HomeLab() {
         <Card className="space-y-3">
           <div className="flex items-center gap-2">
             <ScanLine className="w-5 h-5 text-primary" />
-            <h2 className="font-heading text-lg font-semibold">Cómo montar tu espacio</h2>
+            <h2 className="font-heading text-lg font-semibold">{t('hl.howSetup')}</h2>
           </div>
           {scan.summary && <p className="text-sm text-muted-foreground">{scan.summary}</p>}
           <ol className="space-y-2">
@@ -119,29 +121,29 @@ export default function HomeLab() {
               {scan.safety.map((s, i) => <p key={i} className="flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />{s}</p>)}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Medidas estimadas por IA a partir de tu foto ({fmtDist(space.lengthM, unit)} × {fmtDist(space.widthM, unit)}, techo {fmtDist(space.ceilingM, unit)}). Son aproximadas: comprueba el espacio antes de hacer un swing.</p>
+          <p className="text-xs text-muted-foreground">{t('hl.scanMeasures', { l: fmtDist(space.lengthM, unit), w: fmtDist(space.widthM, unit), c: fmtDist(space.ceilingM, unit) })}</p>
         </Card>
       )}
 
       {plan && (
         <>
           <Card className="bg-gradient-to-br from-primary/10 to-accent/10">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Sesión de hoy · {plan.minutes} min</p>
-            <h2 className="font-heading text-2xl font-bold">{plan.theme}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{plan.note}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('hl.todaySession', { n: plan.minutes })}</p>
+            <h2 className="font-heading text-2xl font-bold">{plan.themeKey ? t(`theme.${plan.themeKey}`) : plan.theme}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{planNote(space, unit)}</p>
             <div className="h-2 bg-card rounded-full mt-4 overflow-hidden"><div className="h-full bg-primary transition-all" style={{ width: `${(completed / Math.max(1, drills.length)) * 100}%` }} /></div>
-            <p className="text-xs text-muted-foreground mt-1">{completed} de {drills.length} ejercicios</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('hl.drillsDone', { done: completed, total: drills.length })}</p>
           </Card>
 
           <div className="space-y-2">
             {drills.map((d, i) => <DrillCard key={d.id} n={i + 1} d={d} onToggle={() => toggle(d.id)} />)}
           </div>
 
-          <button onClick={() => setShowNotice(true)} className="text-xs text-muted-foreground underline">Ver el aviso de seguridad</button>
+          <button onClick={() => setShowNotice(true)} className="text-xs text-muted-foreground underline">{t('hl.seeNotice')}</button>
           {doneToday ? (
-            <Notice tone="ok">¡Sesión de hoy completada! Mañana tendrás un plan nuevo.</Notice>
+            <Notice tone="ok">{t('hl.sessionDone')}</Notice>
           ) : (
-            <Button full onClick={finish} disabled={!allDone}>{allDone ? 'Completar sesión' : 'Marca todos los ejercicios para completar'}</Button>
+            <Button full onClick={finish} disabled={!allDone}>{allDone ? t('hl.complete') : t('hl.markAll')}</Button>
           )}
         </>
       )}
@@ -150,6 +152,7 @@ export default function HomeLab() {
 }
 
 function QuickNotice({ onClose, onFull }: { onClose: () => void; onFull: () => void }) {
+  useT();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -157,62 +160,64 @@ function QuickNotice({ onClose, onFull }: { onClose: () => void; onFull: () => v
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={HOMELAB_QUICK_TITLE} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-card p-5 space-y-3 shadow-xl">
+      <div role="dialog" aria-modal="true" aria-label={t('notice.quick.title')} onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-card p-5 space-y-3 shadow-xl">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-5 h-5 text-destructive shrink-0" />
-          <h2 className="font-heading text-lg font-semibold">{HOMELAB_QUICK_TITLE}</h2>
+          <h2 className="font-heading text-lg font-semibold">{t('notice.quick.title')}</h2>
         </div>
-        <ul className="text-sm space-y-1 list-disc pl-5">{HOMELAB_QUICK_ITEMS.map((t) => <li key={t}>{t}</li>)}</ul>
-        <Button full autoFocus onClick={onClose}>Entendido</Button>
-        <button onClick={onFull} className="block mx-auto text-xs text-muted-foreground underline">Ver el aviso completo</button>
+        <ul className="text-sm space-y-1 list-disc pl-5">{HOMELAB_QUICK_ITEMS.map((_, i) => <li key={i}>{t(`notice.quick.item.${i}`)}</li>)}</ul>
+        <Button full autoFocus onClick={onClose}>{t('tips.gotIt')}</Button>
+        <button onClick={onFull} className="block mx-auto text-xs text-muted-foreground underline">{t('hl.seeFull')}</button>
       </div>
     </div>
   );
 }
 
 function SafetyNotice({ acceptedAt, onAccept, onClose }: { acceptedAt: string | null; onAccept: () => void; onClose: () => void }) {
+  useT();
   return (
     <Card className="space-y-4">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{HOMELAB_NOTICE_DRAFT}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('notice.draft')}</p>
       <div className="flex items-center gap-2">
         <ShieldAlert className="w-5 h-5 text-destructive" />
-        <h2 className="font-heading text-lg font-semibold">{HOMELAB_NOTICE_TITLE}</h2>
+        <h2 className="font-heading text-lg font-semibold">{t('notice.title')}</h2>
       </div>
-      <ul className="space-y-2 text-sm list-disc pl-5">{HOMELAB_NOTICE_ITEMS.map((t) => <li key={t}>{t}</li>)}</ul>
+      <ul className="space-y-2 text-sm list-disc pl-5">{HOMELAB_NOTICE_ITEMS.map((_, i) => <li key={i}>{t(`notice.item.${i}`)}</li>)}</ul>
       {acceptedAt ? (
         <>
-          <p className="text-xs text-muted-foreground">Lo aceptaste el {new Date(acceptedAt).toLocaleDateString('es')}.</p>
-          <Button full variant="outline" onClick={onClose}>Cerrar</Button>
+          <p className="text-xs text-muted-foreground">{t('hl.acceptedOn', { date: fmtDate(new Date(acceptedAt), { year: 'numeric', month: 'numeric', day: 'numeric' }) })}</p>
+          <Button full variant="outline" onClick={onClose}>{t('hl.close')}</Button>
         </>
       ) : (
-        <Button full onClick={onAccept}>Entiendo y acepto</Button>
+        <Button full onClick={onAccept}>{t('hl.accept')}</Button>
       )}
     </Card>
   );
 }
 
 function DrillCard({ n, d, onToggle }: { n: number; d: PlanDrill; onToggle: () => void }) {
+  useT();
   const total = d.minutes * 60;
   const [left, setLeft] = useState(total);
   const [running, setRunning] = useState(false);
   useEffect(() => {
     if (!running) return;
-    const t = setInterval(() => setLeft((l) => { if (l <= 1) { setRunning(false); return 0; } return l - 1; }), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setLeft((l) => { if (l <= 1) { setRunning(false); return 0; } return l - 1; }), 1000);
+    return () => clearInterval(timer);
   }, [running]);
   const mm = String(Math.floor(left / 60)).padStart(2, '0'), ss = String(left % 60).padStart(2, '0');
   return (
     <Card className={`!p-4 space-y-2 ${d.done ? 'opacity-70' : ''}`}>
       <div className="flex items-start gap-3">
-        <button onClick={onToggle} aria-label={d.done ? 'Desmarcar' : 'Marcar hecho'} className="mt-0.5 shrink-0">
+        <button onClick={onToggle} aria-label={d.done ? t('hl.uncheck') : t('hl.check')} className="mt-0.5 shrink-0">
           {d.done ? <CheckCircle2 className="w-6 h-6 text-primary" /> : <Circle className="w-6 h-6 text-muted-foreground" />}
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{n}. {d.kind} · {d.minutes} min</p>
-          <h3 className={`font-semibold ${d.done ? 'line-through' : ''}`}>{d.name}</h3>
-          <p className="text-sm text-muted-foreground mt-1">{d.description}</p>
-          <p className="text-sm mt-2"><span className="font-semibold">Meta:</span> {d.target}</p>
-          <p className="text-sm text-primary"><span className="font-semibold">Clave:</span> {d.cue}</p>
+          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{n}. {t(`drill.kind.${d.kind}`)} · {t('home.minutes', { n: d.minutes })}</p>
+          <h3 className={`font-semibold ${d.done ? 'line-through' : ''}`}>{td(`drill.${d.id}.name`)}</h3>
+          <p className="text-sm text-muted-foreground mt-1">{td(`drill.${d.id}.desc`)}</p>
+          <p className="text-sm mt-2"><span className="font-semibold">{t('hl.goal')}</span> {td(`drill.${d.id}.target`)}</p>
+          <p className="text-sm text-primary"><span className="font-semibold">{t('hl.cue')}</span> {td(`drill.${d.id}.cue`)}</p>
         </div>
       </div>
       {!d.done && (
@@ -220,7 +225,7 @@ function DrillCard({ n, d, onToggle }: { n: number; d: PlanDrill; onToggle: () =
           <button onClick={() => { if (left === 0) setLeft(total); setRunning((r) => !r); }} className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-muted text-sm font-medium">
             {running ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />} {mm}:{ss}
           </button>
-          {left === 0 && <span className="text-xs text-primary font-medium">¡Tiempo!</span>}
+          {left === 0 && <span className="text-xs text-primary font-medium">{t('hl.timeUp')}</span>}
         </div>
       )}
     </Card>
@@ -228,6 +233,7 @@ function DrillCard({ n, d, onToggle }: { n: number; d: PlanDrill; onToggle: () =
 }
 
 function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: Space) => void; onCancel?: () => void }) {
+  useT();
   const [s, setS] = useState<Space>(initial);
   const unit = useUnit();
   // Se escribe en la unidad elegida (D2) y se guarda en metros.
@@ -243,29 +249,29 @@ function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: 
   return (
     <Card className="space-y-5">
       <div>
-        <h2 className="font-heading text-lg font-semibold">Tu espacio</h2>
-        <p className="text-sm text-muted-foreground">Mide el área libre donde puedes practicar. Con esto se decide qué ejercicios son seguros y posibles.</p>
+        <h2 className="font-heading text-lg font-semibold">{t('hl.form.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('hl.form.lead')}</p>
       </div>
-      <div className="grid grid-cols-3 gap-3">{num('lengthM', 'Largo')}{num('widthM', 'Ancho')}{num('ceilingM', 'Techo')}</div>
+      <div className="grid grid-cols-3 gap-3">{num('lengthM', t('hl.form.length'))}{num('widthM', t('hl.form.width'))}{num('ceilingM', t('hl.form.ceiling'))}</div>
       <div>
-        <p className="text-xs text-muted-foreground mb-1.5">Piso</p>
+        <p className="text-xs text-muted-foreground mb-1.5">{t('hl.form.floor')}</p>
         <div className="grid grid-cols-3 gap-2">
           {FLOORS.map((f) => (
-            <button key={f.value} onClick={() => setS({ ...s, floor: f.value })} className={`h-11 rounded-xl border text-sm font-medium ${s.floor === f.value ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{f.label}</button>
+            <button key={f} onClick={() => setS({ ...s, floor: f })} className={`h-11 rounded-xl border text-sm font-medium ${s.floor === f ? 'border-primary bg-primary/10 text-primary' : 'border-border'}`}>{t(`floor.${f}`)}</button>
           ))}
         </div>
       </div>
       <div>
-        <p className="text-xs text-muted-foreground mb-1.5">Equipo que tienes</p>
+        <p className="text-xs text-muted-foreground mb-1.5">{t('hl.form.gear')}</p>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(GEAR_LABEL) as Gear[]).map((g) => (
-            <button key={g} onClick={() => toggleGear(g)} aria-pressed={s.gear.includes(g)} className={`h-10 px-3 rounded-full border text-sm ${s.gear.includes(g) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{GEAR_LABEL[g]}</button>
+            <button key={g} onClick={() => toggleGear(g)} aria-pressed={s.gear.includes(g)} className={`h-10 px-3 rounded-full border text-sm ${s.gear.includes(g) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{td(`gear.${g}`)}</button>
           ))}
         </div>
       </div>
       <div className="flex gap-2">
-        {onCancel && <Button variant="outline" onClick={onCancel}>Cancelar</Button>}
-        <Button full disabled={!valid} onClick={() => onSave(s)}>Guardar y crear mi plan</Button>
+        {onCancel && <Button variant="outline" onClick={onCancel}>{t('perfil.cancel')}</Button>}
+        <Button full disabled={!valid} onClick={() => onSave(s)}>{t('hl.form.save')}</Button>
       </div>
     </Card>
   );
@@ -273,9 +279,8 @@ function SpaceForm({ initial, onSave, onCancel }: { initial: Space; onSave: (s: 
 
 /* ───────────────────────── Escaneo con foto o video ───────────────────────── */
 
-const CONF_LABEL = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja: revisa las medidas' } as const;
-
 function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave: (s: Space, info: ScanInfo | null) => void; onCancel?: () => void }) {
+  useT();
   const unit = useUnit();
   const [stage, setStage] = useState<'pick' | 'busy' | 'review' | 'manual'>('pick');
   const [notes, setNotes] = useState('');
@@ -293,7 +298,7 @@ function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave
       setGear([...new Set([...(current?.gear ?? []), ...r.gear])]);
       setStage('review');
     } catch (e) {
-      setError(e instanceof ScanError ? e : new ScanError(e instanceof Error ? e.message : 'No se pudo procesar el archivo.'));
+      setError(e instanceof ScanError ? e : new ScanError(e instanceof Error ? e.message : t('hl.scan.fileError')));
       setStage('pick');
     }
   };
@@ -306,8 +311,8 @@ function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave
     return (
       <Card className="text-center space-y-3 py-10">
         <Loader2 className="w-10 h-10 mx-auto animate-spin text-primary" />
-        <p className="font-heading text-lg font-semibold">Analizando tu espacio…</p>
-        <p className="text-sm text-muted-foreground">Estimando medidas, piso, obstáculos y equipo. Tarda unos segundos.</p>
+        <p className="font-heading text-lg font-semibold">{t('hl.scan.busy')}</p>
+        <p className="text-sm text-muted-foreground">{t('hl.scan.busyNote')}</p>
       </Card>
     );
   }
@@ -318,41 +323,41 @@ function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave
     if (!result.usable) {
       return (
         <Card className="space-y-4">
-          <Notice tone="error">{result.summary || 'En esa imagen no se distingue un espacio para practicar.'}</Notice>
-          <Button full onClick={() => { setResult(null); setStage('pick'); }}>Tomar otra</Button>
+          <Notice tone="error">{result.summary || t('hl.scan.unusable')}</Notice>
+          <Button full onClick={() => { setResult(null); setStage('pick'); }}>{t('hl.scan.retake')}</Button>
         </Card>
       );
     }
     return (
       <Card className="space-y-5">
         <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">Esto es lo que vi</p>
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">{t('hl.scan.saw')}</p>
           <p className="mt-1">{result.summary}</p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
-          {[['Largo', sp.lengthM], ['Ancho', sp.widthM], ['Techo', sp.ceilingM]].map(([l, v]) => (
+          {[[t('hl.form.length'), sp.lengthM], [t('hl.form.width'), sp.widthM], [t('hl.form.ceiling'), sp.ceilingM]].map(([l, v]) => (
             <div key={l} className="rounded-xl bg-muted p-3"><p className="text-[11px] uppercase text-muted-foreground">{l}</p><p className="text-xl font-bold">{inputValue(v as number, unit)}<span className="text-xs font-normal text-muted-foreground"> {UNIT_SHORT[unit]}</span></p></div>
           ))}
         </div>
         <p className={`text-xs ${result.confidence === 'baja' ? 'text-destructive' : 'text-muted-foreground'}`}>
-          {CONF_LABEL[result.confidence]} · piso: {FLOORS.find((f) => f.value === sp.floor)?.label.toLowerCase()} · medidas estimadas, sin que tengas que medir.
+          {t('hl.scan.confLine', { conf: t(`hl.conf.${result.confidence}`), floor: t(`floor.${sp.floor}`).toLowerCase() })}
         </p>
         {result.observations.length > 0 && (
           <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">{result.observations.map((o, i) => <li key={i}>{o}</li>)}</ul>
         )}
         <div>
-          <p className="text-sm font-medium mb-1.5">¿Qué equipo tienes?</p>
-          <p className="text-xs text-muted-foreground mb-2">Marqué lo que se ve en la imagen. Toca para añadir lo que no salió.</p>
+          <p className="text-sm font-medium mb-1.5">{t('hl.scan.gearQ')}</p>
+          <p className="text-xs text-muted-foreground mb-2">{t('hl.scan.gearNote')}</p>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(GEAR_LABEL) as Gear[]).map((g) => (
-              <button key={g} onClick={() => toggle(g)} aria-pressed={gear.includes(g)} className={`h-10 px-3 rounded-full border text-sm ${gear.includes(g) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{GEAR_LABEL[g]}</button>
+              <button key={g} onClick={() => toggle(g)} aria-pressed={gear.includes(g)} className={`h-10 px-3 rounded-full border text-sm ${gear.includes(g) ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'}`}>{td(`gear.${g}`)}</button>
             ))}
           </div>
         </div>
-        <Button full onClick={() => onSave(sp, scanInfo(result))}>Crear mi plan con este espacio</Button>
+        <Button full onClick={() => onSave(sp, scanInfo(result))}>{t('hl.scan.create')}</Button>
         <div className="flex gap-2">
-          <Button full variant="outline" onClick={() => { setResult(null); setStage('pick'); }}>Tomar otra</Button>
-          <Button full variant="outline" onClick={() => { setManualInit(sp); setStage('manual'); }}>Corregir medidas</Button>
+          <Button full variant="outline" onClick={() => { setResult(null); setStage('pick'); }}>{t('hl.scan.retake')}</Button>
+          <Button full variant="outline" onClick={() => { setManualInit(sp); setStage('manual'); }}>{t('hl.scan.fix')}</Button>
         </div>
       </Card>
     );
@@ -362,32 +367,32 @@ function ScanFlow({ current, onSave, onCancel }: { current: Space | null; onSave
   return (
     <Card className="space-y-4">
       <div>
-        <h2 className="font-heading text-lg font-semibold">Muéstrame tu espacio</h2>
-        <p className="text-sm text-muted-foreground">Toma una foto o un video corto del lugar donde quieres practicar. No tienes que medir nada: la app estima el espacio y te dice qué hacer.</p>
+        <h2 className="font-heading text-lg font-semibold">{t('hl.scan.showTitle')}</h2>
+        <p className="text-sm text-muted-foreground">{t('hl.scan.showLead')}</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <label className={tile}>
           <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Camera className="w-5 h-5" /></span>
-          <span className="font-medium text-sm">Foto</span>
+          <span className="font-medium text-sm">{t('hl.scan.photo')}</span>
           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => run(e.target.files?.[0])} />
         </label>
         <label className={tile}>
           <span className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Video className="w-5 h-5" /></span>
-          <span className="font-medium text-sm">Video</span>
+          <span className="font-medium text-sm">{t('hl.scan.video')}</span>
           <input type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => run(e.target.files?.[0])} />
         </label>
       </div>
-      <p className="text-xs text-muted-foreground">Consejo: que se vean el piso, el techo y algún mueble o puerta; ayudan a calcular el tamaño.</p>
-      <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder="¿Algo que deba saber? (opcional)" className="w-full h-11 rounded-xl border border-border bg-card px-3 text-sm" />
+      <p className="text-xs text-muted-foreground">{t('hl.scan.tip')}</p>
+      <input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder={t('hl.scan.notesPh')} className="w-full h-11 rounded-xl border border-border bg-card px-3 text-sm" />
       {error && (
         <Notice tone="error">
           {error.message}
-          {error.code && <> Mientras tanto puedes ingresar tu espacio a mano.</>}
+          {error.code && <>{t('hl.scan.manualMeanwhile')}</>}
         </Notice>
       )}
       <div className="flex gap-2">
-        {onCancel && <Button variant="outline" onClick={onCancel}>Cancelar</Button>}
-        <Button full variant="ghost" className="text-sm text-muted-foreground" onClick={() => setStage('manual')}>Prefiero ingresar las medidas a mano</Button>
+        {onCancel && <Button variant="outline" onClick={onCancel}>{t('perfil.cancel')}</Button>}
+        <Button full variant="ghost" className="text-sm text-muted-foreground" onClick={() => setStage('manual')}>{t('hl.scan.manual')}</Button>
       </div>
     </Card>
   );

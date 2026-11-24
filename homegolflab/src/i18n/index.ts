@@ -16,7 +16,7 @@ import { ko } from './locales/ko';
 import { sv } from './locales/sv';
 import { pt } from './locales/pt';
 import { nl } from './locales/nl';
-import { badgeDictEs, noticeDictEs } from './locales/dynamic';
+import { badgeDictEs, homelabDictEs, noticeDictEs } from './locales/dynamic';
 import { AREAS } from './areas';
 
 export type { Locale } from './core';
@@ -24,15 +24,25 @@ export { LOCALES } from './core';
 /** Claves del diccionario base. `t()` acepta cualquier clave (las pruebas revisan que toda clave escrita en el código exista). */
 export type Key = keyof typeof es;
 
-const BASE: Readonly<Record<Locale, Dict>> = {
-  es: { ...es, ...badgeDictEs(), ...noticeDictEs() },
-  'es-ES': esES,
-  en, 'en-GB': enGB, de, fr, it, ja, ko, sv, pt, nl,
-};
-/** Base + todas las áreas. */
-export const DICTS: Readonly<Record<Locale, Dict>> = Object.fromEntries(
-  (Object.keys(BASE) as Locale[]).map((l) => [l, Object.assign({}, BASE[l], ...AREAS.map((a) => a[l] ?? {}))]),
-) as Record<Locale, Dict>;
+/**
+ * Los diccionarios se arman la PRIMERA vez que se usan (no al cargar el módulo): `dynamic.ts` lee constantes de `lib/*` y esos archivos
+ * importan `t()`, así que armarlos al cargar crearía un ciclo.
+ */
+let built: Readonly<Record<Locale, Dict>> | null = null;
+function build(): Readonly<Record<Locale, Dict>> {
+  if (built) return built;
+  const base: Readonly<Record<Locale, Dict>> = {
+    es: { ...es, ...badgeDictEs(), ...noticeDictEs(), ...homelabDictEs() },
+    'es-ES': esES,
+    en, 'en-GB': enGB, de, fr, it, ja, ko, sv, pt, nl,
+  };
+  built = Object.fromEntries(
+    (Object.keys(base) as Locale[]).map((l) => [l, Object.assign({}, base[l], ...AREAS.map((a) => a[l] ?? {}))]),
+  ) as Record<Locale, Dict>;
+  return built;
+}
+/** Base + todas las áreas, por idioma. */
+export const DICTS = new Proxy({} as Record<Locale, Dict>, { get: (_t, k) => build()[k as Locale] });
 
 const STORAGE_KEY = 'homegolflab-lang';
 const readStored = (): string | null => { try { return localStorage.getItem(STORAGE_KEY); } catch { return null; } };
