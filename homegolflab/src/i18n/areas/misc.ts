@@ -1,6 +1,7 @@
 /**
- * Área «misc»: x
- * Idiomas incluidos aquí: es, en, pt, de, fr, it, ja, ko, sv. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
+ * Área «misc»: textos sueltos: progreso (`sw2.analyzing`, `vf2.following`, `cv2.frameA`, `vr2.frameLine`), etiquetas de guías (`guide.*`) y mensajes del coach (`coach.*`).
+ * R8 pendiente: coach.offline, coach.notConfigured, coach.failed.
+ * Idiomas: es (fuente) y los otros 9 idiomas completos (en, pt, de, fr, it, ja, ko, sv, nl). Borrador de IA, sin revisión nativa.
  */
 import type { Area } from './index';
 
@@ -130,5 +131,19 @@ export const misc: Area = {
     "coach.notConfigured": "Den här testversionen innehåller inte AI-coachen.",
     "coach.failed": "AI-analysen misslyckades. Försök igen.",
     "coach.quota": "Du har använt alla analyser den här månaden. De nollställs första dagen nästa månad.",
+  },
+  nl: {
+    "sw2.analyzing": "Analyseren… {p}%",
+    "vf2.following": "Volgen… {p}%",
+    "cv2.frameA": "beeld A {n}",
+    "vr2.frameLine": "beeld {n} · {s} s",
+    "guide.head": "Hoofd",
+    "guide.torso": "Romp",
+    "guide.leadArm": "Leidende arm",
+    "guide.hips": "Heupen",
+    "coach.offline": "Geen verbinding met de AI-coach. Controleer je internet.",
+    "coach.notConfigured": "Deze testversie bevat de AI-coach niet.",
+    "coach.failed": "De AI-analyse is mislukt. Probeer het opnieuw.",
+    "coach.quota": "Je hebt alle analyses van deze maand gebruikt. Ze worden op de eerste dag van de volgende maand teruggezet.",
   },
 };

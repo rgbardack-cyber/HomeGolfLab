@@ -330,3 +330,12 @@ Comprobado en esta máquina (Windows 11): no hay `java`, `adb`, `ANDROID_HOME` n
 - **Banco:** Wells Fargo de la LLC; se agregó `registro-ingresos.md` (registro mensual para el contador). No es asesoría fiscal.
 - **Bloque de idiomas** (`feat/idiomas-y-precio`): selector en Perfil, 12 idiomas, base `src/i18n/`, 13 pruebas nuevas (532 de 532 en total, `typecheck` y `build` correctos). Detalle y lo que falta en `plan-idiomas.md`. El coach y el escaneo reciben el idioma (no medido con clave real).
 - **Aviso:** esta rama sale de `feat/semana-continuidad`; la web todavía muestra «Activar Premium (modo prueba)» hasta que se acepte `fix/ocultar-premium-prueba-web`.
+
+## 24 nov 2026 — Idiomas, segunda vuelta: todo el texto visible en 10 idiomas completos
+- **Rama:** `feat/idiomas-y-precio` (local, sin push). Pedido por la sesión coordinadora tras la aprobación de Ryan («si dale a ambas»).
+- **Hecho:** HomeLAB (pantalla, zonas, escaneo, ejercicios, aviso de seguridad), Ball tracking (cámara, manual, nombres de palos), Análisis de swing (pantalla, ~110 observaciones y ejercicios, errores, encuadre, línea de caderas), modo Video, revisión, comparar, exportar, descarga con anuncio, cámara en vivo, consentimiento, anuncios y espacio usado. Textos con parámetros `{n}`; las pantallas se rearman al cambiar de idioma.
+- **Idiomas completos (905 de 905 textos):** es, en, pt, de, fr, it, ja, ko, sv, nl. **es-ES y en-GB:** solo ajustes (27 y 14). Inglés y portugués = prioridad de calidad (**supuesto**; Ryan no lo confirmó).
+- **Pruebas nuevas:** completitud por idioma, claves usadas existen, sin texto directo en `pages` y `components` (excepción justificada: `FlagsPanel`), marcadores `{x}` intactos, R8. **538 de 538**, `typecheck` y `build` correctos.
+- **Legal — traducción de un borrador, NO revisada por abogado:** aviso de seguridad del HomeLAB (`notice.*`) y consentimiento de datos (`consent.*`, R9). La política, los términos y el consentimiento largo de `docs/legal/` no se tradujeron.
+- **R8 pendiente (decide Ryan):** 12 textos que ya nombraban la IA en español se tradujeron fieles (lista en `plan-idiomas.md`); la prueba de R8 los exceptúa con una lista que solo puede achicarse.
+- **Límites:** análisis guardados conservan el idioma en que se analizaron; mensajes de validación del servidor siguen en español; traducciones = borrador de IA sin revisión nativa; ningún teléfono; coach en otro idioma no medido (sin clave de la API).
