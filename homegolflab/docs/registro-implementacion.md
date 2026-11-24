@@ -339,3 +339,10 @@ Comprobado en esta máquina (Windows 11): no hay `java`, `adb`, `ANDROID_HOME` n
 - **Legal — traducción de un borrador, NO revisada por abogado:** aviso de seguridad del HomeLAB (`notice.*`) y consentimiento de datos (`consent.*`, R9). La política, los términos y el consentimiento largo de `docs/legal/` no se tradujeron.
 - **R8 pendiente (decide Ryan):** 12 textos que ya nombraban la IA en español se tradujeron fieles (lista en `plan-idiomas.md`); la prueba de R8 los exceptúa con una lista que solo puede achicarse.
 - **Límites:** análisis guardados conservan el idioma en que se analizaron; mensajes de validación del servidor siguen en español; traducciones = borrador de IA sin revisión nativa; ningún teléfono; coach en otro idioma no medido (sin clave de la API).
+
+## 24 nov 2026 (noche): plan v2, bloques 0 y 1
+- **Rama `release/v1`** creada en local desde `feat/idiomas-y-precio` (`749d7ff`). Sin push. `feat/video-review-export` local sigue en `2dfc975` (11 por delante de `origin`, `562f5b0`): no se tocó. La tabla de ramas del plan se confirmó con `git branch -vv` y `git reflog` sin cambios.
+- **Bloque 1:** `docs/auditoria-nombres-2026-11-24.md` (nombres, `appId`, idiomas es y en, CI, `dist/`, textos `R8_PENDING`) y `.env.example` corregido (clave usada por coach y escaneo; 14 variables nuevas sin valores).
+- **Medido en `release/v1` (Node v26.13.0; el CI usa 22, no medido):** `npm ci` sin vulnerabilidades, `typecheck` sin errores, **538 de 538** pruebas, `build` correcto con `VITE_BASE=/HomeGolfLab/`.
+- **Hallazgo:** en `dist/`, `Activar Premium` = **1** (esperado 0), `Funciones de prueba` = 0, `__hgl` = 0. `release/v1` no trae `2dfc975`; además la clave `perfil.activate` queda en el diccionario aunque el botón se oculte. Detalle y opciones en la auditoría. **Sin corregir: espera a Ryan.**
+- **No medido:** Node 22, un teléfono, portugués y demás idiomas, Tracking y Logros.
