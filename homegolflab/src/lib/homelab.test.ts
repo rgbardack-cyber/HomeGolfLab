@@ -91,10 +91,14 @@ describe('HomeLAB: umbrales conservadores (R13)', () => {
     expect(zones({ ...base, lengthM: 3 })[1].ok).toBe(true);
   });
 
-  it('chip: sin foam ni red no hay chip, aunque el espacio alcance', () => {
-    expect(zones({ ...base, gear: ['wedge'] })[1].ok).toBe(false);
-    expect(zones({ ...base, gear: ['wedge', 'foam'] })[1].ok).toBe(true);
-    expect(zones({ ...base, gear: ['wedge', 'red'] })[1].ok).toBe(true);
+  it('chip: foam o red se RECOMIENDAN pero no se exigen (decisión de Ryan, 23 nov)', () => {
+    const solo = zones({ ...base, gear: ['wedge'] })[1];
+    expect(solo.ok).toBe(true);
+    expect(solo.note.toLowerCase()).toContain('recomendado');
+    expect(zones({ ...base, gear: ['wedge', 'foam'] })[1].note).toContain('foam');
+    expect(zones({ ...base, gear: ['wedge', 'red'] })[1].note).toContain('red');
+    expect(zones({ ...base, gear: ['putter'] })[1].ok).toBe(false);      // sin wedge no hay chip
+    expect(zones({ ...base, lengthM: 2.9, gear: ['wedge'] })[1].ok).toBe(false); // el espacio sí se exige
   });
 
   it('los ejercicios con swing solo se ofrecen si la zona de swing es viable (techo bajo = sin swings)', () => {

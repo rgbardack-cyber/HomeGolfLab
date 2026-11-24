@@ -39,16 +39,13 @@ export function zones(s: Space, unit: DistUnit = 'm'): Zone[] {
         ? { type: 'putt', label: 'Putting', ok: false, note: 'En piso duro la bola no rueda bien: usa un mat de putting o una alfombra.' }
         : { type: 'putt', label: 'Putting', ok: true, note: `Carril de ${d(Math.min(s.lengthM, 6))}.` };
 
-  const chipSafe = has('foam') || has('red');
   const chip: Zone = !has('wedge')
     ? { type: 'chip', label: 'Chip', ok: false, note: 'Necesitas un wedge.' }
     : s.lengthM < LIMITS.chipLengthM
       ? { type: 'chip', label: 'Chip', ok: false, note: `Hace falta al menos ${dMin(LIMITS.chipLengthM)} de largo.` }
-      : !chipSafe
-        ? { type: 'chip', label: 'Chip', ok: false, note: 'Por seguridad, usa bolas de foam o una red.' }
-        : s.floor === 'duro' && !has('matGolpeo')
+      : s.floor === 'duro' && !has('matGolpeo')
           ? { type: 'chip', label: 'Chip', ok: false, note: 'En piso duro necesitas un mat de golpeo.' }
-          : { type: 'chip', label: 'Chip', ok: true, note: has('red') ? 'Hacia la red.' : 'Con bolas de foam a un objetivo.' };
+          : { type: 'chip', label: 'Chip', ok: true, note: has('red') ? 'Hacia la red.' : has('foam') ? 'Con bolas de foam a un objetivo.' : 'Recomendado: bolas de foam o una red.' };
 
   const clubs = has('hierros') || has('wedge');
   const swing: Zone = !clubs

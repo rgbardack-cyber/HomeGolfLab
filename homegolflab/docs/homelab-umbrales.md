@@ -9,10 +9,10 @@ Fecha: 23 nov 2026 · Bloque D · Decisión R13: la app no se hace responsable d
 | Umbral | Antes | Ahora | Respaldo | Confianza |
 |---|---|---|---|---|
 | Techo, swing completo | 2,7 m | **2,75 m** (≈ 9 pies) | Varias guías de vendedores: 9 pies mínimo | Media |
-| Espacio libre, swing completo | 3 × 3 m | 3 × 3 m (**pendiente de decidir, ver abajo**) | Mixto; mi cálculo dice que es justo | Baja |
+| Espacio libre, swing completo | 3 × 3 m | 3 × 3 m (**confirmado por Ryan el 23 nov**) | Mixto; mi cálculo dice que es justo | Baja |
 | Largo para putting | 2 m | 2 m | Es de comodidad, no de seguridad | Media |
 | Largo para chip | 3 m | 3 m | Una guía: zona de 1,8 × 2,4 m | Baja |
-| Foam o red obligatorios para chip | sí | sí | Sin norma publicada; decisión de Ryan | Baja |
+| Foam o red para chip | obligatorios | **solo se recomiendan** (decisión de Ryan, 23 nov) | Sin norma publicada | Baja |
 
 ## 1. Techo: 2,75 m (antes 2,7 m)
 
@@ -32,7 +32,7 @@ Fecha: 23 nov 2026 · Bloque D · Decisión R13: la app no se hace responsable d
   - Ancho: TruGolf da 10 pies (3,05 m) de mínimo y 12 a 16 pies recomendados. Austad's da 10 mínimo y 12 recomendados. Trackman iO pide 15 pies o más.
   - Fondo: TruGolf da 12 a 15 pies (3,7 a 4,6 m) de mínimo. Austad's da 12 pies mínimo.
 - **Cálculo propio (sin fuente, aproximado):** el alcance del swing es el largo del brazo más el largo del palo. Con 1,80 m de estatura, el brazo mide cerca de 0,73 m y un hierro o wedge cerca de 0,9 a 0,95 m. Eso da un radio de unos 1,7 m, o sea un círculo de unos **3,4 m**. Un cuadrado de 3 × 3 m es justo, sobre todo en el sentido del objetivo.
-- **Veredicto:** el valor actual no tiene respaldo sólido. Subirlo cambia qué zonas resultan viables (muchas salas de 3 a 3,5 m perderían el swing). Por la regla del plan, **no lo cambié: es decisión de Ryan** (ver "Preguntas").
+- **Veredicto:** el valor no tiene respaldo sólido. Subirlo cambiaría qué zonas resultan viables (muchas salas de 3 a 3,5 m perderían el swing). **Ryan decidió el 23 nov dejarlo en 3 × 3 m.** Queda como límite aceptado; el aviso de seguridad y el swing de prueba lento cubren el riesgo.
 - **Pendiente de medir en casa:** con un wedge en la mano, ¿qué espacio libre necesitas de verdad en cada dirección?
 
 ## 3. Putting: 2 m de largo
@@ -47,7 +47,7 @@ Fecha: 23 nov 2026 · Bloque D · Decisión R13: la app no se hace responsable d
 - **Fuentes:** una [guía de un vendedor de redes](https://giraffyco.com/blogs/news/indoor-golf-chipping-practice-setup-safety-and-space-planning) da una zona mínima de 1,8 m de ancho por 2,4 m de fondo. Golf Digest ([nota sobre redes](https://www.golfdigest.com/story/why-this-indoor-outdoor-hitting-net-is-one-of-the-best-we-ve-see)) aconseja unos 6 a 7 pies de holgura por encima, detrás y delante. Las guías coinciden en que las bolas de foam son la opción segura en interiores.
 - **Foam:** las fuentes discrepan en cuánto vuelan (de 25 % a 70 % de una bola normal). Sin dato fiable.
 - **Sin norma:** no encontré ninguna norma que diga cuándo una red es segura con una bola real. Una sola guía sugiere bola real con red, y pide revisar las indicaciones del fabricante de la red.
-- **Veredicto:** 3 m cubre la zona de 2,4 m de la guía. La regla «foam o red» es decisión de Ryan y es conservadora. **Una red sola permite bola real**: es la parte con menos respaldo. Si quieres lo más conservador, exige foam siempre, o foam y red.
+- **Veredicto:** 3 m cubre la zona de 2,4 m de la guía. **Decisión de Ryan (23 nov): la app no puede exigir foam ni red; solo lo recomienda.** El chip se habilita con wedge y 3 m de largo. Si el usuario no marca foam ni red, la zona dice «Recomendado: bolas de foam o una red», y el aviso de seguridad lo repite como recomendación. Sin norma publicada, esta es la parte con menos respaldo y la que más pesa el aviso y los términos (R13).
 - **Pendiente de medir en casa:** hasta dónde llega un chip con foam en tu sala y si la red lo frena sin rebotes peligrosos.
 
 ## 5. Ejercicios con swing: ahora exigen la zona de swing
@@ -82,7 +82,7 @@ Antes solo 6 de las 18 claves que emite el análisis llevaban a un ejercicio. Ah
 4. Cuánto vuela un chip de foam en tu sala.
 5. Si el aviso de seguridad se entendió y si el ejercicio sugerido corresponde al feedback.
 
-## Preguntas para Ryan
+## Decisiones de Ryan (23 nov 2026)
 
-1. **Espacio del swing:** ¿lo dejamos en 3 × 3 m, o lo subimos a 3,05 m de ancho × 3,7 m de largo (el mínimo de las guías)? Lo segundo es más seguro y deja sin swing a más salas.
-2. **Chip con red:** ¿una red sola basta para bola real, o exigimos foam siempre?
+1. **Espacio del swing:** se queda en 3 × 3 m.
+2. **Chip:** foam o red solo se recomiendan; no se exigen.

@@ -12,7 +12,7 @@ export const HOMELAB_NOTICE_ITEMS = [
   'Tú eres responsable de medir tu espacio. Las medidas de la app son una guía, no una garantía.',
   'Despeja el área: quita objetos frágiles, muebles, lámparas, ventiladores y a las personas y mascotas que estén cerca.',
   'Haz un swing de prueba muy lento, sin bola, para comprobar que el palo no toca el techo ni nada alrededor.',
-  'Para chipear usa bolas de foam o una red. Nunca golpees una bola real sin red.',
+  'Para chipear, recomendamos bolas de foam o una red. Tú decides cómo practicar y eres responsable de que sea seguro.',
   'Si algo no se siente seguro, no hagas el ejercicio.',
 ] as const;
 
@@ -27,7 +27,7 @@ export const noticeAccepted = (a: HomelabNoticeAcceptance | null | undefined): b
  * Debe leerse en 3 segundos y quitarse con un toque, con Esc o tocando fuera.
  */
 export const HOMELAB_QUICK_TITLE = 'Antes de medir tu espacio';
-export const HOMELAB_QUICK_ITEMS = ['Mide tú mismo el espacio.', 'Despeja objetos y personas.', 'Para chipear: foam o red.'] as const;
+export const HOMELAB_QUICK_ITEMS = ['Mide tú mismo el espacio.', 'Despeja objetos y personas.', 'Para chipear, recomendamos foam o red.'] as const;
 
 /** ¿Se muestra el recordatorio corto? Solo al empezar a analizar un espacio, con el aviso completo ya aceptado, sin haberlo cerrado en esta vuelta y sin el aviso completo abierto. */
 export const quickNoticeVisible = (o: { analyzingSpace: boolean; accepted: boolean; quickDismissed: boolean; fullOpen: boolean }): boolean =>

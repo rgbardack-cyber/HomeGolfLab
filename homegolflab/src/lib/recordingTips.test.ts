@@ -56,7 +56,7 @@ describe('consejos de grabación: cada sección mide algo distinto', () => {
     const sw = [...RECORDING_TIPS.swing.items, RECORDING_TIPS.swing.note].join(' ').toLowerCase();
     const tr = [...RECORDING_TIPS.tracking.items, RECORDING_TIPS.tracking.note].join(' ').toLowerCase();
     expect(sw).toContain('cuerpo entero'); expect(sw).toContain('postura');
-    expect(tr).toContain('bola'); expect(tr).toContain('60 fps');
+    expect(tr).toContain('bola'); expect(tr).toContain('60 fps'); expect(tr).toContain('detrás de ti');
     expect(sw).not.toContain('bola');
   });
 

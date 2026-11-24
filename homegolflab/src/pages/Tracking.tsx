@@ -282,7 +282,7 @@ function CameraTracker({ onShot }: { onShot: (s: Omit<Shot, 'id' | 'at'>) => voi
         {step === 'off' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white text-center p-6">
             <Camera className="w-10 h-10 opacity-80" />
-            <p className="text-sm opacity-80">Fija el teléfono (trípode o apoyado) viendo la bola y el objetivo desde arriba o en diagonal.</p>
+            <p className="text-sm opacity-80">Fija el teléfono (trípode o apoyado) detrás de ti, mirando al objetivo, y que se vean la bola y el objetivo.</p>
             <Button variant="gold" onClick={start} disabled={loading}>{loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Abriendo…</> : <><Camera className="w-5 h-5" /> Abrir cámara</>}</Button>
           </div>
         ) : (

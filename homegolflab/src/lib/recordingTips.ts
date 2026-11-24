@@ -30,8 +30,8 @@ export const RECORDING_TIPS: Record<TipsArea, RecordingTipsContent> = {
   tracking: {
     title: 'Antes de grabar tu tiro',
     items: [
-      'Teléfono fijo: en trípode o bien apoyado.',
-      'Que se vea la bola quieta antes del golpe, y el objetivo.',
+      'Teléfono fijo (trípode o apoyado), detrás de ti, mirando al objetivo.',
+      'Que se vean la bola quieta y el objetivo.',
       'Graba a 60 fps, con buena luz y sin contraluz.',
     ],
     note: 'Sigue la bola mientras se ve. No mide distancia ni curva.',
