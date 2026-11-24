@@ -1,6 +1,6 @@
 /**
- * Área «misc»: textos sueltos: progreso, etiquetas de guías y mensajes del coach (errores, cuota). Claves sw2.analyzing, vf2.following, cv2.frameA, vr2.frameLine, guide.*, coach.*.
- * Idiomas incluidos aquí: es, en, pt. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
+ * Área «misc»: textos sueltos: progreso, etiquetas de guías y mensajes del coach. Claves guide.*, coach.* y algunas sw2/vf2/cv2/vr2.
+ * Idiomas incluidos aquí: es, en, pt, de. Los demás caen en inglés hasta traducirse (ver PENDING_AREAS en `i18n.test.ts`). Borrador de IA, sin revisión nativa.
  */
 import type { Area } from './index';
 
@@ -46,5 +46,19 @@ export const misc: Area = {
     "coach.notConfigured": "Esta versão de teste não inclui o coach com IA.",
     "coach.failed": "A análise com IA falhou. Tenta de novo.",
     "coach.quota": "Já usaste todas as análises deste mês. Reiniciam no primeiro dia do mês seguinte.",
+  },
+  de: {
+    "sw2.analyzing": "Wird analysiert… {p}%",
+    "vf2.following": "Wird verfolgt… {p}%",
+    "cv2.frameA": "Bild A {n}",
+    "vr2.frameLine": "Bild {n} · {s} s",
+    "guide.head": "Kopf",
+    "guide.torso": "Rumpf",
+    "guide.leadArm": "Führungsarm",
+    "guide.hips": "Hüften",
+    "coach.offline": "Keine Verbindung zum KI-Coach. Prüfe dein Internet.",
+    "coach.notConfigured": "Diese Testversion enthält den KI-Coach nicht.",
+    "coach.failed": "Die KI-Analyse ist fehlgeschlagen. Versuche es erneut.",
+    "coach.quota": "Du hast alle Analysen dieses Monats verbraucht. Sie werden am ersten Tag des nächsten Monats zurückgesetzt.",
   },
 };
