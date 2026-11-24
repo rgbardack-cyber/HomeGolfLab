@@ -16,17 +16,23 @@ import { ko } from './locales/ko';
 import { sv } from './locales/sv';
 import { pt } from './locales/pt';
 import { nl } from './locales/nl';
-import { badgeDictEs } from './locales/dynamic';
+import { badgeDictEs, noticeDictEs } from './locales/dynamic';
+import { AREAS } from './areas';
 
 export type { Locale } from './core';
 export { LOCALES } from './core';
+/** Claves del diccionario base. `t()` acepta cualquier clave (las pruebas revisan que toda clave escrita en el código exista). */
 export type Key = keyof typeof es;
 
-export const DICTS: Readonly<Record<Locale, Dict>> = {
-  es: { ...es, ...badgeDictEs() },
+const BASE: Readonly<Record<Locale, Dict>> = {
+  es: { ...es, ...badgeDictEs(), ...noticeDictEs() },
   'es-ES': esES,
   en, 'en-GB': enGB, de, fr, it, ja, ko, sv, pt, nl,
 };
+/** Base + todas las áreas. */
+export const DICTS: Readonly<Record<Locale, Dict>> = Object.fromEntries(
+  (Object.keys(BASE) as Locale[]).map((l) => [l, Object.assign({}, BASE[l], ...AREAS.map((a) => a[l] ?? {}))]),
+) as Record<Locale, Dict>;
 
 const STORAGE_KEY = 'homegolflab-lang';
 const readStored = (): string | null => { try { return localStorage.getItem(STORAGE_KEY); } catch { return null; } };
@@ -56,7 +62,7 @@ export function setLocale(l: Locale | string): void {
 }
 
 /** Texto con clave conocida (el compilador revisa que la clave exista). */
-export function t(key: Key, params?: Record<string, string | number>): string {
+export function t(key: Key | (string & {}), params?: Record<string, string | number>): string {
   return translate(DICTS, current, key, params);
 }
 /** Texto con clave armada al vuelo (`badge.${id}.label`); si falta, devuelve la clave. Las pruebas revisan las claves dinámicas. */
