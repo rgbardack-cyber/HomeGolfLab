@@ -14,12 +14,20 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
+import { Entitlements, FileStore, validUserId } from './entitlements.ts';
+import { QUOTA_EXHAUSTED_MESSAGE, TOKENS_PER_ANALYSIS_ESTIMATE, quotaConfigFromEnv, type ApiUsage } from '../src/lib/plans.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGES = 4;
 const RATE_LIMIT = { max: 10, windowMs: 60 * 60 * 1000 }; // por dirección IP
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+// Planes, pase Early Adopter y cuota del coach (bloque F). Apagado por defecto: sin ENTITLEMENTS_ENABLED=1 todo funciona como antes.
+// Falta identidad firmada y verificación de recibos antes de encenderlo en producción (ver server/entitlements.ts).
+const entitlements = process.env.ENTITLEMENTS_ENABLED === '1'
+  ? new Entitlements(new FileStore(process.env.ENTITLEMENTS_FILE ?? 'data/entitlements.json'), quotaConfigFromEnv(process.env))
+  : null;
 
 const GEAR = ['putter', 'wedge', 'hierros', 'red', 'matPutt', 'matGolpeo', 'foam', 'varillas', 'vaso', 'espejo'] as const;
 
@@ -136,7 +144,8 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
 
 class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  extra: Record<string, unknown>;
+  constructor(status: number, message: string, extra: Record<string, unknown> = {}) { super(message); this.status = status; this.extra = extra; }
 }
 
 const BodySchema = z.object({
@@ -162,7 +171,7 @@ const CoachBodySchema = z.object({
   notes: z.string().max(300).optional(),
 });
 
-async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<CoachResult> {
+async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<{ result: CoachResult; usage: ApiUsage }> {
   client ??= new Anthropic();
   const context = [
     `Vista de la cámara: ${body.view === 'atras' ? 'desde atrás, sobre la línea de tiro' : 'de frente al jugador'}.`,
@@ -194,7 +203,7 @@ async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<CoachR
   });
   if (response.stop_reason === 'refusal') throw new HttpError(422, 'No se pudieron analizar esas fotos. Prueba con otro video.');
   if (!response.parsed_output) throw new HttpError(502, 'El análisis no devolvió un resultado válido. Inténtalo de nuevo.');
-  return response.parsed_output;
+  return { result: response.parsed_output, usage: response.usage };
 }
 
 async function scan(body: z.infer<typeof BodySchema>): Promise<ScanResult> {
@@ -221,7 +230,7 @@ async function scan(body: z.infer<typeof BodySchema>): Promise<ScanResult> {
   return response.parsed_output;
 }
 
-const ROUTES: Record<string, { name: string; run: (body: unknown) => Promise<unknown> }> = {
+const ROUTES: Record<string, { name: string; run: (body: unknown, req: IncomingMessage) => Promise<unknown> }> = {
   '/api/homelab/scan': {
     name: 'El escaneo con IA',
     run: (body) => {
@@ -232,19 +241,46 @@ const ROUTES: Record<string, { name: string; run: (body: unknown) => Promise<unk
   },
   '/api/swing/coach': {
     name: 'El coach con IA',
-    run: (body) => {
+    run: async (body, req) => {
       const parsed = CoachBodySchema.safeParse(body);
       if (!parsed.success) throw new HttpError(400, 'Envía de 1 a 3 fotos del swing en JPG, PNG o WebP, con la vista de la cámara.');
-      return coachSwing(parsed.data);
+      if (!entitlements) return (await coachSwing(parsed.data)).result;
+      // Con la cuota encendida: se niega ANTES de gastar si ya no queda, y se registra lo que reporta la API después.
+      const userId = req.headers['x-hgl-user'];
+      if (!validUserId(userId)) throw new HttpError(400, 'Falta identificar al usuario.', { code: 'no_user' });
+      const status = entitlements.status(userId);
+      if (!status.allowed) throw new HttpError(429, QUOTA_EXHAUSTED_MESSAGE, { code: 'quota_exhausted', resetsAt: status.resetsAt });
+      const { result, usage } = await coachSwing(parsed.data);
+      entitlements.recordUsage(userId, usage);
+      return result;
     },
   },
 };
+
+/** Estado de la cuota del usuario. Solo existe con ENTITLEMENTS_ENABLED=1. */
+function entitlementStatus(req: IncomingMessage) {
+  const userId = req.headers['x-hgl-user'];
+  if (!entitlements || !validUserId(userId)) return null;
+  const s = entitlements.status(userId);
+  return { plan: s.plan, limit: s.limit, used: s.used, remaining: s.remaining, resetsAt: s.resetsAt, analysesLeftEstimate: Math.floor(s.remaining / TOKENS_PER_ANALYSIS_ESTIMATE), passesLeft: entitlements.passesLeft() };
+}
 
 const server = createServer(async (req, res) => {
   cors(req, res);
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
   const path = (req.url ?? '').split('?')[0];
   if (req.method === 'GET' && path === '/api/health') return send(res, 200, { ok: true });
+  if (req.method === 'POST' && path === '/api/entitlements/status') {
+    const st = entitlementStatus(req);
+    return st ? send(res, 200, st) : send(res, 404, { error: 'No encontrado.' });
+  }
+  // Solo para desarrollo: entrega el pase sin recibo. En producción debe reemplazarse por la verificación del recibo de la tienda.
+  if (req.method === 'POST' && path === '/api/entitlements/dev-claim' && entitlements && process.env.ENTITLEMENTS_DEV_CLAIM === '1') {
+    const userId = req.headers['x-hgl-user'];
+    if (!validUserId(userId)) return send(res, 400, { error: 'Falta identificar al usuario.', code: 'no_user' });
+    const r = entitlements.claimEarlyAdopter(userId);
+    return r.ok ? send(res, 200, { ok: true, already: r.already }) : send(res, 409, { error: 'Los pases Early Adopter se agotaron.', code: 'sold_out' });
+  }
   const route = req.method === 'POST' ? ROUTES[path] : undefined;
   if (!route) return send(res, 404, { error: 'No encontrado.' });
   const notConfigured = { error: `${route.name} todavía no está configurado.`, code: 'not_configured' };
@@ -253,9 +289,9 @@ const server = createServer(async (req, res) => {
     if (!configured()) return send(res, 503, notConfigured);
     // El límite es por dirección y por servicio: escanear el espacio no gasta los análisis de swing.
     if (rateLimited(`${req.socket.remoteAddress ?? 'desconocido'} ${path}`)) throw new HttpError(429, 'Demasiadas solicitudes seguidas. Espera un rato e inténtalo de nuevo.');
-    send(res, 200, await route.run(await readJson(req)));
+    send(res, 200, await route.run(await readJson(req), req));
   } catch (e) {
-    if (e instanceof HttpError) return send(res, e.status, { error: e.message });
+    if (e instanceof HttpError) return send(res, e.status, { error: e.message, ...e.extra });
     if (e instanceof Anthropic.AuthenticationError) { console.error('ANTHROPIC_API_KEY falta o no es válida'); return send(res, 503, notConfigured); }
     if (e instanceof Anthropic.RateLimitError) return send(res, 503, { error: 'El servicio está saturado. Inténtalo en un minuto.' });
     if (e instanceof Anthropic.BadRequestError) { console.error(e.message); return send(res, 400, { error: 'No se pudieron leer esas imágenes. Prueba con otras.' }); }

@@ -124,14 +124,16 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
   const premium = useStore((s) => s.profile.premium);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quotaHit, setQuotaHit] = useState(false);
   const [coach, setCoach] = useState<CoachResult | null>(null);
   const images: CoachImage[] = shots.flatMap((sh) => (sh.clean && sh.position ? [{ position: sh.position, media_type: 'image/jpeg' as const, data: sh.clean }] : []));
   if (!images.length) return null;
 
   const ask = async () => {
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setQuotaHit(false);
     try { setCoach(await askCoach(coachPayload(r, images))); }
     catch (e) {
+      setQuotaHit(e instanceof CoachError && e.code === 'quota_exhausted');
       setError(e instanceof CoachError && e.code === 'not_configured' ? 'El coach con IA todavía no está disponible en esta versión.' : e instanceof Error ? e.message : 'El análisis con IA falló.');
     } finally { setBusy(false); }
   };
@@ -159,7 +161,7 @@ function AiCoachCard({ r, shots }: { r: SwingResult; shots: Shot[] }) {
           <p className="text-xs text-muted-foreground">Se envían las tres fotos de tu swing a nuestro servidor para analizarlas con IA. No se guardan.</p>
         </>
       )}
-      {error && <Notice tone="error">{error}</Notice>}
+      {error && <Notice tone={quotaHit ? 'info' : 'error'}>{error}</Notice>}
       {coach && !coach.usable && <Notice>{coach.summary || 'Las fotos no muestran un swing completo. Graba de cuerpo entero.'}</Notice>}
       {coach?.usable && (
         <div className="space-y-3">
