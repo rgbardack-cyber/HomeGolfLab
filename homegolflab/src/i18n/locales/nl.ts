@@ -42,7 +42,7 @@ export const nl: Readonly<Record<string, string>> = {
   'perfil.wipeError': 'De opgeslagen video’s konden niet worden verwijderd. Probeer het opnieuw; je gegevens zijn ongewijzigd.',
 
   'lang.title': 'Taal', 'lang.label': 'Taal van de app',
-  'lang.note': 'Teksten die nog niet zijn vertaald, verschijnen in het Engels. De vertalingen zijn een concept en worden vóór publicatie door een moedertaalspreker nagekeken.',
+  'lang.note': 'Teksten die nog niet zijn vertaald, verschijnen in het Engels. De vertalingen zijn een concept.',
 
   'badge.first_session.label': 'Eerste sessie', 'badge.first_session.desc': 'Je hebt je eerste oefensessie afgerond.',
   'badge.first_swing.label': 'Eerste swing', 'badge.first_swing.desc': 'Je hebt je eerste swing geanalyseerd.',

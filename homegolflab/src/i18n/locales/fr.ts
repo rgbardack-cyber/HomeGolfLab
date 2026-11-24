@@ -42,7 +42,7 @@ export const fr: Readonly<Record<string, string>> = {
   'perfil.wipeError': 'Impossible de supprimer les vidéos enregistrées. Réessaie ; tes données sont intactes.',
 
   'lang.title': 'Langue', 'lang.label': 'Langue de l’app',
-  'lang.note': 'Les textes pas encore traduits s’affichent en anglais. Les traductions sont un brouillon, relu par une personne de langue maternelle avant publication.',
+  'lang.note': 'Les textes pas encore traduits s’affichent en anglais. Les traductions sont un brouillon.',
 
   'badge.first_session.label': 'Première séance', 'badge.first_session.desc': 'Tu as terminé ta première séance d’entraînement.',
   'badge.first_swing.label': 'Premier swing', 'badge.first_swing.desc': 'Tu as analysé ton premier swing.',

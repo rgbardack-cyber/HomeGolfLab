@@ -117,5 +117,5 @@ export const es = {
   // Idioma
   'lang.title': 'Idioma',
   'lang.label': 'Idioma de la app',
-  'lang.note': 'Los textos que todavía no estén traducidos aparecen en inglés. Las traducciones son un borrador y las revisa una persona nativa antes de publicarse.',
+  'lang.note': 'Los textos que todavía no estén traducidos aparecen en inglés. Las traducciones son un borrador.',
 } as const;

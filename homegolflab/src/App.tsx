@@ -14,6 +14,7 @@ import Tracking from '@/pages/Tracking';
 import Logros from '@/pages/Logros';
 import Perfil from '@/pages/Perfil';
 import Comparar from '@/pages/Comparar';
+import Premium from '@/pages/Premium';
 
 const NAV: { to: string; key: Key; icon: typeof Activity }[] = [
   { to: '/swing', key: 'nav.swing', icon: Activity },
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="/logros" element={<Logros />} />
           <Route path="/perfil" element={<Perfil />} />
           <Route path="/comparar" element={<Comparar />} />
+          <Route path="/premium" element={<Premium />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

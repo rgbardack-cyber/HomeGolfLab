@@ -11,7 +11,7 @@ Dueño: Ryan. Responder y escribir la interfaz en español.
 - Dos modos: **Casa** y **Cancha** (selector en el encabezado). HomeLAB es solo de Casa.
 - Versión 1 = Análisis de swing, HomeLAB, Ball tracking y medallas. Los desafíos quedan para una actualización futura.
 - Swing: subir video es gratis (1 por día); análisis en vivo es Premium.
-- Sin backend ni cuentas todavía: los datos se guardan en el dispositivo (`src/store.ts`, zustand persist). Premium es un interruptor de prueba en Perfil; los pagos reales irán por compras dentro de las tiendas.
+- Sin backend ni cuentas todavía: los datos se guardan en el dispositivo (`src/store.ts`, zustand persist). Perfil lleva a `/premium` (opciones de Premium y oferta Early Adopter de 119,99 USD) con la compra apagada (`PURCHASES_ENABLED = false`: «Disponible pronto», no cobra). El interruptor de Premium de prueba solo existe en builds internas (`PremiumTestSwitch`). Los pagos reales irán por compras dentro de las tiendas.
 
 ## Honestidad de las medidas
 No mostrar números que la app no mide. El swing reporta lo estimable desde la postura (tempo, giros, postura, cabeza, cadera, y manos y brazos al inicio y en el tope). El ball tracking con cámara mide putts y chips rodados; el swing completo se registra a mano.

@@ -42,7 +42,7 @@ export const ko: Readonly<Record<string, string>> = {
   'perfil.wipeError': '저장된 영상을 삭제하지 못했습니다. 다시 시도하세요. 데이터는 그대로입니다.',
 
   'lang.title': '언어', 'lang.label': '앱 언어',
-  'lang.note': '아직 번역되지 않은 문구는 영어로 표시됩니다. 번역은 초안이며 출시 전에 원어민이 검수합니다.',
+  'lang.note': '아직 번역되지 않은 문구는 영어로 표시됩니다. 번역은 초안입니다.',
 
   'badge.first_session.label': '첫 세션', 'badge.first_session.desc': '첫 연습 세션을 마쳤습니다.',
   'badge.first_swing.label': '첫 스윙', 'badge.first_swing.desc': '첫 스윙을 분석했습니다.',

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Check, Crown, User } from 'lucide-react';
 import { useStore } from '@/store';
 import { Button, Card, Notice, PageHeader } from '@/components/ui';
@@ -75,6 +76,7 @@ export default function Perfil() {
           <ul className="space-y-1.5"><li className="font-semibold text-muted-foreground">{t('perfil.free')}</li>{FREE_LIST.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />{t(f)}</li>)}</ul>
           <ul className="space-y-1.5"><li className="font-semibold text-primary">{t('perfil.premium')}</li>{PREMIUM.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />{t(f)}</li>)}</ul>
         </div>
+        {!profile.premium && <Link to="/premium" className="inline-flex w-full items-center justify-center h-11 px-5 rounded-xl bg-accent text-accent-foreground font-medium">{t('perfil.getPremium')}</Link>}
         {INTERNAL && <PremiumTestSwitch />}
       </Card>
 

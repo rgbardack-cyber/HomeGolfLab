@@ -42,7 +42,7 @@ export const pt: Readonly<Record<string, string>> = {
   'perfil.wipeError': 'Não foi possível apagar os vídeos guardados. Tenta de novo; os teus dados estão intactos.',
 
   'lang.title': 'Idioma', 'lang.label': 'Idioma da app',
-  'lang.note': 'Os textos que ainda não estão traduzidos aparecem em inglês. As traduções são um rascunho e são revistas por um falante nativo antes de serem publicadas.',
+  'lang.note': 'Os textos que ainda não estão traduzidos aparecem em inglês. As traduções são um rascunho.',
 
   'badge.first_session.label': 'Primeira sessão', 'badge.first_session.desc': 'Concluíste a tua primeira sessão de treino.',
   'badge.first_swing.label': 'Primeiro swing', 'badge.first_swing.desc': 'Analisaste o teu primeiro swing.',

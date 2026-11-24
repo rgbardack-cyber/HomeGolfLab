@@ -42,7 +42,7 @@ export const de: Readonly<Record<string, string>> = {
   'perfil.wipeError': 'Die gespeicherten Videos konnten nicht gelöscht werden. Versuche es erneut; deine Daten sind unverändert.',
 
   'lang.title': 'Sprache', 'lang.label': 'App-Sprache',
-  'lang.note': 'Texte, die noch nicht übersetzt sind, erscheinen auf Englisch. Die Übersetzungen sind ein Entwurf und werden vor der Veröffentlichung von einer Muttersprachlerin oder einem Muttersprachler geprüft.',
+  'lang.note': 'Texte, die noch nicht übersetzt sind, erscheinen auf Englisch. Die Übersetzungen sind ein Entwurf.',
 
   'badge.first_session.label': 'Erste Einheit', 'badge.first_session.desc': 'Du hast deine erste Trainingseinheit abgeschlossen.',
   'badge.first_swing.label': 'Erster Swing', 'badge.first_swing.desc': 'Du hast deinen ersten Swing analysiert.',

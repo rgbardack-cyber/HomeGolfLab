@@ -114,7 +114,7 @@ const base: Record<K, string> = {
 
   'lang.title': 'Language',
   'lang.label': 'App language',
-  'lang.note': 'Text that is not translated yet appears in English. Translations are a draft and a native speaker reviews them before release.',
+  'lang.note': 'Text that is not translated yet appears in English. Translations are a draft.',
 };
 
 const dyn: Record<string, string> = {

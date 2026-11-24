@@ -42,7 +42,7 @@ export const sv: Readonly<Record<string, string>> = {
   'perfil.wipeError': 'Det gick inte att radera de sparade videorna. Försök igen; din data är orörd.',
 
   'lang.title': 'Språk', 'lang.label': 'Appens språk',
-  'lang.note': 'Texter som ännu inte är översatta visas på engelska. Översättningarna är ett utkast och granskas av en person med språket som modersmål före publicering.',
+  'lang.note': 'Texter som ännu inte är översatta visas på engelska. Översättningarna är ett utkast.',
 
   'badge.first_session.label': 'Första passet', 'badge.first_session.desc': 'Du genomförde ditt första träningspass.',
   'badge.first_swing.label': 'Första svingen', 'badge.first_swing.desc': 'Du analyserade din första sving.',

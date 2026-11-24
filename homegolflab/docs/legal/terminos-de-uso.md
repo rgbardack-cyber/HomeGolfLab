@@ -26,6 +26,8 @@ Es una herramienta de práctica. Las medidas del swing, las notas y los consejos
 ## 4. Tus videos y datos
 Los videos se analizan en tu dispositivo y hoy no los guardamos. Cómo tratamos tus datos está en la **política de privacidad**. 
 
+**Datos que salen de tu dispositivo.** Algunas funciones envían datos a nuestro servidor y a un proveedor externo de análisis [Anthropic, PBC; el abogado confirma proveedor, país y plazo de retención] **solo cuando tú las usas**: el escaneo del espacio del Home Lab (las fotos o el video que tomes del lugar) y el análisis adicional del swing (tres fotos de tu swing, sus medidas y el texto que escribas). No las guardamos nosotros. Si no usas esas funciones, no sale nada. [Decisión de Ryan, 24 nov 2026 (R18): se avisa aquí, en los términos y en la política de privacidad, sin promocionar la función. El abogado confirma el texto.]
+
 **Licencia de videos y análisis, solo si tú la aceptas.** Dar una licencia para que guardemos y usemos tus videos y sus análisis para mejorar la app es **opcional** y se pide **aparte**, con una casilla que viene sin marcar (`consentimiento-datos.md`). No es parte de estos términos. Si no la aceptas, usas la app igual. Si la aceptas, es una licencia [no exclusiva, para mejorar y evaluar la app y sus modelos, revocable; el abogado define el texto] y no te quita la propiedad de tus videos. Puedes retirarla cuando quieras y pedir el borrado.
 
 ## 5. Plan gratuito, Premium y pase Early Adopter

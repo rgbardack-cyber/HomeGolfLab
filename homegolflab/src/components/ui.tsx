@@ -62,7 +62,7 @@ export function PremiumGate({ title, children }: { title: string; children: Reac
       </div>
       <h3 className="font-heading text-lg font-semibold">{title}</h3>
       <p className="text-sm text-muted-foreground">{children}</p>
-      <Link to="/perfil" className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-accent text-accent-foreground font-medium">
+      <Link to="/premium" className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-accent text-accent-foreground font-medium">
         {t('ui.seePremium')}
       </Link>
     </Card>

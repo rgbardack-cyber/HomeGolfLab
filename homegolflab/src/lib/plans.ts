@@ -94,3 +94,12 @@ export function addUsage(usage: UsageRecord | undefined, tokens: number, now: Da
 
 /** Mensaje claro para el usuario cuando se acaba la cuota. No es un error y no menciona tokens. */
 export const QUOTA_EXHAUSTED_MESSAGE = 'Ya usaste todos los análisis de este mes. Se reinician el primer día del mes que viene.';
+
+/**
+ * Compra de Premium / pase Early Adopter (decisión de Ryan, 24 nov 2026). APAGADA: la pantalla `/premium` se ve, pero el botón de compra
+ * dice «Disponible pronto» y no cobra nada. Se enciende (y se conecta a las compras dentro de la app de cada tienda) cuando la app se publique.
+ */
+export const PURCHASES_ENABLED = false;
+
+/** Precio de lanzamiento del pase Early Adopter en USD (R8, revisada el 24 nov 2026). La tienda muestra el precio final con impuestos. */
+export const EARLY_ADOPTER_PRICE_USD = 119.99;

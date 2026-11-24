@@ -42,7 +42,7 @@ export const ja: Readonly<Record<string, string>> = {
   'perfil.wipeError': '保存した動画を削除できませんでした。もう一度お試しください。データはそのままです。',
 
   'lang.title': '言語', 'lang.label': 'アプリの言語',
-  'lang.note': 'まだ翻訳されていない文章は英語で表示されます。翻訳は下訳で、公開前にネイティブの方が確認します。',
+  'lang.note': 'まだ翻訳されていない文章は英語で表示されます。翻訳は下訳です。',
 
   'badge.first_session.label': '初セッション', 'badge.first_session.desc': '最初の練習セッションを完了しました。',
   'badge.first_swing.label': '初スイング', 'badge.first_swing.desc': '最初のスイングを分析しました。',
