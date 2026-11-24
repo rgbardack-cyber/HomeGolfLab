@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Crown, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useT } from '@/i18n';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`bg-card rounded-2xl border border-border p-5 ${className}`}>{children}</div>;
@@ -53,6 +54,7 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
 }
 
 export function PremiumGate({ title, children }: { title: string; children: ReactNode }) {
+  const { t } = useT();
   return (
     <Card className="text-center space-y-3 border-accent/40 bg-accent/5">
       <div className="w-12 h-12 mx-auto rounded-full bg-accent/20 flex items-center justify-center">
@@ -61,7 +63,7 @@ export function PremiumGate({ title, children }: { title: string; children: Reac
       <h3 className="font-heading text-lg font-semibold">{title}</h3>
       <p className="text-sm text-muted-foreground">{children}</p>
       <Link to="/perfil" className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-accent text-accent-foreground font-medium">
-        Ver Premium
+        {t('ui.seePremium')}
       </Link>
     </Card>
   );
@@ -81,6 +83,7 @@ export function Stat({ label, value, unit, tone }: { label: string; value: React
 }
 
 export function ScoreRing({ score, size = 104 }: { score: number; size?: number }) {
+  const { t } = useT();
   const r = size / 2 - 8, c = 2 * Math.PI * r;
   const color = score >= 80 ? 'var(--color-primary)' : score >= 65 ? 'var(--color-accent)' : 'var(--color-destructive)';
   return (
@@ -91,7 +94,7 @@ export function ScoreRing({ score, size = 104 }: { score: number; size?: number 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-heading text-3xl font-bold leading-none">{score}</span>
-        <span className="text-[10px] text-muted-foreground">de 100</span>
+        <span className="text-[10px] text-muted-foreground">{t('ui.outOf100')}</span>
       </div>
     </div>
   );

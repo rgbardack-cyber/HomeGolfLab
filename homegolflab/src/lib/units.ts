@@ -3,10 +3,13 @@
  * el usuario puede cambiar a metros en Perfil. Todo se GUARDA siempre en metros (compatibilidad con `Shot.carryM`,
  * `Space.lengthM`…) y se convierte solo al mostrar o al leer lo que el usuario escribe. 1 yarda = 0,9144 m exacto.
  */
+import { fmtNumber, t } from '@/i18n';
 export type DistUnit = 'yd' | 'm';
 export const DEFAULT_UNIT: DistUnit = 'yd';
 export const YD_M = 0.9144;
+/** Texto en español (idioma base). En pantalla se usa `unitLabel()`, que respeta el idioma elegido. */
 export const UNIT_LABEL: Record<DistUnit, string> = { yd: 'yardas', m: 'metros' };
+export const unitLabel = (u: DistUnit): string => t(u === 'yd' ? 'unit.yd' : 'unit.m');
 export const UNIT_SHORT: Record<DistUnit, string> = { yd: 'yd', m: 'm' };
 
 export const mToYd = (m: number): number => m / YD_M;
@@ -17,7 +20,7 @@ export const fromMeters = (m: number, u: DistUnit): number => (u === 'yd' ? mToY
 /** Lo que escribió el usuario (en su unidad) → metros para guardar. */
 export const toMeters = (v: number, u: DistUnit): number => (u === 'yd' ? ydToM(v) : v);
 
-const comma = (n: number, d: number) => n.toFixed(d).replace('.', ',');
+const comma = (n: number, d: number) => fmtNumber(n, d);
 
 /**
  * Texto de una distancia guardada en metros: «12,3 yd» / «11,2 m». Redondeo a 1 decimal (o entero desde 100); con `d` se fuerza.
@@ -32,9 +35,9 @@ export function fmtDist(m: number, u: DistUnit, d?: number): string {
 
 /** Desvío lateral: «centro» si es casi nulo; si no, en la unidad elegida (2 decimales bajo 1, 1 decimal desde 1) y con el lado. */
 export function fmtLateral(m: number, u: DistUnit): string {
-  if (!Number.isFinite(m) || Math.abs(m) < 0.005) return 'centro';
+  if (!Number.isFinite(m) || Math.abs(m) < 0.005) return t('unit.center');
   const v = Math.abs(fromMeters(m, u));
-  return `${comma(v, v < 1 ? 2 : 1)} ${UNIT_SHORT[u]} ${m > 0 ? 'der.' : 'izq.'}`;
+  return `${comma(v, v < 1 ? 2 : 1)} ${UNIT_SHORT[u]} ${m > 0 ? t('unit.right') : t('unit.left')}`;
 }
 
 /** Valor para un campo numérico en la unidad elegida (para mostrar lo guardado): 1 decimal sin ceros sobrantes. */

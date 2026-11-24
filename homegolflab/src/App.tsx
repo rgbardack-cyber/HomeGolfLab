@@ -5,6 +5,7 @@ import { useStore, type Mode } from '@/store';
 import { BADGES } from '@/lib/badges';
 import { anyMediaFlag, getFlags } from '@/lib/flags';
 import { runCleanup } from '@/lib/media/cleanup';
+import { useT, type Key } from '@/i18n';
 import { getMediaStore } from '@/lib/media/store';
 import Home from '@/pages/Home';
 import Swing from '@/pages/Swing';
@@ -14,15 +15,16 @@ import Logros from '@/pages/Logros';
 import Perfil from '@/pages/Perfil';
 import Comparar from '@/pages/Comparar';
 
-const NAV = [
-  { to: '/swing', label: 'Swing', icon: Activity },
-  { to: '/homelab', label: 'HomeLAB', icon: FlaskConical },
-  { to: '/', label: 'Inicio', icon: HomeIcon },
-  { to: '/tracking', label: 'Tracking', icon: Target },
-  { to: '/logros', label: 'Logros', icon: Award },
+const NAV: { to: string; key: Key; icon: typeof Activity }[] = [
+  { to: '/swing', key: 'nav.swing', icon: Activity },
+  { to: '/homelab', key: 'nav.homelab', icon: FlaskConical },
+  { to: '/', key: 'nav.home', icon: HomeIcon },
+  { to: '/tracking', key: 'nav.tracking', icon: Target },
+  { to: '/logros', key: 'nav.logros', icon: Award },
 ];
 
 function ModeSwitch() {
+  const { t } = useT();
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
   const opt = (m: Mode, label: string, Icon: typeof House) => (
@@ -34,10 +36,11 @@ function ModeSwitch() {
       <Icon className="w-3.5 h-3.5" /> {label}
     </button>
   );
-  return <div className="flex bg-muted rounded-full p-0.5">{opt('casa', 'Casa', House)}{opt('cancha', 'Cancha', Flag)}</div>;
+  return <div className="flex bg-muted rounded-full p-0.5">{opt('casa', t('mode.casa'), House)}{opt('cancha', t('mode.cancha'), Flag)}</div>;
 }
 
 function UnlockToast() {
+  const { td, t } = useT();
   const id = useStore((s) => s.unlockQueue[0]);
   const shift = useStore((s) => s.shiftUnlock);
   const badge = BADGES.find((b) => b.id === id);
@@ -51,15 +54,16 @@ function UnlockToast() {
     <button onClick={shift} className="fixed left-4 right-4 z-50 mx-auto max-w-md bg-card border-2 border-accent rounded-2xl p-4 flex items-center gap-3 shadow-xl text-left" style={{ top: 'calc(env(safe-area-inset-top) + 72px)' }}>
       <span className="text-4xl">{badge.emoji}</span>
       <span className="min-w-0">
-        <span className="block text-[11px] font-bold text-accent uppercase tracking-wide">¡Nueva medalla!</span>
-        <span className="block font-heading font-bold">{badge.label}</span>
-        <span className="block text-xs text-muted-foreground">{badge.description} · +{badge.xp} XP</span>
+        <span className="block text-[11px] font-bold text-accent uppercase tracking-wide">{t('toast.newBadge')}</span>
+        <span className="block font-heading font-bold">{td(`badge.${badge.id}.label`)}</span>
+        <span className="block text-xs text-muted-foreground">{td(`badge.${badge.id}.desc`)} · +{badge.xp} XP</span>
       </span>
     </button>
   );
 }
 
 export default function App() {
+  const { t } = useT();
   const name = useStore((s) => s.profile.name);
   // Al arrancar: borra exportaciones y grabaciones temporales de más de 24 h y respeta el tope de espacio (F2.3).
   // Solo si hay funciones de video encendidas: si no, la app ni abre el almacén de medios.
@@ -77,7 +81,7 @@ export default function App() {
           </Link>
           <div className="ml-auto flex items-center gap-1.5">
             <ModeSwitch />
-            <Link to="/perfil" aria-label="Perfil" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-sm font-semibold">
+            <Link to="/perfil" aria-label={t('app.profile')} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-sm font-semibold">
               {name ? name[0].toUpperCase() : <User className="w-4 h-4" />}
             </Link>
           </div>
@@ -99,10 +103,10 @@ export default function App() {
 
       <nav className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-border" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="max-w-2xl mx-auto grid grid-cols-5">
-          {NAV.map(({ to, label, icon: Icon }) => (
+          {NAV.map(({ to, key, icon: Icon }) => (
             <NavLink key={to} to={to} end className={({ isActive }) => `h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
               <Icon className="w-5 h-5" />
-              {label}
+              {t(key)}
             </NavLink>
           ))}
         </div>
