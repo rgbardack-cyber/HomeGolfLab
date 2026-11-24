@@ -6,6 +6,7 @@
  * programó; aquí el modelo comenta también el grip, el palo o la alineación. A cambio necesita
  * servidor y cuesta por uso, así que se pide a mano y es de Premium.
  */
+import { getLocale } from '@/i18n';
 import type { SwingResult } from './swing';
 
 export type Position = 'inicio' | 'tope' | 'impacto';
@@ -25,6 +26,8 @@ export interface CoachResult {
 }
 
 export interface CoachPayload {
+  /** Idioma de la app: el servidor escribe la respuesta en él. */
+  language?: string;
   images: CoachImage[];
   view: 'frente' | 'atras';
   lefty?: boolean;
@@ -122,7 +125,7 @@ export class CoachError extends Error {
 export async function askCoach(payload: CoachPayload): Promise<CoachResult> {
   let res: Response;
   try {
-    res = await fetch(`${API}/api/swing/coach`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    res = await fetch(`${API}/api/swing/coach`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, language: getLocale() }) });
   } catch {
     throw new CoachError('No hay conexión con el coach con IA. Revisa tu internet.', 'offline');
   }

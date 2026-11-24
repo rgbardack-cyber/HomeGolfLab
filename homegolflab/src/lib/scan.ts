@@ -2,6 +2,7 @@
  * Escaneo de HomeLAB: el jugador toma una foto o un video de su espacio y el servidor
  * (visión de Claude) devuelve medidas estimadas, equipo visible y cómo montar la práctica.
  */
+import { getLocale } from '@/i18n';
 import type { Floor, Gear, Space } from './homelab';
 
 export interface ScanResult {
@@ -86,7 +87,7 @@ export class ScanError extends Error {
 export async function scanSpace(images: ScanImage[], notes?: string): Promise<ScanResult> {
   let res: Response;
   try {
-    res = await fetch(`${API}/api/homelab/scan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ images, notes: notes || undefined }) });
+    res = await fetch(`${API}/api/homelab/scan`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ images, notes: notes || undefined, language: getLocale() }) });
   } catch {
     throw new ScanError('No hay conexión con el servicio de escaneo. Revisa tu internet.', 'offline');
   }

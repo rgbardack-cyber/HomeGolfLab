@@ -15,6 +15,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 import { Entitlements, FileStore, validUserId } from './entitlements.ts';
+import { LOCALES, isLocale } from '../src/i18n/core.ts';
 import { QUOTA_EXHAUSTED_MESSAGE, TOKENS_PER_ANALYSIS_ESTIMATE, quotaConfigFromEnv, type ApiUsage } from '../src/lib/plans.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -148,7 +149,17 @@ class HttpError extends Error {
   constructor(status: number, message: string, extra: Record<string, unknown> = {}) { super(message); this.status = status; this.extra = extra; }
 }
 
+/** Idioma pedido por la app (código de `src/i18n/core.ts`). Un valor desconocido se ignora y se responde en español. */
+const language = z.string().max(10).optional();
+/** Instrucción extra: el resultado se escribe en el idioma del usuario. Los valores fijos del esquema (enum) no se traducen. */
+function languageDirective(code: string | undefined): string {
+  if (!code || code === 'es' || !isLocale(code)) return '';
+  const name = LOCALES.find((l) => l.code === code)?.name ?? code;
+  return `\n\nIDIOMA DE LA RESPUESTA: esta instrucción reemplaza la de escribir en español. Escribe todos los textos libres del resultado en ${name} (código ${code}), directo y breve. Los valores fijos del esquema (por ejemplo "alta", "media", "baja", "inicio", "tope", "impacto") se dejan exactamente como están.`;
+}
+
 const BodySchema = z.object({
+  language,
   images: z.array(z.object({
     media_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
     data: z.string().min(100),
@@ -157,6 +168,7 @@ const BodySchema = z.object({
 });
 
 const CoachBodySchema = z.object({
+  language,
   images: z.array(z.object({
     position: z.enum(POSITIONS),
     media_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
@@ -188,7 +200,7 @@ async function coachSwing(body: z.infer<typeof CoachBodySchema>): Promise<{ resu
     // Si el modelo principal declina por seguridad, la API reintenta sola con el modelo de respaldo.
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
-    system: COACH_SYSTEM,
+    system: COACH_SYSTEM + languageDirective(body.language),
     messages: [{
       role: 'user',
       content: [
@@ -215,7 +227,7 @@ async function scan(body: z.infer<typeof BodySchema>): Promise<ScanResult> {
     // Si el modelo principal declina por seguridad, la API reintenta sola con el modelo de respaldo.
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
-    system: SYSTEM,
+    system: SYSTEM + languageDirective(body.language),
     messages: [{
       role: 'user',
       content: [
