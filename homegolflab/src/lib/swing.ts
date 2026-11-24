@@ -8,6 +8,7 @@
  * casi no se mueve; en el impacto las manos van demasiado rápido para un video normal.
  */
 
+import { t } from '@/i18n';
 export interface Pt { x: number; y: number; z: number; v: number }
 export interface Frame { t: number; lm: Pt[]; world?: Pt[] }
 
@@ -21,7 +22,9 @@ export const LM = {
 
 /** Desde dónde graba la cámara: de frente al jugador, o desde atrás sobre la línea de tiro. */
 export type SwingView = 'frente' | 'atras';
+/** Español (idioma base). En pantalla se usa `viewLabel()`. */
 export const VIEW_LABEL: Record<SwingView, string> = { frente: 'De frente', atras: 'Desde atrás' };
+export const viewLabel = (v: SwingView): string => t(v === 'atras' ? 'view.atras' : 'view.frente');
 
 interface TempoMetrics {
   tempoRatio: number;        // subida / bajada (ideal ≈ 3.0)
@@ -295,8 +298,8 @@ function buildResult<M>(metrics: M, feedback: Feedback[], score: number, ev: { a
   const issues = feedback.filter((f) => f.severity !== 'good');
   const goods = feedback.filter((f) => f.severity === 'good');
   const summary =
-    (goods[0] ? `Punto fuerte: ${goods[0].title.toLowerCase()}. ` : '') +
-    (issues[0] ? `Lo más importante a trabajar: ${issues[0].title.toLowerCase()}.` : 'Swing muy sólido en todo lo medido. Mantén la rutina.');
+    (goods[0] ? t('fb.summary.strong', { title: goods[0].title.toLowerCase() }) : '') +
+    (issues[0] ? t('fb.summary.work', { title: issues[0].title.toLowerCase() }) : t('fb.summary.solid'));
   return {
     metrics, score, feedback, summary,
     focus: issues.slice(0, 3).map((f) => f.drill ?? f.title),
@@ -470,18 +473,18 @@ export interface Framing { ok: boolean; hint: string }
  */
 export function framingCheck(lm: Pt[]): Framing {
   const bad = (hint: string): Framing => ({ ok: false, hint });
-  if (!lm || lm.length < 29 || !frameVisible(lm)) return bad('No te veo: entra de cuerpo entero');
+  if (!lm || lm.length < 29 || !frameVisible(lm)) return bad(t('frame.noBody'));
   const nose = lm[LM.NOSE], la = lm[LM.L_ANKLE], ra = lm[LM.R_ANKLE];
   const feetY = Math.max(la.y, ra.y);
   // Basta ver un tobillo: de perfil (vista trasera) el pie lejano queda tapado por el cercano y su visibilidad cae aunque los pies estén en cuadro.
-  if (Math.max(la.v, ra.v) < 0.5 || feetY > 0.97) return bad('No veo tus pies: aleja el teléfono');
-  if (nose.y < 0.16) return bad('Deja aire sobre tu cabeza para el palo: aléjate un poco');
-  if (feetY - nose.y < 0.35) return bad('Acércate: te ves muy pequeño');
+  if (Math.max(la.v, ra.v) < 0.5 || feetY > 0.97) return bad(t('frame.noFeet'));
+  if (nose.y < 0.16) return bad(t('frame.headroom'));
+  if (feetY - nose.y < 0.35) return bad(t('frame.tooSmall'));
   const hipX = (lm[LM.L_HIP].x + lm[LM.R_HIP].x) / 2;
-  if (hipX < 0.3 || hipX > 0.7) return bad('Colócate en el centro del cuadro');
+  if (hipX < 0.3 || hipX > 0.7) return bad(t('frame.center'));
   const hx = (lm[LM.L_WRIST].x + lm[LM.R_WRIST].x) / 2;
-  if (hx < 0.14 || hx > 0.86) return bad('Deja espacio a los lados para el palo');
-  return { ok: true, hint: 'Bien colocado' };
+  if (hx < 0.14 || hx > 0.86) return bad(t('frame.sides'));
+  return { ok: true, hint: t('frame.ok') };
 }
 
 /**
@@ -614,22 +617,22 @@ export function hipLine(r: SwingResult): HipLine | null {
     const m = r.metrics;
     if (m.hipTopPct == null) return null;
     return {
-      left: 'Atrás', right: 'Hacia la bola', unit: '% del torso',
-      note: 'Lo ideal es que no crucen la línea hacia la bola: si se acercan, los brazos se quedan sin espacio.',
+      left: t('hip.back'), right: t('hip.towardBall'), unit: t('hip.pctTorso'),
+      note: t('hip.noteDtl'),
       rows: [
-        { key: 'top', label: 'Tope', pct: m.hipTopPct, tone: tone(m.hipTopPct, HIP.dtlTop) },
-        { key: 'impact', label: 'Impacto', pct: m.hipAdvancePct, tone: tone(m.hipAdvancePct, HIP.dtlImpact) },
+        { key: 'top', label: t('hip.top'), pct: m.hipTopPct, tone: tone(m.hipTopPct, HIP.dtlTop) },
+        { key: 'impact', label: t('hip.impact'), pct: m.hipAdvancePct, tone: tone(m.hipAdvancePct, HIP.dtlImpact) },
       ],
     };
   }
   const m = r.metrics;
   if (m.hipSwayPct == null) return null;
   return {
-    left: 'Lado trasero', right: 'Hacia el objetivo', unit: '% de hombros',
-    note: 'Lo ideal: casi sobre la línea en el tope y un poco hacia el objetivo en el impacto.',
+    left: t('hip.rearSide'), right: t('hip.towardTarget'), unit: t('hip.pctShoulders'),
+    note: t('hip.noteFace'),
     rows: [
-      { key: 'top', label: 'Tope', pct: -m.hipSwayPct + 0, tone: tone(m.hipSwayPct, HIP.sway) },
-      { key: 'impact', label: 'Impacto', pct: m.hipShiftPct, tone: m.hipShiftPct < -5 ? 'bad' : m.hipShiftPct < 8 || m.hipShiftPct > HIP.slide ? 'warn' : 'good' },
+      { key: 'top', label: t('hip.top'), pct: -m.hipSwayPct + 0, tone: tone(m.hipSwayPct, HIP.sway) },
+      { key: 'impact', label: t('hip.impact'), pct: m.hipShiftPct, tone: m.hipShiftPct < -5 ? 'bad' : m.hipShiftPct < 8 || m.hipShiftPct > HIP.slide ? 'warn' : 'good' },
     ],
   };
 }
@@ -703,92 +706,92 @@ export function coachDtl(m: DtlMetrics): { feedback: Feedback[]; score: number }
 
   // Inclinación al inicio
   if (m.spineAddressDeg >= 25 && m.spineAddressDeg <= 45) {
-    add({ key: 'setup', severity: 'good', title: 'Buena inclinación al inicio', detail: `Te inclinas unos ${m.spineAddressDeg}° desde la cadera, dentro del rango de referencia (25–45°).` });
+    add({ key: 'setup', severity: 'good', title: t('fb.setup.1.title'), detail: t('fb.setup.1.detail', { spineAddressDeg: m.spineAddressDeg }) });
   } else if (m.spineAddressDeg < 25) {
-    add({ key: 'setup', severity: m.spineAddressDeg < 15 ? 'fix' : 'improve', title: 'Muy erguido al inicio', detail: `Solo unos ${m.spineAddressDeg}° de inclinación. Tan de pie, los brazos no tienen espacio para pasar.`, drill: 'Apoya un palo en la espalda (cabeza, espalda y cadera) e inclínate desde la cadera hasta que el palo quede a unos 35°, 10 repeticiones.' }, m.spineAddressDeg < 15 ? 10 : 6);
+    add({ key: 'setup', severity: m.spineAddressDeg < 15 ? 'fix' : 'improve', title: t('fb.setup.2.title'), detail: t('fb.setup.2.detail', { spineAddressDeg: m.spineAddressDeg }), drill: t('fb.setup.2.drill') }, m.spineAddressDeg < 15 ? 10 : 6);
   } else {
-    add({ key: 'setup', severity: m.spineAddressDeg > 55 ? 'fix' : 'improve', title: 'Demasiado inclinado al inicio', detail: `Unos ${m.spineAddressDeg}° de inclinación. Tan agachado es difícil girar y mantener el equilibrio.`, drill: 'Párate recto, flexiona un poco las rodillas e inclínate solo hasta que los brazos cuelguen libres bajo los hombros.' }, m.spineAddressDeg > 55 ? 10 : 6);
+    add({ key: 'setup', severity: m.spineAddressDeg > 55 ? 'fix' : 'improve', title: t('fb.setup.3.title'), detail: t('fb.setup.3.detail', { spineAddressDeg: m.spineAddressDeg }), drill: t('fb.setup.3.drill') }, m.spineAddressDeg > 55 ? 10 : 6);
   }
 
   // Rodillas al inicio
   if (m.kneeFlexDeg != null) {
     if (m.kneeFlexDeg >= 10 && m.kneeFlexDeg <= 38) {
-      add({ key: 'knees', severity: 'good', title: 'Rodillas bien flexionadas', detail: `Unos ${m.kneeFlexDeg}° de flexión al inicio: base atlética y estable.` });
+      add({ key: 'knees', severity: 'good', title: t('fb.knees.1.title'), detail: t('fb.knees.1.detail', { kneeFlexDeg: m.kneeFlexDeg }) });
     } else if (m.kneeFlexDeg < 10) {
-      add({ key: 'knees', severity: 'improve', title: 'Piernas rígidas al inicio', detail: `Apenas ${m.kneeFlexDeg}° de flexión. Con las piernas rectas cuesta girar y usar el suelo.`, drill: 'Antes de cada swing, da un pequeño salto y quédate como aterrizaste: esa es tu flexión.' }, 5);
+      add({ key: 'knees', severity: 'improve', title: t('fb.knees.2.title'), detail: t('fb.knees.2.detail', { kneeFlexDeg: m.kneeFlexDeg }), drill: t('fb.knees.2.drill') }, 5);
     } else {
-      add({ key: 'knees', severity: 'improve', title: 'Rodillas demasiado flexionadas', detail: `Unos ${m.kneeFlexDeg}° de flexión. Sentarte tanto limita el giro de caderas.`, drill: 'Colócate con las piernas rectas y afloja las rodillas solo hasta sentir el peso en el centro de los pies.' }, 5);
+      add({ key: 'knees', severity: 'improve', title: t('fb.knees.3.title'), detail: t('fb.knees.3.detail', { kneeFlexDeg: m.kneeFlexDeg }), drill: t('fb.knees.3.drill') }, 5);
     }
   }
 
   // Postura en el tope
   if (Math.abs(m.spineTopChangeDeg) > 8) {
     const up = m.spineTopChangeDeg < 0;
-    add({ key: 'top', severity: Math.abs(m.spineTopChangeDeg) > 14 ? 'fix' : 'improve', title: up ? 'Te levantas en la subida' : 'Te agachas en la subida', detail: `La inclinación cambia ${Math.abs(m.spineTopChangeDeg)}° entre el inicio y el tope. Luego hay que compensar en la bajada.`, drill: 'Subidas lentas frente a un espejo lateral manteniendo el pecho apuntando a la bola, 12 repeticiones.' }, Math.abs(m.spineTopChangeDeg) > 14 ? 10 : 5);
+    add({ key: 'top', severity: Math.abs(m.spineTopChangeDeg) > 14 ? 'fix' : 'improve', title: up ? t('fb.top.1.titleUp') : t('fb.top.1.titleDown'), detail: t('fb.top.1.detail', { spineTopChangeDeg: Math.abs(m.spineTopChangeDeg) }), drill: t('fb.top.1.drill') }, Math.abs(m.spineTopChangeDeg) > 14 ? 10 : 5);
   }
 
   // Postura en el impacto
   const ic = m.spineImpactChangeDeg;
   if (Math.abs(ic) <= 7) {
-    add({ key: 'spine', severity: 'good', title: 'Mantienes la postura', detail: 'Tu inclinación en el impacto es casi la misma que al inicio.' });
+    add({ key: 'spine', severity: 'good', title: t('fb.spine.1.title'), detail: t('fb.spine.1.detail') });
   } else if (ic < 0) {
-    add({ key: 'spine', severity: ic < -14 ? 'fix' : 'improve', title: 'Te levantas en el impacto', detail: `Te enderezas ${Math.abs(ic)}° antes de pegar. Suele dar golpes topeados o con la punta.`, drill: 'Swings a media velocidad con la cadera tocando una silla detrás de ti durante todo el movimiento.' }, ic < -14 ? 14 : 7);
+    add({ key: 'spine', severity: ic < -14 ? 'fix' : 'improve', title: t('fb.spine.2.title'), detail: t('fb.spine.2.detail', { ic: Math.abs(ic) }), drill: t('fb.spine.2.drill') }, ic < -14 ? 14 : 7);
   } else {
-    add({ key: 'spine', severity: ic > 14 ? 'fix' : 'improve', title: 'Te agachas en el impacto', detail: `Te inclinas ${ic}° más que al inicio. Suele dar golpes gordos.`, drill: 'Swings a media velocidad con la frente rozando una pared acolchada o un cojín sostenido por alguien.' }, ic > 14 ? 12 : 6);
+    add({ key: 'spine', severity: ic > 14 ? 'fix' : 'improve', title: t('fb.spine.3.title'), detail: t('fb.spine.3.detail', { ic }), drill: t('fb.spine.3.drill') }, ic > 14 ? 12 : 6);
   }
 
   // Línea de caderas en la subida: al girar, el centro de las caderas debe quedarse donde empezó.
   const [topOk, topBad] = HIP.dtlTop;
   const hipTop = m.hipTopPct ?? 0;
   if (hipTop > topOk) {
-    add({ key: 'hipsTop', severity: hipTop > topBad ? 'fix' : 'improve', title: 'Las caderas se acercan a la bola en la subida', detail: `En el tope ya están un ${hipTop}% del largo de tu torso más cerca de la bola que al inicio. Empiezas la bajada con menos espacio para los brazos.`, drill: 'Subidas lentas con los glúteos rozando una pared o silla: al girar, la cadera trasera empuja hacia la pared en vez de despegarse, 12 repeticiones.' }, hipTop > topBad ? 8 : 4);
+    add({ key: 'hipsTop', severity: hipTop > topBad ? 'fix' : 'improve', title: t('fb.hipsTop.1.title'), detail: t('fb.hipsTop.1.detail', { hipTop }), drill: t('fb.hipsTop.1.drill') }, hipTop > topBad ? 8 : 4);
   }
 
   // Extensión temprana: caderas hacia la bola en el impacto. Con la posición del tope se sabe en qué
   // parte del swing ocurre, y con el cambio de inclinación, si además el pecho se levanta.
   const [impOk, impBad] = HIP.dtlImpact;
   if (m.hipAdvancePct <= impOk) {
-    add({ key: 'extension', severity: 'good', title: 'Caderas en su sitio', detail: hipTop > topOk
-      ? 'En el impacto tus caderas vuelven a la línea del inicio: recuperas el espacio para los brazos.'
+    add({ key: 'extension', severity: 'good', title: t('fb.extension.1.title'), detail: hipTop > topOk
+      ? t('fb.extension.1.detailReturned')
       : m.hipTopPct != null
-        ? 'Tus caderas se quedan en la línea del inicio en la subida y en la bajada: dejas espacio para los brazos.'
-        : 'Tus caderas no se acercan a la bola en la bajada: dejas espacio para los brazos.' });
+        ? t('fb.extension.1.detailStayed')
+        : t('fb.extension.1.detailNone') });
   } else {
     const down = m.hipAdvancePct - hipTop; // lo que avanzan entre el tope y el impacto
     const where = m.hipTopPct == null ? ''
-      : hipTop <= topOk ? ' Ocurre en la bajada: llegas bien al tope y de ahí las caderas se van hacia la bola.'
-      : down > impOk ? ' Empieza en la subida y sigue en la bajada.'
-      : ' Viene de la subida: en el tope ya estaban adelantadas y no regresan.';
-    const chest = m.spineImpactChangeDeg < -7 ? ` Además el pecho se levanta ${Math.abs(m.spineImpactChangeDeg)}°: las dos señales juntas son el patrón típico de extensión temprana.` : '';
-    add({ key: 'extension', severity: m.hipAdvancePct > impBad ? 'fix' : 'improve', title: 'Las caderas se acercan a la bola', detail: `En el impacto están un ${m.hipAdvancePct}% del largo de tu torso más cerca de la bola que al inicio (extensión temprana). Quita espacio a los brazos y obliga a compensar con las manos.${where}${chest}`, drill: 'Colócate con los glúteos rozando una pared o silla y haz swings a media velocidad sin perder el contacto hasta después del impacto. En la bajada, siente que el bolsillo trasero del lado guía se va hacia la pared mientras giras.' }, m.hipAdvancePct > impBad ? 14 : 7);
+      : hipTop <= topOk ? t('fb.extension.where.down')
+      : down > impOk ? t('fb.extension.where.both')
+      : t('fb.extension.where.up');
+    const chest = m.spineImpactChangeDeg < -7 ? t('fb.extension.chest', { deg: Math.abs(m.spineImpactChangeDeg) }) : '';
+    add({ key: 'extension', severity: m.hipAdvancePct > impBad ? 'fix' : 'improve', title: t('fb.extension.2.title'), detail: t('fb.extension.2.detail', { hipAdvancePct: m.hipAdvancePct, where, chest }), drill: t('fb.extension.2.drill') }, m.hipAdvancePct > impBad ? 14 : 7);
   }
 
   // Cabeza
   const hv = Math.abs(m.headVerticalPct), hf = Math.abs(m.headForwardPct);
   if (hv <= 18 && hf <= 22) {
-    add({ key: 'head', severity: 'good', title: 'Cabeza estable', detail: 'Tu cabeza casi no sube, baja ni se acerca a la bola durante el swing.' });
+    add({ key: 'head', severity: 'good', title: t('fb.head.1.title'), detail: t('fb.head.1.detail') });
   } else if (hv >= hf) {
-    add({ key: 'head', severity: hv > 30 ? 'fix' : 'improve', title: m.headVerticalPct > 0 ? 'La cabeza sube' : 'La cabeza baja', detail: `Se mueve en vertical un ${hv}% del largo de tu torso. Cambia la distancia a la bola en pleno swing.`, drill: 'Practica con una marca en la pared a la altura de tu cabeza y mantenla alineada hasta el impacto.' }, hv > 30 ? 10 : 5);
+    add({ key: 'head', severity: hv > 30 ? 'fix' : 'improve', title: m.headVerticalPct > 0 ? t('fb.head.2.titleUp') : t('fb.head.2.titleDown'), detail: t('fb.head.2.detail', { hv }), drill: t('fb.head.2.drill') }, hv > 30 ? 10 : 5);
   } else {
-    add({ key: 'head', severity: hf > 35 ? 'fix' : 'improve', title: m.headForwardPct > 0 ? 'La cabeza se va hacia la bola' : 'La cabeza se aleja de la bola', detail: `Se desplaza un ${hf}% del largo de tu torso. Indica que pierdes el equilibrio entre puntas y talones.`, drill: 'Swings descalzo a media velocidad sintiendo el peso en el centro de los pies.' }, hf > 35 ? 10 : 5);
+    add({ key: 'head', severity: hf > 35 ? 'fix' : 'improve', title: m.headForwardPct > 0 ? t('fb.head.3.titleToward') : t('fb.head.3.titleAway'), detail: t('fb.head.3.detail', { hf }), drill: t('fb.head.3.drill') }, hf > 35 ? 10 : 5);
   }
 
   // Manos al inicio: los brazos deben colgar casi bajo los hombros
   if (m.handsAddressPct != null) {
     if (m.handsAddressPct > 30) {
-      add({ key: 'hands', severity: m.handsAddressPct > 45 ? 'fix' : 'improve', title: 'Estiras los brazos hacia la bola', detail: `Tus manos quedan un ${m.handsAddressPct}% del largo de tu torso por delante de los hombros. Estás lejos de la bola y el swing pierde control.`, drill: 'Colócate, suelta el palo y deja colgar los brazos: donde caen las manos es donde debes tomar el palo.' }, m.handsAddressPct > 45 ? 8 : 5);
+      add({ key: 'hands', severity: m.handsAddressPct > 45 ? 'fix' : 'improve', title: t('fb.hands.1.title'), detail: t('fb.hands.1.detail', { handsAddressPct: m.handsAddressPct }), drill: t('fb.hands.1.drill') }, m.handsAddressPct > 45 ? 8 : 5);
     } else if (m.handsAddressPct < -5) {
-      add({ key: 'hands', severity: 'improve', title: 'Manos muy pegadas al cuerpo', detail: 'Tus manos quedan por detrás de la línea de los hombros. Falta espacio para que pasen los brazos.', drill: 'Al colocarte, deja un puño de distancia entre el extremo del palo y tus muslos.' }, 4);
+      add({ key: 'hands', severity: 'improve', title: t('fb.hands.2.title'), detail: t('fb.hands.2.detail'), drill: t('fb.hands.2.drill') }, 4);
     } else {
-      add({ key: 'hands', severity: 'good', title: 'Brazos cuelgan libres al inicio', detail: 'Tus manos quedan casi bajo los hombros: buena distancia a la bola.' });
+      add({ key: 'hands', severity: 'good', title: t('fb.hands.3.title'), detail: t('fb.hands.3.detail') });
     }
   }
   // Manos en el tope: profundidad
   if (m.handsDepthTopPct != null) {
     if (m.handsDepthTopPct > 65) {
-      add({ key: 'depth', severity: 'improve', title: 'Manos muy atrás en el tope', detail: `Quedan un ${m.handsDepthTopPct}% del largo de tu torso por detrás de los hombros: subida plana, alrededor del cuerpo.`, drill: 'Subidas lentas sintiendo que las manos suben sobre el hombro trasero, no detrás de la espalda.' }, 4);
+      add({ key: 'depth', severity: 'improve', title: t('fb.depth.1.title'), detail: t('fb.depth.1.detail', { handsDepthTopPct: m.handsDepthTopPct }), drill: t('fb.depth.1.drill') }, 4);
     } else if (m.handsDepthTopPct < -20) {
-      add({ key: 'depth', severity: 'improve', title: 'Manos por delante en el tope', detail: 'Tus manos suben por fuera, del lado de la bola: subida empinada, con poco giro.', drill: 'Subidas lentas girando el pecho hasta dar la espalda al objetivo antes de levantar los brazos.' }, 4);
+      add({ key: 'depth', severity: 'improve', title: t('fb.depth.2.title'), detail: t('fb.depth.2.detail'), drill: t('fb.depth.2.drill') }, 4);
     }
   }
   armRules(m, add);
@@ -801,7 +804,7 @@ export function coachDtl(m: DtlMetrics): { feedback: Feedback[]; score: number }
 /** Reglas de manos en el tope, comunes a las dos vistas. */
 function armRules(m: { handsTopPct?: number }, add: (f: Feedback, p?: number) => void) {
   if (m.handsTopPct != null && m.handsTopPct < 0) {
-    add({ key: 'height', severity: 'improve', title: 'Manos bajas en el tope', detail: 'Tus manos no llegan a la altura de los hombros: la subida queda corta y pierdes recorrido.', drill: 'Sin bola, sube hasta sentir las manos por encima del hombro trasero y sostén dos segundos, 10 repeticiones.' }, 4);
+    add({ key: 'height', severity: 'improve', title: t('fb.height.1.title'), detail: t('fb.height.1.detail'), drill: t('fb.height.1.drill') }, 4);
   }
 }
 
@@ -820,13 +823,13 @@ export const SPINE_SIDE = [15, 22] as const;
 /** Regla de tempo, común a las dos vistas. */
 function tempoRule(m: TempoMetrics, add: (f: Feedback, p?: number) => void) {
   if (m.tempoRatio >= TEMPO.fastOk && m.tempoRatio <= TEMPO.slowOk) {
-    add({ key: 'tempo', severity: 'good', title: 'Tempo equilibrado', detail: `Tu relación subida/bajada es ${m.tempoRatio}:1, cerca del 3:1 de referencia. Con video de teléfono es una estimación (depende de dónde se marca el inicio de la subida): compárala entre tus swings.` });
+    add({ key: 'tempo', severity: 'good', title: t('fb.tempo.1.title'), detail: t('fb.tempo.1.detail', { tempoRatio: m.tempoRatio }) });
   } else if (m.tempoRatio < TEMPO.fastOk) {
     const sev: Severity = m.tempoRatio < TEMPO.fastBad ? 'fix' : 'improve';
-    add({ key: 'tempo', severity: sev, title: 'Subida apresurada', detail: `Tempo ${m.tempoRatio}:1. La subida es corta respecto a la bajada, lo que suele quitar control y distancia.`, drill: 'Cuenta "uno-dos-tres" en la subida y "ya" en la bajada, 10 swings sin bola.' }, sev === 'fix' ? 14 : 7);
+    add({ key: 'tempo', severity: sev, title: t('fb.tempo.2.title'), detail: t('fb.tempo.2.detail', { tempoRatio: m.tempoRatio }), drill: t('fb.tempo.2.drill') }, sev === 'fix' ? 14 : 7);
   } else {
     const sev: Severity = m.tempoRatio > TEMPO.slowBad ? 'fix' : 'improve';
-    add({ key: 'tempo', severity: sev, title: 'Subida demasiado lenta', detail: `Tempo ${m.tempoRatio}:1. Una subida tan larga rompe el ritmo y dificulta repetir el swing.`, drill: 'Swings continuos sin pausa (ida y vuelta) con un wedge, 3 series de 8.' }, sev === 'fix' ? 12 : 6);
+    add({ key: 'tempo', severity: sev, title: t('fb.tempo.3.title'), detail: t('fb.tempo.3.detail', { tempoRatio: m.tempoRatio }), drill: t('fb.tempo.3.drill') }, sev === 'fix' ? 12 : 6);
   }
 }
 
@@ -840,17 +843,17 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
 
   // Giro de hombros
   if (m.shoulderTurnDeg >= 75) {
-    add({ key: 'shoulders', severity: 'good', title: 'Buen giro de hombros', detail: `Giras unos ${m.shoulderTurnDeg}° en el tope, suficiente para generar potencia.` });
+    add({ key: 'shoulders', severity: 'good', title: t('fb.shoulders.1.title'), detail: t('fb.shoulders.1.detail', { shoulderTurnDeg: m.shoulderTurnDeg }) });
   } else {
     const sev: Severity = m.shoulderTurnDeg < 55 ? 'fix' : 'improve';
-    add({ key: 'shoulders', severity: sev, title: 'Giro de hombros corto', detail: `Unos ${m.shoulderTurnDeg}° en el tope (referencia: 80–100°). Pierdes recorrido y potencia.`, drill: 'Cruza un palo sobre los hombros y gira hasta que apunte a la bola, 15 repeticiones.' }, sev === 'fix' ? 14 : 7);
+    add({ key: 'shoulders', severity: sev, title: t('fb.shoulders.2.title'), detail: t('fb.shoulders.2.detail', { shoulderTurnDeg: m.shoulderTurnDeg }), drill: t('fb.shoulders.2.drill') }, sev === 'fix' ? 14 : 7);
   }
 
   // Caderas / X-factor
   if (m.hipTurnDeg > 60) {
-    add({ key: 'hips', severity: 'improve', title: 'Caderas giran de más', detail: `Unos ${m.hipTurnDeg}° de giro de cadera. Con tanta cadera se pierde la tensión entre tronco y piernas.`, drill: 'Subida con una pelota o cojín entre las rodillas para estabilizar la base.' }, 6);
+    add({ key: 'hips', severity: 'improve', title: t('fb.hips.1.title'), detail: t('fb.hips.1.detail', { hipTurnDeg: m.hipTurnDeg }), drill: t('fb.hips.1.drill') }, 6);
   } else if (m.xFactorDeg >= 30) {
-    add({ key: 'hips', severity: 'good', title: 'Buena separación tronco-cadera', detail: `Diferencia de ${m.xFactorDeg}° entre hombros y caderas: buena fuente de potencia.` });
+    add({ key: 'hips', severity: 'good', title: t('fb.hips.2.title'), detail: t('fb.hips.2.detail', { xFactorDeg: m.xFactorDeg }) });
   }
 
   // Inclinación lateral. De frente se ve cuánto se inclina el tronco hacia un lado, no hacia delante, y un buen
@@ -858,49 +861,49 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
   // (levantarse o agacharse) se juzga desde atrás.
   const sc = Math.abs(m.spineChangeDeg);
   if (sc <= SPINE_SIDE[0]) {
-    add({ key: 'spine', severity: 'good', title: 'Postura estable', detail: 'La inclinación lateral del tronco cambia poco entre el inicio y el impacto.' });
+    add({ key: 'spine', severity: 'good', title: t('fb.spine.4.title'), detail: t('fb.spine.4.detail') });
   } else {
     const sev: Severity = sc > SPINE_SIDE[1] ? 'fix' : 'improve';
-    add({ key: 'spine', severity: sev, title: 'Mucha inclinación lateral en el impacto', detail: `El tronco se inclina ${sc}° de lado entre el inicio y el impacto. Algo de inclinación hacia atrás es normal; tanta mueve el punto bajo del swing. De frente no se ve si te levantas o te agachas: eso se mide mejor desde atrás.`, drill: 'Swings a media velocidad con la cadera tocando una silla detrás de ti durante todo el movimiento.' }, sev === 'fix' ? 8 : 4);
+    add({ key: 'spine', severity: sev, title: t('fb.spine.5.title'), detail: t('fb.spine.5.detail', { sc }), drill: t('fb.spine.5.drill') }, sev === 'fix' ? 8 : 4);
   }
 
   // Cabeza
   if (m.headSwayPct <= 25) {
-    add({ key: 'head', severity: 'good', title: 'Cabeza quieta', detail: 'Tu cabeza casi no se desplaza durante el swing.' });
+    add({ key: 'head', severity: 'good', title: t('fb.head.4.title'), detail: t('fb.head.4.detail') });
   } else {
     const sev: Severity = m.headSwayPct > 45 ? 'fix' : 'improve';
-    add({ key: 'head', severity: sev, title: 'La cabeza se desplaza', detail: `Se mueve lateralmente un ${m.headSwayPct}% del ancho de tus hombros. Dificulta el contacto limpio.`, drill: 'Practica frente a una pared o espejo con una marca a la altura de la cabeza y no la pierdas.' }, sev === 'fix' ? 12 : 6);
+    add({ key: 'head', severity: sev, title: t('fb.head.5.title'), detail: t('fb.head.5.detail', { headSwayPct: m.headSwayPct }), drill: t('fb.head.5.drill') }, sev === 'fix' ? 12 : 6);
   }
 
   // Caderas en la subida: deben girar casi en su sitio, no irse hacia el lado trasero
   const [swayOk, swayBad] = HIP.sway;
   if (m.hipSwayPct != null && m.hipSwayPct > swayOk) {
-    add({ key: 'sway', severity: m.hipSwayPct > swayBad ? 'fix' : 'improve', title: 'Las caderas se desplazan en la subida', detail: `En el tope están un ${m.hipSwayPct}% del ancho de tus hombros más lejos del objetivo que al inicio. Te desplazas en vez de girar, y luego cuesta volver a tiempo a la bola.`, drill: 'Subidas lentas con una silla o una pared pegada a la cadera trasera: gira sin empujarla, 12 repeticiones.' }, m.hipSwayPct > swayBad ? 8 : 4);
+    add({ key: 'sway', severity: m.hipSwayPct > swayBad ? 'fix' : 'improve', title: t('fb.sway.1.title'), detail: t('fb.sway.1.detail', { hipSwayPct: m.hipSwayPct }), drill: t('fb.sway.1.drill') }, m.hipSwayPct > swayBad ? 8 : 4);
   }
 
   // Transferencia hacia el objetivo
   if (m.hipShiftPct > HIP.slide) {
-    add({ key: 'slide', severity: 'improve', title: 'Las caderas se deslizan de más', detail: `En el impacto avanzaron un ${m.hipShiftPct}% del ancho de tus hombros hacia el objetivo. Tanto desplazamiento sin giro deja el cuerpo por delante de la bola y las manos atrás.`, drill: 'Swings a media velocidad con una silla o varilla junto a la cadera guía: llega a rozarla y gira, sin empujarla.' }, 4);
+    add({ key: 'slide', severity: 'improve', title: t('fb.slide.1.title'), detail: t('fb.slide.1.detail', { hipShiftPct: m.hipShiftPct }), drill: t('fb.slide.1.drill') }, 4);
   } else if (m.hipShiftPct >= 8) {
-    add({ key: 'shift', severity: 'good', title: 'Transfieres el peso al frente', detail: 'Tus caderas avanzan hacia el objetivo en el impacto.' });
+    add({ key: 'shift', severity: 'good', title: t('fb.shift.1.title'), detail: t('fb.shift.1.detail') });
   } else {
     const sev: Severity = m.hipShiftPct < -5 ? 'fix' : 'improve';
-    add({ key: 'shift', severity: sev, title: 'Peso atrás en el impacto', detail: 'Las caderas no avanzan hacia el objetivo. Suele producir golpes débiles o altos.', drill: 'Paso al frente: inicia la bajada dando un pequeño paso con el pie guía, 10 repeticiones.' }, sev === 'fix' ? 12 : 6);
+    add({ key: 'shift', severity: sev, title: t('fb.shift.2.title'), detail: t('fb.shift.2.detail'), drill: t('fb.shift.2.drill') }, sev === 'fix' ? 12 : 6);
   }
 
   // Brazo guía
   if (m.leadArmDeg < 140) {
-    add({ key: 'arm', severity: 'improve', title: 'Brazo guía muy flexionado', detail: `Codo a ${m.leadArmDeg}° en el tope. Un brazo más extendido da un arco más ancho y consistente.`, drill: 'Subidas lentas hasta la altura del pecho manteniendo el brazo guía largo, 12 repeticiones.' }, 5);
+    add({ key: 'arm', severity: 'improve', title: t('fb.arm.1.title'), detail: t('fb.arm.1.detail', { leadArmDeg: m.leadArmDeg }), drill: t('fb.arm.1.drill') }, 5);
   } else if (m.leadArmAddressDeg != null && m.leadArmAddressDeg < 150) {
-    add({ key: 'arm', severity: 'improve', title: 'Brazo guía doblado al inicio', detail: `Codo a ${m.leadArmAddressDeg}° antes de empezar. Empieza con el brazo guía largo y relajado.`, drill: 'Al colocarte, deja que el brazo guía cuelgue recto y forme una línea con el palo.' }, 4);
+    add({ key: 'arm', severity: 'improve', title: t('fb.arm.2.title'), detail: t('fb.arm.2.detail', { leadArmAddressDeg: m.leadArmAddressDeg }), drill: t('fb.arm.2.drill') }, 4);
   }
 
   // Manos al inicio
   if (m.handsAddressPct != null) {
     if (m.handsAddressPct < -20) {
-      add({ key: 'hands', severity: 'improve', title: 'Manos atrasadas al inicio', detail: 'Tus manos quedan por detrás del centro del cuerpo, lejos del objetivo. Favorece el cuchareo en el impacto.', drill: 'Colócate con las manos frente a la cara interna del muslo guía.' }, 4);
+      add({ key: 'hands', severity: 'improve', title: t('fb.hands.4.title'), detail: t('fb.hands.4.detail'), drill: t('fb.hands.4.drill') }, 4);
     } else if (m.handsAddressPct > 85) {
-      add({ key: 'hands', severity: 'improve', title: 'Manos muy adelantadas al inicio', detail: 'Tus manos quedan muy por delante del centro del cuerpo. Cierra la cara y quita altura al golpe.', drill: 'Colócate con las manos frente a la cara interna del muslo guía, no más allá.' }, 3);
+      add({ key: 'hands', severity: 'improve', title: t('fb.hands.5.title'), detail: t('fb.hands.5.detail'), drill: t('fb.hands.5.drill') }, 3);
     }
   }
   armRules(m, add);
@@ -910,6 +913,10 @@ export function coach(m: SwingMetrics): { feedback: Feedback[]; score: number } 
   return { feedback: fb, score: Math.round(clamp(96 - penalty, 35, 98)) };
 }
 
+/** Texto de cada error en el idioma actual. */
+export const swingErrorText = (e: SwingError): string => t(`swing.err.${e}`);
+
+/** Español (idioma base); en pantalla se usa `swingErrorText()`. */
 export const SWING_ERROR_TEXT: Record<SwingError, string> = {
   too_short: 'No se detectó tu cuerpo el tiempo suficiente. Graba el swing completo, de cuerpo entero.',
   no_swing: 'No se detectó un swing completo. Graba un solo swing, a velocidad normal (no en cámara lenta), desde antes de empezar hasta un poco después del golpe, con las manos y los pies dentro del cuadro y nadie más en la imagen.',

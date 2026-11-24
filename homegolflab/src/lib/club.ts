@@ -12,6 +12,7 @@
  * Por eso lo que sale de aquí se muestra aparte, marcado como experimental, y no entra en la nota.
  */
 import { LM, type Feedback, type Pt, type SwingView } from './swing';
+import { t } from '@/i18n';
 
 export interface Gray { data: Uint8Array; width: number; height: number }
 
@@ -228,7 +229,7 @@ export function readClub(view: SwingView, address: Shaft | null, top: Shaft | nu
       if (view === 'frente') {
         info.addressLeanDeg = r1((Math.atan2(-dx * towardTarget, dy) * 180) / Math.PI);
         if (info.addressLeanDeg < -8) {
-          info.feedback.push({ key: 'club-address', severity: 'improve', title: 'Manos detrás del palo al inicio', detail: `La varilla se inclina ${Math.abs(info.addressLeanDeg)}° alejándose del objetivo. Con hierros, las manos deben quedar a la altura de la bola o un poco por delante.`, drill: 'Colócate con la varilla apuntando a la cara interna del muslo guía.' });
+          info.feedback.push({ key: 'club-address', severity: 'improve', title: t('fb.club-address.1.title'), detail: t('fb.club-address.1.detail', { deg: Math.abs(info.addressLeanDeg) }), drill: t('fb.club-address.1.drill') });
         }
       } else {
         info.addressPlaneDeg = r1((Math.atan2(dy, Math.abs(dx)) * 180) / Math.PI);
@@ -239,9 +240,9 @@ export function readClub(view: SwingView, address: Shaft | null, top: Shaft | nu
     const dx = Math.cos(rad(top)), dy = Math.sin(rad(top));
     info.topDeg = r1((Math.atan2(-dy, dx * towardTarget) * 180) / Math.PI);
     if (info.topDeg < -12) {
-      info.feedback.push({ key: 'club-top', severity: 'improve', title: 'El palo pasa de la paralela en el tope', detail: `La cabeza del palo cae ${Math.abs(info.topDeg)}° por debajo de la horizontal. Una subida tan larga cuesta controlarla y suele venir de doblar el brazo guía o soltar las muñecas.`, drill: 'Subidas hasta tres cuartos, parando cuando el brazo guía queda paralelo al suelo, 10 repeticiones.' });
+      info.feedback.push({ key: 'club-top', severity: 'improve', title: t('fb.club-top.1.title'), detail: t('fb.club-top.1.detail', { deg: Math.abs(info.topDeg) }), drill: t('fb.club-top.1.drill') });
     } else if (info.topDeg <= 35) {
-      info.feedback.push({ key: 'club-top', severity: 'good', title: 'Palo cerca de la paralela en el tope', detail: 'La varilla queda casi paralela al suelo apuntando al objetivo: una subida completa y controlada.' });
+      info.feedback.push({ key: 'club-top', severity: 'good', title: t('fb.club-top.2.title'), detail: t('fb.club-top.2.detail') });
     }
   }
   return info.addressLeanDeg == null && info.addressPlaneDeg == null && info.topDeg == null ? null : info;
