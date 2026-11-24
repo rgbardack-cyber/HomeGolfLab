@@ -62,12 +62,17 @@ export default function Perfil() {
           <ul className="space-y-1.5"><li className="font-semibold text-muted-foreground">Gratis</li>{FREE_LIST.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />{f}</li>)}</ul>
           <ul className="space-y-1.5"><li className="font-semibold text-primary">Premium</li>{PREMIUM.map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />{f}</li>)}</ul>
         </div>
-        <Notice>
-          Los pagos todavía no están conectados. Este interruptor es solo para probar la app: en la versión de tiendas se reemplaza por la compra dentro de App Store y Google Play.
-        </Notice>
-        <Button full variant={profile.premium ? 'outline' : 'gold'} onClick={() => setProfile({ premium: !profile.premium })}>
-          {profile.premium ? 'Volver al plan gratuito (prueba)' : 'Activar Premium (modo prueba)'}
-        </Button>
+        {/* El interruptor de prueba solo existe en desarrollo o con VITE_INTERNAL=1: la web pública no lo trae. */}
+        {INTERNAL && (
+          <>
+            <Notice>
+              Los pagos todavía no están conectados. Este interruptor es solo para probar la app: en la versión de tiendas se reemplaza por la compra dentro de App Store y Google Play.
+            </Notice>
+            <Button full variant={profile.premium ? 'outline' : 'gold'} onClick={() => setProfile({ premium: !profile.premium })}>
+              {profile.premium ? 'Volver al plan gratuito (prueba)' : 'Activar Premium (modo prueba)'}
+            </Button>
+          </>
+        )}
       </Card>
 
       {anyMediaFlag(flags) && <StorageCard />}

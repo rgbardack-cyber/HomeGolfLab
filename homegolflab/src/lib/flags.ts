@@ -60,7 +60,12 @@ export function parseOverrides(raw: string | null): Partial<Record<FlagName, boo
 /** ¿Alguna función que guarda videos o pistas está encendida? Si no, la app no abre el almacén de medios. */
 export const anyMediaFlag = (f: FlagValues): boolean => f.videoReview || f.compare || f.flightV2 || f.export || f.liveRecording;
 
-/** ¿Se muestra el panel y se leen los cambios guardados? */
+/** ¿Es una build interna? Solo en desarrollo o con VITE_INTERNAL=1. Pura, para poder probarla. */
+export const isInternalBuild = (env: { DEV?: boolean; VITE_INTERNAL?: unknown }): boolean => env.DEV === true || env.VITE_INTERNAL === '1';
+
+/** ¿Se muestra el panel y se leen los cambios guardados? También decide si aparece el interruptor «Activar Premium (modo prueba)» de Perfil. */
+// La expresión va escrita aquí tal cual (no a través de isInternalBuild) para que el empaquetador la resuelva al construir y
+// quite del build de producción el panel interno y el interruptor de prueba. Mantenerla igual a isInternalBuild.
 export const INTERNAL: boolean = import.meta.env.DEV || import.meta.env.VITE_INTERNAL === '1';
 
 const STORAGE_KEY = 'hgl-flags-v1';

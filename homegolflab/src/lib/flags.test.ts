@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { envKey, FLAG_NAMES, parseOverrides, resolveFlags } from './flags';
+import { envKey, FLAG_NAMES, isInternalBuild, parseOverrides, resolveFlags } from './flags';
+
+describe('interruptor de Premium de prueba (solo builds internas)', () => {
+  it('la web pública (sin DEV ni VITE_INTERNAL) no lo muestra', () => {
+    expect(isInternalBuild({})).toBe(false);
+    expect(isInternalBuild({ DEV: false })).toBe(false);
+    expect(isInternalBuild({ DEV: false, VITE_INTERNAL: '0' })).toBe(false);
+    expect(isInternalBuild({ DEV: false, VITE_INTERNAL: 'true' })).toBe(false);
+    expect(isInternalBuild({ VITE_INTERNAL: 1 })).toBe(false);
+  });
+  it('desarrollo o VITE_INTERNAL=1 sí', () => {
+    expect(isInternalBuild({ DEV: true })).toBe(true);
+    expect(isInternalBuild({ DEV: false, VITE_INTERNAL: '1' })).toBe(true);
+  });
+});
 
 describe('banderas (1.4)', () => {
   it('todo nace apagado', () => {
